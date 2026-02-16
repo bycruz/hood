@@ -6,6 +6,14 @@ VULKAN = os.getenv("VULKAN") == "1"
 
 local hood = {}
 
+---@enum hood.PresentMode
+hood.PresentMode = {
+	Immediate = 1,
+	Fifo = 2,
+	FifoRelaxed = 3,
+	Mailbox = 4,
+}
+
 ---@alias hood.InstanceBackend "vulkan" | "opengl"
 ---@alias hood.InstanceFlag "validate"
 

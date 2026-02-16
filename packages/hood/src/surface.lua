@@ -1,4 +1,5 @@
 ---@class hood.SurfaceConfig
+---@field presentMode hood.PresentMode
 
 ---@class hood.Surface
 ---@field new fun(window: winit.Window): hood.Surface

@@ -14,6 +14,14 @@ local vkFormatToHoodFormat = {
 	[vk.Format.B8G8R8A8_SRGB] = hood.TextureFormat.Bgra8Srgb,
 }
 
+---@type table<hood.PresentMode, vk.PresentModeKHR>
+local hoodPresentToVkPresent = {
+	[hood.PresentMode.Immediate] = vk.PresentModeKHR.IMMEDIATE,
+	[hood.PresentMode.Fifo] = vk.PresentModeKHR.FIFO,
+	[hood.PresentMode.FifoRelaxed] = vk.PresentModeKHR.FIFO_RELAXED,
+	[hood.PresentMode.Mailbox] = vk.PresentModeKHR.MAILBOX,
+}
+
 ---@class hood.vk.Surface
 ---@field window winit.Window
 ---@field handle vk.ffi.SurfaceKHR
@@ -68,6 +76,23 @@ function VKSurface:configure(device, config)
 		error("Unsupported swapchain format: " .. tostring(format.format))
 	end
 
+	-- Query supported present modes and validate requested mode
+	local presentModes = vk.getPhysicalDeviceSurfacePresentModesKHR(device.pd, self.handle)
+	local requestedPresentMode = hoodPresentToVkPresent[config.presentMode]
+
+	---@type vk.PresentModeKHR?
+	local presentMode = nil
+	for _, mode in ipairs(presentModes) do
+		if mode == requestedPresentMode then
+			presentMode = requestedPresentMode
+			break
+		end
+	end
+
+	if not presentMode then
+		error("Requested present mode not supported: " .. tostring(config.presentMode))
+	end
+
 	return VKSwapchain.new(device, hoodFormat, {
 		surface = self.handle,
 		minImageCount = imageCount,
@@ -79,7 +104,7 @@ function VKSurface:configure(device, config)
 		imageSharingMode = vk.SharingMode.EXCLUSIVE,
 		preTransform = caps.currentTransform,
 		compositeAlpha = vk.CompositeAlphaFlagBitsKHR.OPAQUE,
-		presentMode = vk.PresentModeKHR.IMMEDIATE,
+		presentMode = presentMode,
 		clipped = 1,
 	})
 end
