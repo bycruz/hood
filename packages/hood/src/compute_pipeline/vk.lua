@@ -31,6 +31,10 @@ function VKComputePipeline.new(device, descriptor)
 		layout = layout,
 	})
 
+	-- No longer needed, pipeline stores whatever it needs
+	-- TODO: Make this automatic via shaderModule gc
+	device.handle:destroyShaderModule(shaderModule)
+
 	return setmetatable({ handle = handle, layout = layout, device = device }, VKComputePipeline)
 end
 

@@ -246,6 +246,10 @@ function VKPipeline.new(device, descriptor)
 		},
 	})
 
+	-- TODO: Make this automatic via shaderModule gc
+	device.handle:destroyShaderModule(vertModule)
+	device.handle:destroyShaderModule(fragModule)
+
 	return setmetatable({
 		handle = pipelines[1],
 		layout = layout,
