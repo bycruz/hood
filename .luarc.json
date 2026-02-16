@@ -2,6 +2,6 @@
 	"$schema": "https://raw.githubusercontent.com/sumneko/vscode-lua/master/setting/schema.json",
 	"runtime": {
 		"version": "LuaJIT",
-		"path": ["./lpm_modules/?.lua", "./lpm_modules/?/init.lua"]
+		"path": ["./target/?.lua", "./target/?/init.lua"]
 	}
 }
