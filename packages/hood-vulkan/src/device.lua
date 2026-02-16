@@ -46,10 +46,9 @@ return function(vk)
 	---@param allocator ffi.cdata*?
 	---@return vk.ffi.PipelineLayout
 	function VKDevice:createPipelineLayout(info, allocator)
-		local info = ffi.new("VkPipelineLayoutCreateInfo", info)
-		info.sType = vk.StructureType.PIPELINE_LAYOUT_CREATE_INFO
+		local createInfo = pipelineLayoutCreateInfoToFFI(info)
 		local pipelineLayout = ffi.new("VkPipelineLayout[1]")
-		local result = self.v1_0.vkCreatePipelineLayout(self.handle, info, allocator, pipelineLayout)
+		local result = self.v1_0.vkCreatePipelineLayout(self.handle, createInfo, allocator, pipelineLayout)
 		if result ~= 0 then
 			error("Failed to create Vulkan pipeline layout, error code: " .. tostring(result))
 		end

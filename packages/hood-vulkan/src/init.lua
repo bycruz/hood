@@ -6,6 +6,8 @@ local vkEnums = require("hood-vulkan.ffi.enums")
 
 ---@class vk: vk.RawEnums
 ---@field PresentInfoKHR fun(): vk.ffi.PresentInfoKHR
+---@field RenderPassBeginInfo fun(): vk.ffi.RenderPassBeginInfo
+---@field PipelineLayoutCreateInfo fun(): vk.ffi.PipelineLayoutCreateInfo
 local vk = {}
 for k, v in pairs(vkEnums) do
 	vk[k] = v

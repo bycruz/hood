@@ -436,13 +436,19 @@ typedef struct {
 } VkShaderModuleCreateInfo;
 
 typedef struct {
+  VkShaderStageFlags stageFlags;
+  uint32_t offset;
+  uint32_t size;
+} VkPushConstantRange;
+
+typedef struct {
   VkStructureType sType;
   const void *pNext;
   VkPipelineLayoutCreateFlags flags;
   uint32_t setLayoutCount;
-  const void *pSetLayouts;
+  const VkDescriptorSetLayout *pSetLayouts;
   uint32_t pushConstantRangeCount;
-  const void *pPushConstantRanges;
+  const VkPushConstantRange *pPushConstantRanges;
 } VkPipelineLayoutCreateInfo;
 
 typedef struct {
@@ -907,6 +913,13 @@ typedef struct {
   VkImage image;
   VkImageSubresourceRange subresourceRange;
 } VkImageMemoryBarrier;
+
+typedef struct {
+  VkStructureType sType;
+  const void *pNext;
+  VkFlags srcAccessMask;
+  VkFlags dstAccessMask;
+} VkMemoryBarrier;
 
 typedef int32_t VkFilter;
 typedef int32_t VkSamplerMipmapMode;
