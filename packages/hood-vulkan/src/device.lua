@@ -587,6 +587,51 @@ return function(vk)
 		self.v1_0.vkDestroySampler(self.handle, sampler, allocator)
 	end
 
+	---@param imageView vk.ffi.ImageView
+	---@param allocator ffi.cdata*?
+	function VKDevice:destroyImageView(imageView, allocator)
+		self.v1_0.vkDestroyImageView(self.handle, imageView, allocator)
+	end
+
+	---@param framebuffer vk.ffi.Framebuffer
+	---@param allocator ffi.cdata*?
+	function VKDevice:destroyFramebuffer(framebuffer, allocator)
+		self.v1_0.vkDestroyFramebuffer(self.handle, framebuffer, allocator)
+	end
+
+	---@param commandPool vk.ffi.CommandPool
+	---@param allocator ffi.cdata*?
+	function VKDevice:destroyCommandPool(commandPool, allocator)
+		self.v1_0.vkDestroyCommandPool(self.handle, commandPool, allocator)
+	end
+
+	---@param shaderModule vk.ffi.ShaderModule
+	---@param allocator ffi.cdata*?
+	function VKDevice:destroyShaderModule(shaderModule, allocator)
+		self.v1_0.vkDestroyShaderModule(self.handle, shaderModule, allocator)
+	end
+
+	---@param fence vk.ffi.Fence
+	---@param allocator ffi.cdata*?
+	function VKDevice:destroyFence(fence, allocator)
+		self.v1_0.vkDestroyFence(self.handle, fence, allocator)
+	end
+
+	---@param memory vk.ffi.DeviceMemory
+	---@param allocator ffi.cdata*?
+	function VKDevice:freeMemory(memory, allocator)
+		self.v1_0.vkFreeMemory(self.handle, memory, allocator)
+	end
+
+	---@param commandPool vk.ffi.CommandPool
+	---@param flags number?
+	function VKDevice:resetCommandPool(commandPool, flags)
+		local result = self.v1_0.vkResetCommandPool(self.handle, commandPool, flags or 0)
+		if result ~= 0 then
+			error("Failed to reset command pool, error code: " .. tostring(result))
+		end
+	end
+
 	---@param info vk.ffi.MemoryAllocateInfo
 	---@param allocator ffi.cdata*?
 	---@return vk.ffi.DeviceMemory
@@ -1133,6 +1178,13 @@ return function(vk)
 			vkQueuePresentKHR = "VkResult(*)(VkQueue, const VkPresentInfoKHR*)",
 			vkCreateSampler = "VkResult(*)(VkDevice, const VkSamplerCreateInfo*, const VkAllocationCallbacks*, VkSampler*)",
 			vkDestroySampler = "void(*)(VkDevice, VkSampler, const VkAllocationCallbacks*)",
+			vkDestroyImageView = "void(*)(VkDevice, VkImageView, const VkAllocationCallbacks*)",
+			vkDestroyFramebuffer = "void(*)(VkDevice, VkFramebuffer, const VkAllocationCallbacks*)",
+			vkDestroyCommandPool = "void(*)(VkDevice, VkCommandPool, const VkAllocationCallbacks*)",
+			vkDestroyShaderModule = "void(*)(VkDevice, VkShaderModule, const VkAllocationCallbacks*)",
+			vkDestroyFence = "void(*)(VkDevice, VkFence, const VkAllocationCallbacks*)",
+			vkFreeMemory = "void(*)(VkDevice, VkDeviceMemory, const VkAllocationCallbacks*)",
+			vkResetCommandPool = "VkResult(*)(VkDevice, VkCommandPool, VkFlags)",
 			vkCmdPipelineBarrier = "void(*)(VkCommandBuffer, VkFlags, VkFlags, VkFlags, uint32_t, const void*, uint32_t, const void*, uint32_t, const VkImageMemoryBarrier*)",
 			vkCreateComputePipelines = "VkResult(*)(VkDevice, uint64_t, uint32_t, const VkComputePipelineCreateInfo*, const VkAllocationCallbacks*, VkPipeline*)",
 			vkCmdDispatch = "void(*)(VkCommandBuffer, uint32_t, uint32_t, uint32_t)",
