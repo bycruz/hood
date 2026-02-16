@@ -3,6 +3,7 @@ local vk = require("hood-vulkan")
 
 ---@class hood.vk.Texture
 ---@field handle vk.ffi.Image
+---@field memory vk.ffi.DeviceMemory?
 ---@field format vk.Format?
 ---@field width number?
 ---@field height number?
@@ -78,7 +79,46 @@ function VKTexture.new(device, descriptor)
 		initialLayout = vk.ImageLayout.UNDEFINED,
 	})
 
-	return setmetatable({ handle = handle }, VKTexture)
+	-- TODO: Rewrite and reuse this logic
+	-- Allocate and bind memory (prefer DEVICE_LOCAL, fall back to any compatible type)
+	local requirements = device.handle:getImageMemoryRequirements(handle)
+	local memProps = vk.getPhysicalDeviceMemoryProperties(device.pd)
+	local memTypeIndex = nil
+	local fallbackIndex = nil
+
+	local typeBits = tonumber(requirements.memoryTypeBits)
+	local count = tonumber(memProps.memoryTypeCount)
+	for i = 0, count - 1 do
+		-- If memoryTypeBits is 0 (driver doesn't constrain), consider all types
+		if typeBits == 0 or bit.band(typeBits, bit.lshift(1, i)) ~= 0 then
+			if not fallbackIndex then
+				fallbackIndex = i
+			end
+			if bit.band(tonumber(memProps.memoryTypes[i].propertyFlags), vk.MemoryPropertyFlags.DEVICE_LOCAL) ~= 0 then
+				memTypeIndex = i
+				break
+			end
+		end
+	end
+
+	memTypeIndex = memTypeIndex or fallbackIndex
+	if not memTypeIndex then
+		error("Failed to find compatible memory type for image")
+	end
+
+	local memory = device.handle:allocateMemory({
+		allocationSize = requirements.size,
+		memoryTypeIndex = memTypeIndex,
+	})
+	device.handle:bindImageMemory(handle, memory, 0)
+
+	return setmetatable({
+		handle = handle,
+		memory = memory,
+		format = textureFormatToVkFormat[descriptor.format],
+		width = descriptor.extents.width,
+		height = descriptor.extents.height,
+	}, VKTexture)
 end
 
 function VKTexture.fromRaw(device, handle, format, width, height)
