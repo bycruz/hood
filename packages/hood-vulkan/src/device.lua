@@ -42,7 +42,46 @@ return function(vk)
 		return shaderModule[0]
 	end
 
-	---@param info vk.ffi.PipelineLayoutCreateInfo
+	---@class vk.PushConstantRange
+	---@field stageFlags vk.ShaderStageFlagBits
+	---@field offset number
+	---@field size number
+
+	---@class vk.PipelineLayoutCreateInfo
+	---@field descriptorSetLayouts vk.ffi.DescriptorSetLayout[]?
+	---@field pushConstantRanges vk.PushConstantRange[]?
+
+	---@param info vk.PipelineLayoutCreateInfo
+	---@return ffi.cdata* VkPipelineLayoutCreateInfo
+	local function pipelineLayoutCreateInfoToFFI(info)
+		local createInfo = vk.PipelineLayoutCreateInfo()
+
+		local layouts = info.descriptorSetLayouts
+		if layouts and #layouts > 0 then
+			local layoutArray = ffi.new("VkDescriptorSetLayout[?]", #layouts)
+			for i, l in ipairs(layouts) do
+				layoutArray[i - 1] = l
+			end
+			createInfo.setLayoutCount = #layouts
+			createInfo.pSetLayouts = layoutArray
+		end
+
+		local ranges = info.pushConstantRanges
+		if ranges and #ranges > 0 then
+			local rangeArray = ffi.new("VkPushConstantRange[?]", #ranges)
+			for i, r in ipairs(ranges) do
+				rangeArray[i - 1].stageFlags = r.stageFlags
+				rangeArray[i - 1].offset = r.offset
+				rangeArray[i - 1].size = r.size
+			end
+			createInfo.pushConstantRangeCount = #ranges
+			createInfo.pPushConstantRanges = rangeArray
+		end
+
+		return createInfo
+	end
+
+	---@param info vk.PipelineLayoutCreateInfo
 	---@param allocator ffi.cdata*?
 	---@return vk.ffi.PipelineLayout
 	function VKDevice:createPipelineLayout(info, allocator)

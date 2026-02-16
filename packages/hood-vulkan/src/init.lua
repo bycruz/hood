@@ -33,6 +33,7 @@ do
 
 	defStruct("PresentInfoKHR", "PRESENT_INFO_KHR")
 	defStruct("RenderPassBeginInfo", "RENDER_PASS_BEGIN_INFO")
+	defStruct("PipelineLayoutCreateInfo", "PIPELINE_LAYOUT_CREATE_INFO")
 end
 
 -- Constants
@@ -171,7 +172,7 @@ do
 
 	---@param physicalDevice vk.ffi.PhysicalDevice
 	---@param surface vk.ffi.SurfaceKHR
-	---@return number[]
+	---@return vk.PresentModeKHR[]
 	function vk.getPhysicalDeviceSurfacePresentModesKHR(physicalDevice, surface)
 		local count = ffi.new("uint32_t[1]")
 		local result = C.vkGetPhysicalDeviceSurfacePresentModesKHR(physicalDevice, surface, count, nil)
