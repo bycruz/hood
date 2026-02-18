@@ -6,13 +6,25 @@ VULKAN = os.getenv("VULKAN") == "1"
 
 local hood = {}
 
----@enum hood.PresentMode
-hood.PresentMode = {
-	Immediate = 1,
-	Fifo = 2,
-	FifoRelaxed = 3,
-	Mailbox = 4,
-}
+---@alias hood.TextureViewDimension
+--- | "1d"
+--- | "2d"
+--- | "3d"
+--- | "cube"
+--- | "1d-array"
+--- | "2d-array"
+--- | "cube-array"
+
+---@alias hood.TextureAspect
+--- | "all"
+--- | "stencil"
+--- | "depth"
+
+---@alias hood.PresentMode
+--- | "immediate"
+--- | "fifo"
+--- | "fifo-relaxed"
+--- | "mailbox"
 
 ---@alias hood.InstanceBackend "vulkan" | "opengl"
 ---@alias hood.InstanceFlag "validate"

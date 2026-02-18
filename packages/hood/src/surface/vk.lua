@@ -16,10 +16,10 @@ local vkFormatToHoodFormat = {
 
 ---@type table<hood.PresentMode, vk.PresentModeKHR>
 local hoodPresentToVkPresent = {
-	[hood.PresentMode.Immediate] = vk.PresentModeKHR.IMMEDIATE,
-	[hood.PresentMode.Fifo] = vk.PresentModeKHR.FIFO,
-	[hood.PresentMode.FifoRelaxed] = vk.PresentModeKHR.FIFO_RELAXED,
-	[hood.PresentMode.Mailbox] = vk.PresentModeKHR.MAILBOX,
+	["immediate"] = vk.PresentModeKHR.IMMEDIATE,
+	["fifo"] = vk.PresentModeKHR.FIFO,
+	["fifo-relaxed"] = vk.PresentModeKHR.FIFO_RELAXED,
+	["mailbox"] = vk.PresentModeKHR.MAILBOX,
 }
 
 ---@class hood.vk.Surface
