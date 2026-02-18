@@ -39,10 +39,36 @@ function VKBuffer.new(device, descriptor)
 
 	-- Allocate and attach memory
 	local requirements = device.handle:getBufferMemoryRequirements(handle)
+	local memProps = vk.getPhysicalDeviceMemoryProperties(device.pd)
+	local memTypeIndex = nil
+	local fallbackIndex = nil
+
+	-- Prefer DEVICE_LOCAL, fall back to any compatible type
+	-- TODO: Refactor this slop
+	local typeBits = tonumber(requirements.memoryTypeBits)
+	local count = tonumber(memProps.memoryTypeCount)
+	for i = 0, count - 1 do
+		-- If memoryTypeBits is 0 (driver doesn't constrain), consider all types
+		if typeBits == 0 or bit.band(typeBits, bit.lshift(1, i)) ~= 0 then
+			if not fallbackIndex then
+				fallbackIndex = i
+			end
+
+			if bit.band(tonumber(memProps.memoryTypes[i].propertyFlags), vk.MemoryPropertyFlags.DEVICE_LOCAL) ~= 0 then
+				memTypeIndex = i
+				break
+			end
+		end
+	end
+
+	memTypeIndex = memTypeIndex or fallbackIndex
+	if not memTypeIndex then
+		error("Failed to find compatible memory type for buffer")
+	end
+
 	local memory = device.handle:allocateMemory({
 		allocationSize = requirements.size,
-		-- TODO: This shouldn't be hardcoded to 0.
-		memoryTypeIndex = 0
+		memoryTypeIndex = memTypeIndex,
 	})
 	device.handle:bindBufferMemory(handle, memory, 0)
 
