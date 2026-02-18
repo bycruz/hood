@@ -28,6 +28,11 @@ local submitArray = ffi.new("VkSubmitInfo[1]")
 ---@param buffer hood.vk.CommandBuffer
 ---@param swapchain hood.vk.Swapchain?
 function VKQueue:submit(buffer, swapchain)
+	-- Track command buffer for deferred cleanup after GPU completes
+	if swapchain then
+		swapchain.pendingCommandBuffers[swapchain.currentFrame] = buffer
+	end
+
 	commandBuffers[0] = buffer.handle
 
 	local info = submitArray[0]
@@ -58,6 +63,9 @@ function VKQueue:submit(buffer, swapchain)
 	end
 end
 
+-- TODO: This currently uses a blocking wait for simplicity and to avoid a use after free (from lua's gc)
+-- Should eventually use a form of garbage collection managed by the VKQueue
+
 --- Helper method to write data to a buffer
 ---@param buffer hood.gl.Buffer
 ---@param size number
@@ -66,7 +74,10 @@ end
 function VKQueue:writeBuffer(buffer, size, data, offset)
 	local cmd = VKCommandEncoder.new(self.device)
 	cmd:writeBuffer(buffer, size, data, offset)
-	self:submit(cmd:finish())
+	local buf = cmd:finish()
+	self:submit(buf)
+	self.device.handle:queueWaitIdle(self.handle)
+	buf:destroy()
 end
 
 --- Helper method to write data to a texture
@@ -76,7 +87,10 @@ end
 function VKQueue:writeTexture(texture, descriptor, data)
 	local cmd = VKCommandEncoder.new(self.device)
 	cmd:writeTexture(texture, descriptor, data)
-	self:submit(cmd:finish())
+	local buf = cmd:finish()
+	self:submit(buf)
+	self.device.handle:queueWaitIdle(self.handle)
+	buf:destroy()
 end
 
 ---@param swapchain hood.vk.Swapchain
