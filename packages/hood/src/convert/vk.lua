@@ -1,0 +1,54 @@
+local hood = require("hood")
+local vk = require("hood-vulkan")
+
+local vkConversions = {}
+
+---@type table<hood.TextureDimension, vk.ImageType>
+vkConversions.textureType = {
+	["1d"] = vk.ImageType.TYPE_1D,
+	["2d"] = vk.ImageType.TYPE_2D,
+	["3d"] = vk.ImageType.TYPE_3D
+}
+
+---@type table<hood.TextureViewDimension, vk.SampleCountFlagBits>
+vkConversions.textureViewType = {
+	["1d"] = vk.ImageViewType.TYPE_1D,
+	["2d"] = vk.ImageViewType.TYPE_2D,
+	["3d"] = vk.ImageViewType.TYPE_3D,
+	["cube"] = vk.ImageViewType.CUBE,
+	["1d_array"] = vk.ImageViewType.TYPE_1D_ARRAY,
+	["2d_array"] = vk.ImageViewType.TYPE_2D_ARRAY,
+	["cube_array"] = vk.ImageViewType.CUBE_ARRAY,
+}
+
+---@type table<hood.TextureFormat, vk.Format>
+vkConversions.textureFormat = {
+	[hood.TextureFormat.Rgba8UNorm] = vk.Format.R8G8B8A8_UNORM,
+	[hood.TextureFormat.Rgba8Uint] = vk.Format.R8G8B8A8_UINT,
+	[hood.TextureFormat.Depth16Unorm] = vk.Format.D16_UNORM,
+	[hood.TextureFormat.Depth24Plus] = vk.Format.X8_D24_UNORM_PACK32,
+	[hood.TextureFormat.Depth32Float] = vk.Format.D32_SFLOAT,
+	[hood.TextureFormat.Bgra8UNorm] = vk.Format.B8G8R8A8_UNORM,
+}
+
+---@type table<number, vk.SampleCountFlagBits>
+vkConversions.sampleCount = {
+	[1] = vk.SampleCountFlagBits.COUNT_1,
+	[2] = vk.SampleCountFlagBits.COUNT_2,
+	[4] = vk.SampleCountFlagBits.COUNT_4,
+	[8] = vk.SampleCountFlagBits.COUNT_8,
+	[16] = vk.SampleCountFlagBits.COUNT_16,
+	[32] = vk.SampleCountFlagBits.COUNT_32,
+	[64] = vk.SampleCountFlagBits.COUNT_64,
+}
+
+---@type table<hood.TextureUsage, vk.ImageUsageFlagBits>
+vkConversions.textureUsage = {
+	["COPY_SRC"] = vk.ImageUsageFlagBits.TRANSFER_SRC,
+	["COPY_DST"] = vk.ImageUsageFlagBits.TRANSFER_DST,
+	["TEXTURE_BINDING"] = vk.ImageUsageFlagBits.SAMPLED,
+	["STORAGE_BINDING"] = vk.ImageUsageFlagBits.STORAGE,
+	["RENDER_ATTACHMENT"] = vk.ImageUsageFlagBits.COLOR_ATTACHMENT,
+}
+
+return vkConversions
