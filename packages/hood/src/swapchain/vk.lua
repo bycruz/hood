@@ -36,6 +36,13 @@ function VKSwapchain.new(device, format, info)
 		inFlightFences[i] = device.handle:createFence({ flags = vk.FenceCreateFlagBits.SIGNALED })
 	end
 
+	-- Track per-frame command buffers for deferred cleanup
+	-- TODO: We probably don't want to be doing this in the future.
+	local pendingCommandBuffers = {}
+	for i = 1, #images do
+		pendingCommandBuffers[i] = nil
+	end
+
 	return setmetatable({
 		images = images,
 		device = device,
@@ -43,6 +50,7 @@ function VKSwapchain.new(device, format, info)
 		imageAvailableSemaphores = imageAvailableSemaphores,
 		renderFinishedSemaphores = renderFinishedSemaphores,
 		inFlightFences = inFlightFences,
+		pendingCommandBuffers = pendingCommandBuffers,
 		currentFrame = 1,
 		imageFormat = info.imageFormat,
 		format = format,
@@ -57,6 +65,12 @@ function VKSwapchain:getCurrentTexture()
 	-- Wait for this frame's previous work to complete before reusing its semaphores
 	self.device.handle:waitForFences({ fence }, true, math.huge)
 	self.device.handle:resetFences({ fence })
+
+	local prevBuf = self.pendingCommandBuffers[self.currentFrame]
+	if prevBuf then
+		prevBuf:destroy()
+		self.pendingCommandBuffers[self.currentFrame] = nil
+	end
 
 	local sem = self.imageAvailableSemaphores[self.currentFrame]
 	local currentVkImageIdx = self.device.handle:acquireNextImageKHR(self.handle, math.huge, sem)
