@@ -8,6 +8,8 @@ local VKCommandBuffer = require("hood.command_buffer.vk")
 ---@field buffer hood.vk.CommandBuffer
 ---@field device hood.vk.Device
 ---@field pendingDescriptor hood.RenderPassDescriptor?
+---@field imageViews vk.ffi.ImageView[]
+---@field framebuffers vk.ffi.Framebuffer[]
 local VKCommandEncoder = {}
 VKCommandEncoder.__index = VKCommandEncoder
 
@@ -16,7 +18,12 @@ VKCommandEncoder.__index = VKCommandEncoder
 function VKCommandEncoder.new(device)
 	local buffer = VKCommandBuffer.new(device)
 	device.handle:beginCommandBuffer(buffer.handle)
-	return setmetatable({ device = device, buffer = buffer }, VKCommandEncoder)
+	return setmetatable({
+		device = device,
+		buffer = buffer,
+		imageViews = {},
+		framebuffers = {},
+	}, VKCommandEncoder)
 end
 
 ---@param descriptor hood.RenderPassDescriptor
@@ -49,7 +56,7 @@ function VKCommandEncoder:_beginRenderPass(renderPass, descriptor)
 	local imageViews = ffi.new("VkImageView[?]", totalAttachments)
 
 	for i, att in ipairs(colorAttachments) do
-		imageViews[i - 1] = self.device.handle:createImageView({
+		local iv = self.device.handle:createImageView({
 			image = att.texture.handle,
 			viewType = vk.ImageViewType.TYPE_2D,
 			format = att.texture.format,
@@ -61,10 +68,12 @@ function VKCommandEncoder:_beginRenderPass(renderPass, descriptor)
 				layerCount = 1,
 			},
 		})
+		imageViews[i - 1] = iv
+		self.imageViews[#self.imageViews + 1] = iv
 	end
 
 	if depthAttachment then
-		imageViews[totalAttachments - 1] = self.device.handle:createImageView({
+		local iv = self.device.handle:createImageView({
 			image = depthAttachment.texture.handle,
 			viewType = vk.ImageViewType.TYPE_2D,
 			format = depthAttachment.texture.format,
@@ -76,6 +85,8 @@ function VKCommandEncoder:_beginRenderPass(renderPass, descriptor)
 				layerCount = 1,
 			},
 		})
+		imageViews[totalAttachments - 1] = iv
+		self.imageViews[#self.imageViews + 1] = iv
 	end
 
 	local framebuffer = self.device.handle:createFramebuffer({
@@ -86,6 +97,7 @@ function VKCommandEncoder:_beginRenderPass(renderPass, descriptor)
 		height = height,
 		layers = 1,
 	})
+	self.framebuffers[#self.framebuffers + 1] = framebuffer
 
 	local clearValues = ffi.new("VkClearValue[?]", totalAttachments)
 
@@ -179,6 +191,12 @@ function VKCommandEncoder:drawIndexed(indexCount, instanceCount, firstIndex, bas
 		baseVertex or 0, firstInstance or 0)
 end
 
+---@param index number
+---@param bindGroup hood.BindGroup
+function VKCommandEncoder:setBindGroup(index, bindGroup)
+	-- TODO: implement descriptor set binding for Vulkan
+end
+
 function VKCommandEncoder:endRendering()
 	self.device.handle:cmdEndRenderPass(self.buffer.handle)
 end
@@ -188,7 +206,33 @@ end
 ---@param data ffi.cdata*
 ---@param offset number?
 function VKCommandEncoder:writeBuffer(buffer, size, data, offset)
-	self.device.handle:cmdUpdateBuffer(self.buffer.handle, buffer.handle, offset or 0, size, data)
+	-- TODO: Use a staging buffer instead of this slop
+	offset = offset or 0
+
+	-- vkCmdUpdateBuffer is limited to 65536 bytes per call; chunk if needed
+	local chunkSize = 65536
+	local remaining = size
+	local srcOffset = 0
+	while remaining > 0 do
+		local writeSize = math.min(remaining, chunkSize)
+		self.device.handle:cmdUpdateBuffer(
+			self.buffer.handle, buffer.handle, offset + srcOffset, writeSize,
+			ffi.cast("const char*", data) + srcOffset)
+		srcOffset = srcOffset + writeSize
+		remaining = remaining - writeSize
+	end
+end
+
+---@param stagingBuffer vk.ffi.Buffer
+---@param stagingMemory vk.ffi.DeviceMemory
+function VKCommandEncoder:_trackStagingResource(stagingBuffer, stagingMemory)
+	if not self.buffer.stagingResources then
+		self.buffer.stagingResources = {}
+	end
+	self.buffer.stagingResources[#self.buffer.stagingResources + 1] = {
+		buffer = stagingBuffer,
+		memory = stagingMemory,
+	}
 end
 
 -- TODO: Completely rewrite this
@@ -210,8 +254,12 @@ function VKCommandEncoder:writeTexture(texture, descriptor, data)
 	local memProps = vk.getPhysicalDeviceMemoryProperties(self.device.pd)
 	local requiredFlags = bit.bor(vk.MemoryPropertyFlags.HOST_VISIBLE, vk.MemoryPropertyFlags.HOST_COHERENT)
 	local memTypeIndex
-	for i = 0, tonumber(memProps.memoryTypeCount) - 1 do
-		if bit.band(tonumber(memProps.memoryTypes[i].propertyFlags), requiredFlags) == requiredFlags then
+	local requirements = self.device.handle:getBufferMemoryRequirements(stagingBuffer)
+	local typeBits = tonumber(requirements.memoryTypeBits)
+	local count = tonumber(memProps.memoryTypeCount)
+	for i = 0, count - 1 do
+		if (typeBits == 0 or bit.band(typeBits, bit.lshift(1, i)) ~= 0)
+			and bit.band(tonumber(memProps.memoryTypes[i].propertyFlags), requiredFlags) == requiredFlags then
 			memTypeIndex = i
 			break
 		end
@@ -220,10 +268,13 @@ function VKCommandEncoder:writeTexture(texture, descriptor, data)
 		error("Failed to find host-visible memory type")
 	end
 	local stagingMemory = self.device.handle:allocateMemory({
-		allocationSize = dataSize,
+		allocationSize = requirements.size,
 		memoryTypeIndex = memTypeIndex,
 	})
 	self.device.handle:bindBufferMemory(stagingBuffer, stagingMemory, 0)
+
+	-- Track staging resources for cleanup after GPU finishes
+	self:_trackStagingResource(stagingBuffer, stagingMemory)
 
 	-- Map, copy, unmap
 	local mapped = self.device.handle:mapMemory(stagingMemory, 0, dataSize)
@@ -233,10 +284,21 @@ function VKCommandEncoder:writeTexture(texture, descriptor, data)
 	-- Transition image to TRANSFER_DST_OPTIMAL
 	local mip = descriptor.mip or 0
 	local layer = descriptor.layer or 0
+
+	-- Use tracked layout if available, otherwise UNDEFINED for first use
+	local oldLayout = texture.currentLayout or vk.ImageLayout.UNDEFINED
+	local srcAccessMask = 0
+	local srcStage = vk.PipelineStageFlags.TOP_OF_PIPE
+	if oldLayout == vk.ImageLayout.SHADER_READ_ONLY_OPTIMAL then
+		srcAccessMask = vk.AccessFlags.SHADER_READ
+		srcStage = vk.PipelineStageFlags.FRAGMENT_SHADER
+	end
+
 	local barrier = ffi.new("VkImageMemoryBarrier", {
 		sType = vk.StructureType.IMAGE_MEMORY_BARRIER,
+		srcAccessMask = srcAccessMask,
 		dstAccessMask = vk.AccessFlags.TRANSFER_WRITE,
-		oldLayout = vk.ImageLayout.UNDEFINED,
+		oldLayout = oldLayout,
 		newLayout = vk.ImageLayout.TRANSFER_DST_OPTIMAL,
 		srcQueueFamilyIndex = 0xFFFFFFFF, -- VK_QUEUE_FAMILY_IGNORED
 		dstQueueFamilyIndex = 0xFFFFFFFF,
@@ -253,7 +315,7 @@ function VKCommandEncoder:writeTexture(texture, descriptor, data)
 
 	self.device.handle:cmdPipelineBarrier(
 		self.buffer.handle,
-		vk.PipelineStageFlags.TOP_OF_PIPE,
+		srcStage,
 		vk.PipelineStageFlags.TRANSFER,
 		1, barriers)
 
@@ -286,6 +348,9 @@ function VKCommandEncoder:writeTexture(texture, descriptor, data)
 		vk.PipelineStageFlags.TRANSFER,
 		vk.PipelineStageFlags.FRAGMENT_SHADER,
 		1, barriers)
+
+	-- Track current layout
+	texture.currentLayout = vk.ImageLayout.SHADER_READ_ONLY_OPTIMAL
 end
 
 ---@param descriptor hood.ComputePassDescriptor
@@ -304,8 +369,33 @@ function VKCommandEncoder:dispatchWorkgroups(x, y, z)
 	self.device.handle:cmdDispatch(self.buffer.handle, x, y, z)
 end
 
+function VKCommandEncoder:endComputePass()
+	-- Memory barrier to ensure compute writes are visible to subsequent passes
+	local barrier = ffi.new("VkMemoryBarrier", {
+		sType = vk.StructureType.MEMORY_BARRIER,
+		srcAccessMask = bit.bor(vk.AccessFlags.SHADER_READ, vk.AccessFlags.SHADER_WRITE),
+		dstAccessMask = bit.bor(vk.AccessFlags.SHADER_READ, vk.AccessFlags.SHADER_WRITE,
+			vk.AccessFlags.VERTEX_ATTRIBUTE_READ, vk.AccessFlags.INDEX_READ),
+	})
+
+	self.device.handle.v1_0.vkCmdPipelineBarrier(
+		self.buffer.handle,
+		vk.PipelineStageFlags.COMPUTE_SHADER,
+		bit.bor(vk.PipelineStageFlags.VERTEX_INPUT, vk.PipelineStageFlags.VERTEX_SHADER,
+			vk.PipelineStageFlags.FRAGMENT_SHADER, vk.PipelineStageFlags.COMPUTE_SHADER),
+		0,
+		1, barrier,
+		0, nil,
+		0, nil)
+end
+
 function VKCommandEncoder:finish()
 	self.device.handle:endCommandBuffer(self.buffer.handle)
+
+	-- Transfer ownership of transient resources to the command buffer for deferred cleanup
+	self.buffer.imageViews = self.imageViews
+	self.buffer.framebuffers = self.framebuffers
+
 	return self.buffer
 end
 
