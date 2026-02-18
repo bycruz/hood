@@ -25,7 +25,7 @@ local device = adapter:requestDevice()
 
 -- Create surface and swapchain
 local surface = instance:createSurface(window)
-local swapchain = surface:configure(device, {})
+local swapchain = surface:configure(device, { presentMode = "fifo" })
 
 -- Define vertex layout: position (vec3) + color (vec4)
 local vertexLayout = VertexLayout.new()
