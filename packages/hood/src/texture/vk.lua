@@ -1,6 +1,8 @@
 local hood = require("hood")
 local vk = require("hood-vulkan")
 
+local vkConvert = require("hood.convert.vk")
+
 ---@class hood.vk.Texture
 ---@field handle vk.ffi.Image
 ---@field memory vk.ffi.DeviceMemory?
@@ -10,46 +12,10 @@ local vk = require("hood-vulkan")
 local VKTexture = {}
 VKTexture.__index = VKTexture
 
-local dimToImageType = {
-	["1d"] = vk.ImageType.TYPE_1D,
-	["2d"] = vk.ImageType.TYPE_2D,
-	["3d"] = vk.ImageType.TYPE_3D
-}
-
----@type table<hood.TextureFormat, vk.Format>
-local textureFormatToVkFormat = {
-	[hood.TextureFormat.Rgba8UNorm] = vk.Format.R8G8B8A8_UNORM,
-	[hood.TextureFormat.Rgba8Uint] = vk.Format.R8G8B8A8_UINT,
-	[hood.TextureFormat.Depth16Unorm] = vk.Format.D16_UNORM,
-	[hood.TextureFormat.Depth24Plus] = vk.Format.X8_D24_UNORM_PACK32,
-	[hood.TextureFormat.Depth32Float] = vk.Format.D32_SFLOAT,
-	[hood.TextureFormat.Bgra8UNorm] = vk.Format.B8G8R8A8_UNORM,
-}
-
----@type table<number, vk.SampleCountFlagBits>
-local sampleCountToVkSampleCount = {
-	[1] = vk.SampleCountFlagBits.COUNT_1,
-	[2] = vk.SampleCountFlagBits.COUNT_2,
-	[4] = vk.SampleCountFlagBits.COUNT_4,
-	[8] = vk.SampleCountFlagBits.COUNT_8,
-	[16] = vk.SampleCountFlagBits.COUNT_16,
-	[32] = vk.SampleCountFlagBits.COUNT_32,
-	[64] = vk.SampleCountFlagBits.COUNT_64,
-}
-
----@type table<hood.TextureUsage, vk.ImageUsageFlagBits>
-local usageToVkUsage = {
-	["COPY_SRC"] = vk.ImageUsageFlagBits.TRANSFER_SRC,
-	["COPY_DST"] = vk.ImageUsageFlagBits.TRANSFER_DST,
-	["TEXTURE_BINDING"] = vk.ImageUsageFlagBits.SAMPLED,
-	["STORAGE_BINDING"] = vk.ImageUsageFlagBits.STORAGE,
-	["RENDER_ATTACHMENT"] = vk.ImageUsageFlagBits.COLOR_ATTACHMENT,
-}
-
 ---@param device hood.vk.Device
 ---@param descriptor hood.TextureDescriptor
 function VKTexture.new(device, descriptor)
-	local samples = sampleCountToVkSampleCount[descriptor.sampleCount or 1]
+	local samples = vkConvert.sampleCount[descriptor.sampleCount or 1]
 	if not samples then
 		error("Unsupported sample count: " .. tostring(descriptor.sampleCount))
 	end
@@ -59,12 +25,12 @@ function VKTexture.new(device, descriptor)
 	---@type vk.ImageUsageFlagBits
 	local vkUsage = 0
 	for _, usage in ipairs(descriptor.usages) do
-		vkUsage = bit.bor(vkUsage, usageToVkUsage[usage])
+		vkUsage = bit.bor(vkUsage, vkConvert.textureUsage[usage])
 	end
 
 	local handle = device.handle:createImage({
-		imageType = dimToImageType[descriptor.extents.dim],
-		format = textureFormatToVkFormat[descriptor.format],
+		imageType = vkConvert.textureType[descriptor.extents.dim],
+		format = vkConvert.textureFormat[descriptor.format],
 		extent = {
 			width = descriptor.extents.width,
 			height = descriptor.extents.height,
@@ -115,7 +81,7 @@ function VKTexture.new(device, descriptor)
 	return setmetatable({
 		handle = handle,
 		memory = memory,
-		format = textureFormatToVkFormat[descriptor.format],
+		format = vkConvert.textureFormat[descriptor.format],
 		width = descriptor.extents.width,
 		height = descriptor.extents.height,
 	}, VKTexture)
@@ -123,6 +89,9 @@ end
 
 function VKTexture.fromRaw(device, handle, format, width, height)
 	return setmetatable({ handle = handle, format = format, width = width, height = height }, VKTexture)
+end
+
+function VKTexture:createView(descriptor)
 end
 
 return VKTexture
