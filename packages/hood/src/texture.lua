@@ -5,6 +5,11 @@
 --- | "RENDER_ATTACHMENT"
 --- | "STORAGE_BINDING"
 
+---@alias hood.TextureDimension
+--- | "1d"
+--- | "2d"
+--- | "3d"
+
 ---@alias hood.TextureExtents
 --- | { dim: "3d", width: number, height: number, depth: number }
 --- | { dim: "2d", width: number, height: number, count?: number }
