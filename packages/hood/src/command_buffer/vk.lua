@@ -24,7 +24,38 @@ function VKCommandBuffer.new(device)
 		device = device,
 		pool = pool,
 		handle = handle,
+		stagingResources = nil,
 	}, VKCommandBuffer)
+end
+
+function VKCommandBuffer:destroy()
+	-- Free staging resources
+	if self.stagingResources then
+		for _, res in ipairs(self.stagingResources) do
+			self.device.handle:destroyBuffer(res.buffer)
+			self.device.handle:freeMemory(res.memory)
+		end
+		self.stagingResources = nil
+	end
+
+	-- Free image views
+	if self.imageViews then
+		for _, iv in ipairs(self.imageViews) do
+			self.device.handle:destroyImageView(iv)
+		end
+		self.imageViews = nil
+	end
+
+	-- Free framebuffers
+	if self.framebuffers then
+		for _, fb in ipairs(self.framebuffers) do
+			self.device.handle:destroyFramebuffer(fb)
+		end
+		self.framebuffers = nil
+	end
+
+	-- Destroying the pool implicitly frees all command buffers allocated from it
+	self.device.handle:destroyCommandPool(self.pool)
 end
 
 return VKCommandBuffer
