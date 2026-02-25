@@ -99,7 +99,7 @@ function VKCommandEncoder:_beginRenderPass(renderPass, descriptor)
 	})
 	self.framebuffers[#self.framebuffers + 1] = framebuffer
 
-	local clearValues = ffi.new("VkClearValue[?]", totalAttachments)
+	local clearValues = vk.ClearValueArray(totalAttachments)
 
 	for i, att in ipairs(colorAttachments) do
 		if att.op.type == "clear" then
@@ -130,8 +130,8 @@ function VKCommandEncoder:_beginRenderPass(renderPass, descriptor)
 end
 
 do
-	local viewport = ffi.new("VkViewport")
-	local scissor = ffi.new("VkRect2D")
+	local viewport = vk.Viewport()
+	local scissor = vk.Rect2D()
 
 	---@param x number
 	---@param y number
@@ -294,24 +294,19 @@ function VKCommandEncoder:writeTexture(texture, descriptor, data)
 		srcStage = vk.PipelineStageFlags.FRAGMENT_SHADER
 	end
 
-	local barrier = ffi.new("VkImageMemoryBarrier", {
-		sType = vk.StructureType.IMAGE_MEMORY_BARRIER,
-		srcAccessMask = srcAccessMask,
-		dstAccessMask = vk.AccessFlags.TRANSFER_WRITE,
-		oldLayout = oldLayout,
-		newLayout = vk.ImageLayout.TRANSFER_DST_OPTIMAL,
-		srcQueueFamilyIndex = 0xFFFFFFFF, -- VK_QUEUE_FAMILY_IGNORED
-		dstQueueFamilyIndex = 0xFFFFFFFF,
-		image = texture.handle,
-		subresourceRange = {
-			aspectMask = vk.ImageAspectFlagBits.COLOR,
-			baseMipLevel = mip,
-			levelCount = 1,
-			baseArrayLayer = layer,
-			layerCount = 1,
-		},
-	})
-	local barriers = ffi.new("VkImageMemoryBarrier[1]", barrier)
+	local barriers = vk.ImageMemoryBarrierArray(1)
+	barriers[0].srcAccessMask = srcAccessMask
+	barriers[0].dstAccessMask = vk.AccessFlags.TRANSFER_WRITE
+	barriers[0].oldLayout = oldLayout
+	barriers[0].newLayout = vk.ImageLayout.TRANSFER_DST_OPTIMAL
+	barriers[0].srcQueueFamilyIndex = 0xFFFFFFFF -- VK_QUEUE_FAMILY_IGNORED
+	barriers[0].dstQueueFamilyIndex = 0xFFFFFFFF
+	barriers[0].image = texture.handle
+	barriers[0].subresourceRange.aspectMask = vk.ImageAspectFlagBits.COLOR
+	barriers[0].subresourceRange.baseMipLevel = mip
+	barriers[0].subresourceRange.levelCount = 1
+	barriers[0].subresourceRange.baseArrayLayer = layer
+	barriers[0].subresourceRange.layerCount = 1
 
 	self.device.handle:cmdPipelineBarrier(
 		self.buffer.handle,
@@ -320,28 +315,26 @@ function VKCommandEncoder:writeTexture(texture, descriptor, data)
 		1, barriers)
 
 	-- Copy buffer to image
-	local region = ffi.new("VkBufferImageCopy[1]", { {
-		bufferRowLength = descriptor.bytesPerRow and (descriptor.bytesPerRow / 4) or 0,
-		bufferImageHeight = descriptor.rowsPerImage or 0,
-		imageSubresource = {
-			aspectMask = vk.ImageAspectFlagBits.COLOR,
-			mipLevel = mip,
-			baseArrayLayer = layer,
-			layerCount = 1,
-		},
-		imageExtent = { width = width, height = height, depth = depth },
-	} })
+	local region = vk.BufferImageCopyArray(1)
+	region[0].bufferRowLength = descriptor.bytesPerRow and (descriptor.bytesPerRow / 4) or 0
+	region[0].bufferImageHeight = descriptor.rowsPerImage or 0
+	region[0].imageSubresource.aspectMask = vk.ImageAspectFlagBits.COLOR
+	region[0].imageSubresource.mipLevel = mip
+	region[0].imageSubresource.baseArrayLayer = layer
+	region[0].imageSubresource.layerCount = 1
+	region[0].imageExtent.width = width
+	region[0].imageExtent.height = height
+	region[0].imageExtent.depth = depth
 
 	self.device.handle:cmdCopyBufferToImage(
 		self.buffer.handle, stagingBuffer, texture.handle,
 		vk.ImageLayout.TRANSFER_DST_OPTIMAL, 1, region)
 
 	-- Transition image to SHADER_READ_ONLY_OPTIMAL
-	barrier.srcAccessMask = vk.AccessFlags.TRANSFER_WRITE
-	barrier.dstAccessMask = vk.AccessFlags.SHADER_READ
-	barrier.oldLayout = vk.ImageLayout.TRANSFER_DST_OPTIMAL
-	barrier.newLayout = vk.ImageLayout.SHADER_READ_ONLY_OPTIMAL
-	barriers[0] = barrier
+	barriers[0].srcAccessMask = vk.AccessFlags.TRANSFER_WRITE
+	barriers[0].dstAccessMask = vk.AccessFlags.SHADER_READ
+	barriers[0].oldLayout = vk.ImageLayout.TRANSFER_DST_OPTIMAL
+	barriers[0].newLayout = vk.ImageLayout.SHADER_READ_ONLY_OPTIMAL
 
 	self.device.handle:cmdPipelineBarrier(
 		self.buffer.handle,
@@ -371,22 +364,18 @@ end
 
 function VKCommandEncoder:endComputePass()
 	-- Memory barrier to ensure compute writes are visible to subsequent passes
-	local barrier = ffi.new("VkMemoryBarrier", {
-		sType = vk.StructureType.MEMORY_BARRIER,
+	local barrier = vk.MemoryBarrier({
 		srcAccessMask = bit.bor(vk.AccessFlags.SHADER_READ, vk.AccessFlags.SHADER_WRITE),
 		dstAccessMask = bit.bor(vk.AccessFlags.SHADER_READ, vk.AccessFlags.SHADER_WRITE,
 			vk.AccessFlags.VERTEX_ATTRIBUTE_READ, vk.AccessFlags.INDEX_READ),
 	})
 
-	self.device.handle.v1_0.vkCmdPipelineBarrier(
+	self.device.handle:cmdPipelineBarrier(
 		self.buffer.handle,
 		vk.PipelineStageFlags.COMPUTE_SHADER,
 		bit.bor(vk.PipelineStageFlags.VERTEX_INPUT, vk.PipelineStageFlags.VERTEX_SHADER,
 			vk.PipelineStageFlags.FRAGMENT_SHADER, vk.PipelineStageFlags.COMPUTE_SHADER),
-		0,
-		1, barrier,
-		0, nil,
-		0, nil)
+		0, nil, 1, barrier)
 end
 
 function VKCommandEncoder:finish()

@@ -853,10 +853,14 @@ return function(vk)
 	---@param srcStageMask vk.PipelineStageFlags
 	---@param dstStageMask vk.PipelineStageFlags
 	---@param imageMemoryBarrierCount number
-	---@param pImageMemoryBarriers ffi.cdata*
+	---@param pImageMemoryBarriers ffi.cdata*?
+	---@param memoryBarrierCount number?
+	---@param pMemoryBarriers ffi.cdata*?
 	function VKDevice:cmdPipelineBarrier(commandBuffer, srcStageMask, dstStageMask, imageMemoryBarrierCount,
-										 pImageMemoryBarriers)
-		self.v1_0.vkCmdPipelineBarrier(commandBuffer, srcStageMask, dstStageMask, 0, 0, nil, 0, nil,
+										 pImageMemoryBarriers, memoryBarrierCount, pMemoryBarriers)
+		self.v1_0.vkCmdPipelineBarrier(commandBuffer, srcStageMask, dstStageMask, 0,
+			memoryBarrierCount or 0, pMemoryBarriers,
+			0, nil,
 			imageMemoryBarrierCount, pImageMemoryBarriers)
 	end
 

@@ -23,7 +23,7 @@ local commandBuffers = ffi.new("VkCommandBuffer[1]")
 local waitSemaphores = ffi.new("VkSemaphore[1]")
 local signalSemaphores = ffi.new("VkSemaphore[1]")
 local waitStages = ffi.new("uint32_t[1]", vk.PipelineStageFlags.COLOR_ATTACHMENT_OUTPUT)
-local submitArray = ffi.new("VkSubmitInfo[1]")
+local submitArray = vk.SubmitInfoArray(1)
 
 ---@param buffer hood.vk.CommandBuffer
 ---@param swapchain hood.vk.Swapchain?
@@ -36,7 +36,6 @@ function VKQueue:submit(buffer, swapchain)
 	commandBuffers[0] = buffer.handle
 
 	local info = submitArray[0]
-	info.sType = vk.StructureType.SUBMIT_INFO
 	info.commandBufferCount = 1
 	info.pCommandBuffers = commandBuffers
 

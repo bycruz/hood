@@ -63,6 +63,15 @@ local vkEnums = require("hood-vulkan.ffi.enums")
 ---@field PhysicalDeviceMemoryProperties fun(init: vk.ffi.PhysicalDeviceMemoryProperties?): vk.ffi.PhysicalDeviceMemoryProperties
 ---@field SurfaceCapabilitiesKHR fun(init: vk.ffi.SurfaceCapabilitiesKHR?): vk.ffi.SurfaceCapabilitiesKHR
 ---@field SubmitInfo fun(init: vk.ffi.SubmitInfo?): vk.ffi.SubmitInfo
+---@field ImageMemoryBarrier fun(init: vk.ffi.ImageMemoryBarrier?): vk.ffi.ImageMemoryBarrier
+---@field MemoryBarrier fun(init: vk.ffi.MemoryBarrier?): vk.ffi.MemoryBarrier
+---@field ClearValue fun(init: vk.ffi.ClearValue?): vk.ffi.ClearValue
+---@field Viewport fun(init: vk.ffi.Viewport?): vk.ffi.Viewport
+---@field Rect2D fun(init: vk.ffi.Rect2D?): vk.ffi.Rect2D
+---@field BufferImageCopy fun(init: vk.ffi.BufferImageCopy?): vk.ffi.BufferImageCopy
+---@field ImageMemoryBarrierArray fun(count: number): vk.ffi.ImageMemoryBarrier[]
+---@field ClearValueArray fun(count: number): vk.ffi.ClearValue[]
+---@field BufferImageCopyArray fun(count: number): vk.ffi.BufferImageCopy[]
 ---@field DeviceQueueCreateInfoArray fun(count: number): vk.ffi.DeviceQueueCreateInfo[]
 ---@field PipelineShaderStageCreateInfoArray fun(count: number): vk.ffi.PipelineShaderStageCreateInfo[]
 ---@field GraphicsPipelineCreateInfoArray fun(count: number): vk.ffi.GraphicsPipelineCreateInfo[]
@@ -163,6 +172,12 @@ do
 	defType("PhysicalDeviceMemoryProperties")
 	defType("SurfaceCapabilitiesKHR")
 	defStruct("SubmitInfo", "SUBMIT_INFO")
+	defStruct("ImageMemoryBarrier", "IMAGE_MEMORY_BARRIER")
+	defStruct("MemoryBarrier", "MEMORY_BARRIER")
+	defType("ClearValue")
+	defType("Viewport")
+	defType("Rect2D")
+	defType("BufferImageCopy")
 end
 
 -- Constants
