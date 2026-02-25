@@ -5,9 +5,49 @@ ffi.cdef([[#embed "ffi/ffidefs.h"]])
 local vkEnums = require("hood-vulkan.ffi.enums")
 
 ---@class vk: vk.RawEnums
----@field PresentInfoKHR fun(): vk.ffi.PresentInfoKHR
----@field RenderPassBeginInfo fun(): vk.ffi.RenderPassBeginInfo
----@field PipelineLayoutCreateInfo fun(): vk.ffi.PipelineLayoutCreateInfo
+---@field ApplicationInfo fun(init: vk.ffi.ApplicationInfo?): vk.ffi.ApplicationInfo
+---@field InstanceCreateInfo fun(init: vk.ffi.InstanceCreateInfo?): vk.ffi.InstanceCreateInfo
+---@field DeviceQueueCreateInfo fun(init: vk.ffi.DeviceQueueCreateInfo?): vk.ffi.DeviceQueueCreateInfo
+---@field DeviceCreateInfo fun(init: vk.ffi.DeviceCreateInfo?): vk.ffi.DeviceCreateInfo
+---@field BufferCreateInfo fun(init: vk.ffi.BufferCreateInfo?): vk.ffi.BufferCreateInfo
+---@field ShaderModuleCreateInfo fun(init: vk.ffi.ShaderModuleCreateInfo?): vk.ffi.ShaderModuleCreateInfo
+---@field PipelineLayoutCreateInfo fun(init: vk.ffi.PipelineLayoutCreateInfo?): vk.ffi.PipelineLayoutCreateInfo
+---@field PipelineShaderStageCreateInfo fun(init: vk.ffi.PipelineShaderStageCreateInfo?): vk.ffi.PipelineShaderStageCreateInfo
+---@field PipelineVertexInputStateCreateInfo fun(init: vk.ffi.PipelineVertexInputStateCreateInfo?): vk.ffi.PipelineVertexInputStateCreateInfo
+---@field PipelineInputAssemblyStateCreateInfo fun(init: vk.ffi.PipelineInputAssemblyStateCreateInfo?): vk.ffi.PipelineInputAssemblyStateCreateInfo
+---@field PipelineViewportStateCreateInfo fun(init: vk.ffi.PipelineViewportStateCreateInfo?): vk.ffi.PipelineViewportStateCreateInfo
+---@field PipelineRasterizationStateCreateInfo fun(init: vk.ffi.PipelineRasterizationStateCreateInfo?): vk.ffi.PipelineRasterizationStateCreateInfo
+---@field PipelineMultisampleStateCreateInfo fun(init: vk.ffi.PipelineMultisampleStateCreateInfo?): vk.ffi.PipelineMultisampleStateCreateInfo
+---@field PipelineDepthStencilStateCreateInfo fun(init: vk.ffi.PipelineDepthStencilStateCreateInfo?): vk.ffi.PipelineDepthStencilStateCreateInfo
+---@field PipelineColorBlendStateCreateInfo fun(init: vk.ffi.PipelineColorBlendStateCreateInfo?): vk.ffi.PipelineColorBlendStateCreateInfo
+---@field PipelineDynamicStateCreateInfo fun(init: vk.ffi.PipelineDynamicStateCreateInfo?): vk.ffi.PipelineDynamicStateCreateInfo
+---@field GraphicsPipelineCreateInfo fun(init: vk.ffi.GraphicsPipelineCreateInfo?): vk.ffi.GraphicsPipelineCreateInfo
+---@field ComputePipelineCreateInfo fun(init: vk.ffi.ComputePipelineCreateInfo?): vk.ffi.ComputePipelineCreateInfo
+---@field AttachmentReference fun(init: vk.ffi.AttachmentReference?): vk.ffi.AttachmentReference
+---@field RenderPassCreateInfo fun(init: vk.ffi.RenderPassCreateInfo?): vk.ffi.RenderPassCreateInfo
+---@field ImageViewCreateInfo fun(init: vk.ffi.ImageViewCreateInfo?): vk.ffi.ImageViewCreateInfo
+---@field FramebufferCreateInfo fun(init: vk.ffi.FramebufferCreateInfo?): vk.ffi.FramebufferCreateInfo
+---@field CommandPoolCreateInfo fun(init: vk.ffi.CommandPoolCreateInfo?): vk.ffi.CommandPoolCreateInfo
+---@field MemoryRequirements fun(init: vk.ffi.MemoryRequirements?): vk.ffi.MemoryRequirements
+---@field MemoryAllocateInfo fun(init: vk.ffi.MemoryAllocateInfo?): vk.ffi.MemoryAllocateInfo
+---@field ImageCreateInfo fun(init: vk.ffi.CreateImageInfo?): vk.ffi.CreateImageInfo
+---@field SamplerCreateInfo fun(init: vk.ffi.SamplerCreateInfo?): vk.ffi.SamplerCreateInfo
+---@field DescriptorSetLayoutCreateInfo fun(init: vk.ffi.DescriptorSetLayoutCreateInfo?): vk.ffi.DescriptorSetLayoutCreateInfo
+---@field DescriptorPoolCreateInfo fun(init: vk.ffi.DescriptorPoolCreateInfo?): vk.ffi.DescriptorPoolCreateInfo
+---@field DescriptorSetAllocateInfo fun(init: vk.ffi.DescriptorSetAllocateInfo?): vk.ffi.DescriptorSetAllocateInfo
+---@field WriteDescriptorSet fun(init: vk.ffi.WriteDescriptorSet?): vk.ffi.WriteDescriptorSet
+---@field CommandBufferAllocateInfo fun(init: vk.ffi.CommandBufferAllocateInfo?): vk.ffi.CommandBufferAllocateInfo
+---@field CommandBufferBeginInfo fun(init: vk.ffi.CommandBufferBeginInfo?): vk.ffi.CommandBufferBeginInfo
+---@field SemaphoreCreateInfo fun(init: vk.ffi.SemaphoreCreateInfo?): vk.ffi.SemaphoreCreateInfo
+---@field FenceCreateInfo fun(init: vk.ffi.FenceCreateInfo?): vk.ffi.FenceCreateInfo
+---@field SwapchainCreateInfoKHR fun(init: vk.ffi.SwapchainCreateInfoKHR?): vk.ffi.SwapchainCreateInfoKHR
+---@field XlibSurfaceCreateInfoKHR fun(init: vk.ffi.XlibSurfaceCreateInfoKHR?): vk.ffi.XlibSurfaceCreateInfoKHR
+---@field Win32SurfaceCreateInfoKHR fun(init: vk.ffi.Win32SurfaceCreateInfoKHR?): vk.ffi.Win32SurfaceCreateInfoKHR
+---@field PresentInfoKHR fun(init: vk.ffi.PresentInfoKHR?): vk.ffi.PresentInfoKHR
+---@field RenderPassBeginInfo fun(init: vk.ffi.RenderPassBeginInfo?): vk.ffi.RenderPassBeginInfo
+---@field PhysicalDeviceProperties fun(init: vk.ffi.PhysicalDeviceProperties?): vk.ffi.PhysicalDeviceProperties
+---@field PhysicalDeviceMemoryProperties fun(init: vk.ffi.PhysicalDeviceMemoryProperties?): vk.ffi.PhysicalDeviceMemoryProperties
+---@field SurfaceCapabilitiesKHR fun(init: vk.ffi.SurfaceCapabilitiesKHR?): vk.ffi.SurfaceCapabilitiesKHR
 local vk = {}
 for k, v in pairs(vkEnums) do
 	vk[k] = v
@@ -18,22 +58,80 @@ do
 	---@param ffiName string
 	---@param structureTypeName string
 	local function defStruct(ffiName, structureTypeName)
-		vk[ffiName] = function()
-			local info = ffi.new("Vk" .. ffiName)
-			info.sType = vk.StructureType[structureTypeName]
+		local cons = ffi.typeof("Vk" .. ffiName)
+			or error("Failed to find FFI type for Vk" .. ffiName)
+
+		local structType = vk.StructureType[structureTypeName]
+			or error("Failed to find structure type for " .. structureTypeName)
+
+		vk[ffiName] = function(init)
+			local info = cons(init)
+			info.sType = structType
 			return info
+		end
+
+		local arrayCons = ffi.typeof("Vk" .. ffiName .. "[?]")
+		vk[ffiName .. "Array"] = function(count)
+			local array = arrayCons(count)
+
+			for i = 0, count - 1 do
+				array[i].sType = structType
+			end
+
+			return array
 		end
 	end
 
 	local function defType(ffiName)
-		vk[ffiName] = function()
-			return ffi.new("Vk" .. ffiName)
-		end
+		local cons = ffi.typeof("Vk" .. ffiName)
+			or error("Failed to find FFI type for Vk" .. ffiName)
+
+		vk[ffiName] = cons
 	end
 
+	defStruct("ApplicationInfo", "APPLICATION_INFO")
+	defStruct("InstanceCreateInfo", "INSTANCE_CREATE_INFO")
+	defStruct("DeviceQueueCreateInfo", "DEVICE_QUEUE_CREATE_INFO")
+	defStruct("DeviceCreateInfo", "DEVICE_CREATE_INFO")
+	defStruct("BufferCreateInfo", "BUFFER_CREATE_INFO")
+	defStruct("ShaderModuleCreateInfo", "SHADER_MODULE_CREATE_INFO")
+	defStruct("PipelineLayoutCreateInfo", "PIPELINE_LAYOUT_CREATE_INFO")
+	defStruct("PipelineShaderStageCreateInfo", "PIPELINE_SHADER_STAGE_CREATE_INFO")
+	defStruct("PipelineVertexInputStateCreateInfo", "PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO")
+	defStruct("PipelineInputAssemblyStateCreateInfo", "PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO")
+	defStruct("PipelineViewportStateCreateInfo", "PIPELINE_VIEWPORT_STATE_CREATE_INFO")
+	defStruct("PipelineRasterizationStateCreateInfo", "PIPELINE_RASTERIZATION_STATE_CREATE_INFO")
+	defStruct("PipelineMultisampleStateCreateInfo", "PIPELINE_MULTISAMPLE_STATE_CREATE_INFO")
+	defStruct("PipelineDepthStencilStateCreateInfo", "PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO")
+	defStruct("PipelineColorBlendStateCreateInfo", "PIPELINE_COLOR_BLEND_STATE_CREATE_INFO")
+	defStruct("PipelineDynamicStateCreateInfo", "PIPELINE_DYNAMIC_STATE_CREATE_INFO")
+	defStruct("GraphicsPipelineCreateInfo", "GRAPHICS_PIPELINE_CREATE_INFO")
+	defStruct("ComputePipelineCreateInfo", "COMPUTE_PIPELINE_CREATE_INFO")
+	defType("AttachmentReference")
+	defStruct("RenderPassCreateInfo", "RENDER_PASS_CREATE_INFO")
+	defStruct("ImageViewCreateInfo", "IMAGE_VIEW_CREATE_INFO")
+	defStruct("FramebufferCreateInfo", "FRAMEBUFFER_CREATE_INFO")
+	defStruct("CommandPoolCreateInfo", "COMMAND_POOL_CREATE_INFO")
+	defType("MemoryRequirements")
+	defStruct("MemoryAllocateInfo", "MEMORY_ALLOCATE_INFO")
+	defStruct("ImageCreateInfo", "IMAGE_CREATE_INFO")
+	defStruct("SamplerCreateInfo", "SAMPLER_CREATE_INFO")
+	defStruct("DescriptorSetLayoutCreateInfo", "DESCRIPTOR_SET_LAYOUT_CREATE_INFO")
+	defStruct("DescriptorPoolCreateInfo", "DESCRIPTOR_POOL_CREATE_INFO")
+	defStruct("DescriptorSetAllocateInfo", "DESCRIPTOR_SET_ALLOCATE_INFO")
+	defStruct("WriteDescriptorSet", "WRITE_DESCRIPTOR_SET")
+	defStruct("CommandBufferAllocateInfo", "COMMAND_BUFFER_ALLOCATE_INFO")
+	defStruct("CommandBufferBeginInfo", "COMMAND_BUFFER_BEGIN_INFO")
+	defStruct("SemaphoreCreateInfo", "SEMAPHORE_CREATE_INFO")
+	defStruct("FenceCreateInfo", "FENCE_CREATE_INFO")
+	defStruct("SwapchainCreateInfoKHR", "SWAPCHAIN_CREATE_INFO_KHR")
+	defStruct("XlibSurfaceCreateInfoKHR", "XLIB_SURFACE_CREATE_INFO_KHR")
+	defStruct("Win32SurfaceCreateInfoKHR", "WIN32_SURFACE_CREATE_INFO_KHR")
 	defStruct("PresentInfoKHR", "PRESENT_INFO_KHR")
 	defStruct("RenderPassBeginInfo", "RENDER_PASS_BEGIN_INFO")
-	defStruct("PipelineLayoutCreateInfo", "PIPELINE_LAYOUT_CREATE_INFO")
+	defType("PhysicalDeviceProperties")
+	defType("PhysicalDeviceMemoryProperties")
+	defType("SurfaceCapabilitiesKHR")
 end
 
 -- Constants
@@ -77,24 +175,20 @@ do
 			extNames[i - 1] = ffi.cast("const char*", info.enabledExtensionNames[i])
 		end
 
-		local appInfo = ffi.new("VkApplicationInfo", {
-			sType = vkEnums.StructureType.APPLICATION_INFO,
-			pApplicationName = info.applicationInfo.name,
-			applicationVersion = info.applicationInfo.version,
-			pEngineName = info.applicationInfo.engineName,
-			engineVersion = info.applicationInfo.engineVersion,
-			apiVersion = info.applicationInfo.apiVersion,
-		})
+		local appInfo = vk.ApplicationInfo()
+		appInfo.pApplicationName = info.applicationInfo.name
+		appInfo.applicationVersion = info.applicationInfo.version
+		appInfo.pEngineName = info.applicationInfo.engineName
+		appInfo.engineVersion = info.applicationInfo.engineVersion
+		appInfo.apiVersion = info.applicationInfo.apiVersion
 
-		local createInfo = ffi.new("VkInstanceCreateInfo", {
-			sType = vkEnums.StructureType.INSTANCE_CREATE_INFO,
-			flags = 0,
-			pApplicationInfo = appInfo,
-			enabledLayerCount = layerCount,
-			ppEnabledLayerNames = layerNames,
-			enabledExtensionCount = extCount,
-			ppEnabledExtensionNames = extNames,
-		})
+		local createInfo = vk.InstanceCreateInfo()
+		createInfo.flags = 0
+		createInfo.pApplicationInfo = appInfo
+		createInfo.enabledLayerCount = layerCount
+		createInfo.ppEnabledLayerNames = layerNames
+		createInfo.enabledExtensionCount = extCount
+		createInfo.ppEnabledExtensionNames = extNames
 
 		local result = C.vkCreateInstance(createInfo, allocator, instance)
 		if result ~= 0 then
@@ -106,7 +200,7 @@ do
 
 	---@param physicalDevice vk.ffi.PhysicalDevice
 	function vk.getPhysicalDeviceProperties(physicalDevice)
-		local properties = ffi.new("VkPhysicalDeviceProperties")
+		local properties = vk.PhysicalDeviceProperties()
 		C.vkGetPhysicalDeviceProperties(physicalDevice, properties)
 		return properties --[[@as vk.ffi.PhysicalDeviceProperties]]
 	end
@@ -114,7 +208,7 @@ do
 	---@param physicalDevice vk.ffi.PhysicalDevice
 	---@return vk.ffi.PhysicalDeviceMemoryProperties
 	function vk.getPhysicalDeviceMemoryProperties(physicalDevice)
-		local memProperties = ffi.new("VkPhysicalDeviceMemoryProperties")
+		local memProperties = vk.PhysicalDeviceMemoryProperties()
 		C.vkGetPhysicalDeviceMemoryProperties(physicalDevice, memProperties)
 		return memProperties --[[@as vk.ffi.PhysicalDeviceMemoryProperties]]
 	end
@@ -139,7 +233,7 @@ do
 	---@param surface vk.ffi.SurfaceKHR
 	---@return vk.ffi.SurfaceCapabilitiesKHR
 	function vk.getPhysicalDeviceSurfaceCapabilitiesKHR(physicalDevice, surface)
-		local capabilities = ffi.new("VkSurfaceCapabilitiesKHR")
+		local capabilities = vk.SurfaceCapabilitiesKHR()
 		local result = C.vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physicalDevice, surface, capabilities)
 		if result ~= 0 then
 			error("Failed to get physical device surface capabilities, error code: " .. tostring(result))

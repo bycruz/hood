@@ -34,8 +34,7 @@ return function(vk)
 			queueCreateInfoCount = #info.queueCreateInfos
 			queueCreateInfos = ffi.new("VkDeviceQueueCreateInfo[?]", queueCreateInfoCount)
 			for i, qci in ipairs(info.queueCreateInfos) do
-				queueCreateInfos[i - 1] = ffi.new("VkDeviceQueueCreateInfo", {
-					sType = vk.StructureType.DEVICE_QUEUE_CREATE_INFO,
+				queueCreateInfos[i - 1] = vk.DeviceQueueCreateInfo({
 					queueFamilyIndex = qci.queueFamilyIndex,
 					queueCount = qci.queueCount,
 					pQueuePriorities = ffi.new("float[?]", #qci.queuePriorities, qci.queuePriorities),
@@ -54,8 +53,7 @@ return function(vk)
 			end
 		end
 
-		local deviceCreateInfo = ffi.new("VkDeviceCreateInfo", {
-			sType = vk.StructureType.DEVICE_CREATE_INFO,
+		local deviceCreateInfo = vk.DeviceCreateInfo({
 			queueCreateInfoCount = queueCreateInfoCount,
 			pQueueCreateInfos = queueCreateInfos,
 			enabledExtensionCount = extensionCount,
@@ -99,8 +97,7 @@ return function(vk)
 	function VKInstance:createXlibSurfaceKHR(createInfo, allocator)
 		local surface = ffi.new("VkSurfaceKHR[1]")
 
-		local createInfo = ffi.new("VkXlibSurfaceCreateInfoKHR", createInfo)
-		createInfo.sType = vk.StructureType.XLIB_SURFACE_CREATE_INFO_KHR
+		local createInfo = vk.XlibSurfaceCreateInfoKHR(createInfo)
 
 		local result = self.v1_0.vkCreateXlibSurfaceKHR(self.handle, createInfo, allocator, surface)
 		if result ~= 0 then
@@ -116,8 +113,7 @@ return function(vk)
 	function VKInstance:createWin32SurfaceKHR(createInfo, allocator)
 		local surface = ffi.new("VkSurfaceKHR[1]")
 
-		local createInfo = ffi.new("VkWin32SurfaceCreateInfoKHR", createInfo)
-		createInfo.sType = vk.StructureType.WIN32_SURFACE_CREATE_INFO_KHR
+		local createInfo = vk.Win32SurfaceCreateInfoKHR(createInfo)
 
 		local result = self.v1_0.vkCreateWin32SurfaceKHR(self.handle, createInfo, allocator, surface)
 		if result ~= 0 then
