@@ -99,6 +99,10 @@ return function(vk)
 	---@field module vk.ffi.ShaderModule
 	---@field name string?
 
+	---@class vk.ComputePipelineCreateInfo
+	---@field stage vk.PipelineShaderStageCreateInfo
+	---@field layout vk.ffi.PipelineLayout
+
 	---@class vk.VertexInputBindingDescription
 	---@field binding number
 	---@field stride number
@@ -360,7 +364,7 @@ return function(vk)
 	end
 
 	---@param pipelineCache vk.ffi.PipelineCache?
-	---@param info vk.ffi.ComputePipelineCreateInfo
+	---@param info vk.ComputePipelineCreateInfo
 	---@param allocator ffi.cdata*?
 	---@return vk.ffi.Pipeline
 	function VKDevice:createComputePipeline(pipelineCache, info, allocator)
