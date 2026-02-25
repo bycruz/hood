@@ -134,7 +134,10 @@ function VKPipeline.new(device, descriptor)
 		}
 	end
 
-	local layout = device.handle:createPipelineLayout({})
+	local layout = device.handle:createPipelineLayout({
+		descriptorSetLayouts = descriptor.descriptorSetLayouts,
+		pushConstantRanges = descriptor.pushConstantRanges,
+	})
 
 	---@type vk.AttachmentDescription[]
 	local attachmentDescs = {}
@@ -187,6 +190,14 @@ function VKPipeline.new(device, descriptor)
 		}
 	end
 
+	local depthStageMask = 0
+	local depthAccessMask = 0
+	if descriptor.depthStencil then
+		depthStageMask = bit.bor(vk.PipelineStageFlags.EARLY_FRAGMENT_TESTS, vk.PipelineStageFlags.LATE_FRAGMENT_TESTS)
+		depthAccessMask = bit.bor(vk.AccessFlags.DEPTH_STENCIL_ATTACHMENT_READ,
+			vk.AccessFlags.DEPTH_STENCIL_ATTACHMENT_WRITE)
+	end
+
 	local renderPass = device.handle:createRenderPass({
 		attachments = attachmentDescs,
 		subpasses = {
@@ -200,9 +211,9 @@ function VKPipeline.new(device, descriptor)
 			{
 				srcSubpass = vk.SUBPASS_EXTERNAL,
 				dstSubpass = 0,
-				srcStageMask = vk.PipelineStageFlags.COLOR_ATTACHMENT_OUTPUT,
-				dstStageMask = vk.PipelineStageFlags.COLOR_ATTACHMENT_OUTPUT,
-				dstAccessMask = vk.AccessFlags.COLOR_ATTACHMENT_WRITE,
+				srcStageMask = bit.bor(vk.PipelineStageFlags.COLOR_ATTACHMENT_OUTPUT, depthStageMask),
+				dstStageMask = bit.bor(vk.PipelineStageFlags.COLOR_ATTACHMENT_OUTPUT, depthStageMask),
+				dstAccessMask = bit.bor(vk.AccessFlags.COLOR_ATTACHMENT_WRITE, depthAccessMask),
 			},
 		},
 	})
