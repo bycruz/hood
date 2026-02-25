@@ -48,6 +48,12 @@ local vkEnums = require("hood-vulkan.ffi.enums")
 ---@field PhysicalDeviceProperties fun(init: vk.ffi.PhysicalDeviceProperties?): vk.ffi.PhysicalDeviceProperties
 ---@field PhysicalDeviceMemoryProperties fun(init: vk.ffi.PhysicalDeviceMemoryProperties?): vk.ffi.PhysicalDeviceMemoryProperties
 ---@field SurfaceCapabilitiesKHR fun(init: vk.ffi.SurfaceCapabilitiesKHR?): vk.ffi.SurfaceCapabilitiesKHR
+---@field SubmitInfo fun(init: vk.ffi.SubmitInfo?): vk.ffi.SubmitInfo
+---@field DeviceQueueCreateInfoArray fun(count: number): vk.ffi.DeviceQueueCreateInfo[]
+---@field PipelineShaderStageCreateInfoArray fun(count: number): vk.ffi.PipelineShaderStageCreateInfo[]
+---@field GraphicsPipelineCreateInfoArray fun(count: number): vk.ffi.GraphicsPipelineCreateInfo[]
+---@field WriteDescriptorSetArray fun(count: number): vk.ffi.WriteDescriptorSet[]
+---@field SubmitInfoArray fun(count: number): vk.ffi.SubmitInfo[]
 local vk = {}
 for k, v in pairs(vkEnums) do
 	vk[k] = v
@@ -132,6 +138,7 @@ do
 	defType("PhysicalDeviceProperties")
 	defType("PhysicalDeviceMemoryProperties")
 	defType("SurfaceCapabilitiesKHR")
+	defStruct("SubmitInfo", "SUBMIT_INFO")
 end
 
 -- Constants

@@ -32,13 +32,11 @@ return function(vk)
 		local queueCreateInfoCount = 0
 		if info.queueCreateInfos and #info.queueCreateInfos > 0 then
 			queueCreateInfoCount = #info.queueCreateInfos
-			queueCreateInfos = ffi.new("VkDeviceQueueCreateInfo[?]", queueCreateInfoCount)
+			queueCreateInfos = vk.DeviceQueueCreateInfoArray(queueCreateInfoCount)
 			for i, qci in ipairs(info.queueCreateInfos) do
-				queueCreateInfos[i - 1] = vk.DeviceQueueCreateInfo({
-					queueFamilyIndex = qci.queueFamilyIndex,
-					queueCount = qci.queueCount,
-					pQueuePriorities = ffi.new("float[?]", #qci.queuePriorities, qci.queuePriorities),
-				})
+				queueCreateInfos[i - 1].queueFamilyIndex = qci.queueFamilyIndex
+				queueCreateInfos[i - 1].queueCount = qci.queueCount
+				queueCreateInfos[i - 1].pQueuePriorities = ffi.new("float[?]", #qci.queuePriorities, qci.queuePriorities)
 			end
 		end
 

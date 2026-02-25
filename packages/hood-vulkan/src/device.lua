@@ -184,19 +184,17 @@ return function(vk)
 	---@return vk.ffi.Pipeline[]
 	function VKDevice:createGraphicsPipelines(pipelineCache, infos, allocator)
 		local count = #infos
-		local infoArray = ffi.new("VkGraphicsPipelineCreateInfo[?]", count)
+		local infoArray = vk.GraphicsPipelineCreateInfoArray(count)
 
 		for i = 1, count do
 			local info = infos[i]
 
 			local stageCount = #info.stages
-			local stages = ffi.new("VkPipelineShaderStageCreateInfo[?]", stageCount)
+			local stages = vk.PipelineShaderStageCreateInfoArray(stageCount)
 			for j, stage in ipairs(info.stages) do
-				stages[j - 1] = vk.PipelineShaderStageCreateInfo({
-					stage = stage.stage,
-					module = stage.module,
-					pName = stage.name or "main",
-				})
+				stages[j - 1].stage = stage.stage
+				stages[j - 1].module = stage.module
+				stages[j - 1].pName = stage.name or "main"
 			end
 
 			---@type vk.ffi.PipelineVertexInputStateCreateInfo?
@@ -743,7 +741,7 @@ return function(vk)
 	---@param writes vk.ffi.WriteDescriptorSet[]
 	function VKDevice:updateDescriptorSets(writes)
 		local count = #writes
-		local writeArray = ffi.new("VkWriteDescriptorSet[?]", count)
+		local writeArray = vk.WriteDescriptorSetArray(count)
 		for i, write in ipairs(writes) do
 			writeArray[i - 1] = vk.WriteDescriptorSet(write)
 		end
@@ -940,10 +938,9 @@ return function(vk)
 	---@param fence number?
 	function VKDevice:queueSubmit(queue, submits, fence)
 		local count = #submits
-		local submitArray = ffi.new("VkSubmitInfo[?]", count)
+		local submitArray = vk.SubmitInfoArray(count)
 		for i = 1, count do
 			local s = submits[i]
-			submitArray[i - 1].sType = vk.StructureType.SUBMIT_INFO
 			submitArray[i - 1].waitSemaphoreCount = s.waitSemaphoreCount or 0
 			submitArray[i - 1].pWaitSemaphores = s.pWaitSemaphores
 			submitArray[i - 1].pWaitDstStageMask = s.pWaitDstStageMask
