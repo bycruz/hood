@@ -24,6 +24,20 @@ local vkEnums = require("hood-vulkan.ffi.enums")
 ---@field GraphicsPipelineCreateInfo fun(init: vk.ffi.GraphicsPipelineCreateInfo?): vk.ffi.GraphicsPipelineCreateInfo
 ---@field ComputePipelineCreateInfo fun(init: vk.ffi.ComputePipelineCreateInfo?): vk.ffi.ComputePipelineCreateInfo
 ---@field AttachmentReference fun(init: vk.ffi.AttachmentReference?): vk.ffi.AttachmentReference
+---@field AttachmentDescription fun(init: vk.ffi.AttachmentDescription?): vk.ffi.AttachmentDescription
+---@field SubpassDescription fun(init: vk.ffi.SubpassDescription?): vk.ffi.SubpassDescription
+---@field SubpassDependency fun(init: vk.ffi.SubpassDependency?): vk.ffi.SubpassDependency
+---@field VertexInputBindingDescription fun(init: vk.ffi.VertexInputBindingDescription?): vk.ffi.VertexInputBindingDescription
+---@field VertexInputAttributeDescription fun(init: vk.ffi.VertexInputAttributeDescription?): vk.ffi.VertexInputAttributeDescription
+---@field PipelineColorBlendAttachmentState fun(init: vk.ffi.PipelineColorBlendAttachmentState?): vk.ffi.PipelineColorBlendAttachmentState
+---@field PushConstantRange fun(init: vk.ffi.PushConstantRange?): vk.ffi.PushConstantRange
+---@field AttachmentReferenceArray fun(count: number): vk.ffi.AttachmentReference[]
+---@field AttachmentDescriptionArray fun(count: number): vk.ffi.AttachmentDescription[]
+---@field SubpassDescriptionArray fun(count: number): vk.ffi.SubpassDescription[]
+---@field SubpassDependencyArray fun(count: number): vk.ffi.SubpassDependency[]
+---@field VertexInputBindingDescriptionArray fun(count: number): vk.ffi.VertexInputBindingDescription[]
+---@field VertexInputAttributeDescriptionArray fun(count: number): vk.ffi.VertexInputAttributeDescription[]
+---@field PipelineColorBlendAttachmentStateArray fun(count: number): vk.ffi.PipelineColorBlendAttachmentState[]
 ---@field RenderPassCreateInfo fun(init: vk.ffi.RenderPassCreateInfo?): vk.ffi.RenderPassCreateInfo
 ---@field ImageViewCreateInfo fun(init: vk.ffi.ImageViewCreateInfo?): vk.ffi.ImageViewCreateInfo
 ---@field FramebufferCreateInfo fun(init: vk.ffi.FramebufferCreateInfo?): vk.ffi.FramebufferCreateInfo
@@ -92,7 +106,10 @@ do
 		local cons = ffi.typeof("Vk" .. ffiName)
 			or error("Failed to find FFI type for Vk" .. ffiName)
 
+		local arrayCons = ffi.typeof("Vk" .. ffiName .. "[?]")
+
 		vk[ffiName] = cons
+		vk[ffiName .. "Array"] = arrayCons
 	end
 
 	defStruct("ApplicationInfo", "APPLICATION_INFO")
@@ -114,6 +131,13 @@ do
 	defStruct("GraphicsPipelineCreateInfo", "GRAPHICS_PIPELINE_CREATE_INFO")
 	defStruct("ComputePipelineCreateInfo", "COMPUTE_PIPELINE_CREATE_INFO")
 	defType("AttachmentReference")
+	defType("AttachmentDescription")
+	defType("SubpassDescription")
+	defType("SubpassDependency")
+	defType("VertexInputBindingDescription")
+	defType("VertexInputAttributeDescription")
+	defType("PipelineColorBlendAttachmentState")
+	defType("PushConstantRange")
 	defStruct("RenderPassCreateInfo", "RENDER_PASS_CREATE_INFO")
 	defStruct("ImageViewCreateInfo", "IMAGE_VIEW_CREATE_INFO")
 	defStruct("FramebufferCreateInfo", "FRAMEBUFFER_CREATE_INFO")

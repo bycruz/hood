@@ -66,7 +66,7 @@ return function(vk)
 
 		local ranges = info.pushConstantRanges
 		if ranges and #ranges > 0 then
-			local rangeArray = ffi.new("VkPushConstantRange[?]", #ranges)
+			local rangeArray = vk.PushConstantRangeArray(#ranges)
 			for i, r in ipairs(ranges) do
 				rangeArray[i - 1].stageFlags = r.stageFlags
 				rangeArray[i - 1].offset = r.offset
@@ -203,14 +203,14 @@ return function(vk)
 				local bindings = info.vertexInputState.bindings or {}
 				local attributes = info.vertexInputState.attributes or {}
 
-				local bindingArray = ffi.new("VkVertexInputBindingDescription[?]", math.max(#bindings, 1))
+				local bindingArray = vk.VertexInputBindingDescriptionArray(math.max(#bindings, 1))
 				for j, b in ipairs(bindings) do
 					bindingArray[j - 1].binding = b.binding
 					bindingArray[j - 1].stride = b.stride
 					bindingArray[j - 1].inputRate = b.inputRate
 				end
 
-				local attrArray = ffi.new("VkVertexInputAttributeDescription[?]", math.max(#attributes, 1))
+				local attrArray = vk.VertexInputAttributeDescriptionArray(math.max(#attributes, 1))
 				for j, a in ipairs(attributes) do
 					attrArray[j - 1].location = a.location
 					attrArray[j - 1].binding = a.binding
@@ -288,7 +288,7 @@ return function(vk)
 			if info.colorBlendState then
 				local cb = info.colorBlendState ---@cast cb -nil
 				local attachments = cb.attachments or {}
-				local attachmentArray = ffi.new("VkPipelineColorBlendAttachmentState[?]", math.max(#attachments, 1))
+				local attachmentArray = vk.PipelineColorBlendAttachmentStateArray(math.max(#attachments, 1))
 				for j, att in ipairs(attachments) do
 					attachmentArray[j - 1].blendEnable = att.blendEnable and 1 or 0
 					attachmentArray[j - 1].srcColorBlendFactor = att.srcColorBlendFactor or 0
@@ -319,21 +319,19 @@ return function(vk)
 				})
 			end
 
-			infoArray[i - 1] = vk.GraphicsPipelineCreateInfo({
-				stageCount = stageCount,
-				pStages = stages,
-				pVertexInputState = vertexInputState,
-				pInputAssemblyState = inputAssemblyState,
-				pViewportState = viewportState,
-				pRasterizationState = rasterizationState,
-				pMultisampleState = multisampleState,
-				pDepthStencilState = depthStencilState,
-				pColorBlendState = colorBlendState,
-				pDynamicState = dynamicState,
-				layout = info.layout,
-				renderPass = info.renderPass,
-				subpass = info.subpass or 0,
-			})
+			infoArray[i - 1].stageCount = stageCount
+			infoArray[i - 1].pStages = stages
+			infoArray[i - 1].pVertexInputState = vertexInputState
+			infoArray[i - 1].pInputAssemblyState = inputAssemblyState
+			infoArray[i - 1].pViewportState = viewportState
+			infoArray[i - 1].pRasterizationState = rasterizationState
+			infoArray[i - 1].pMultisampleState = multisampleState
+			infoArray[i - 1].pDepthStencilState = depthStencilState
+			infoArray[i - 1].pColorBlendState = colorBlendState
+			infoArray[i - 1].pDynamicState = dynamicState
+			infoArray[i - 1].layout = info.layout
+			infoArray[i - 1].renderPass = info.renderPass
+			infoArray[i - 1].subpass = info.subpass or 0
 		end
 
 		local pipelines = ffi.new("VkPipeline[?]", count)
@@ -415,7 +413,7 @@ return function(vk)
 		local subpasses = info.subpasses
 		local dependencies = info.dependencies or {}
 
-		local attachmentArray = ffi.new("VkAttachmentDescription[?]", math.max(#attachments, 1))
+		local attachmentArray = vk.AttachmentDescriptionArray(math.max(#attachments, 1))
 		for i, att in ipairs(attachments) do
 			attachmentArray[i - 1].format = att.format
 			attachmentArray[i - 1].samples = att.samples or 1
@@ -427,14 +425,14 @@ return function(vk)
 			attachmentArray[i - 1].finalLayout = att.finalLayout
 		end
 
-		local subpassArray = ffi.new("VkSubpassDescription[?]", #subpasses)
+		local subpassArray = vk.SubpassDescriptionArray(#subpasses)
 		local refArrays = {}
 		for i, sub in ipairs(subpasses) do
 			subpassArray[i - 1].pipelineBindPoint = sub.pipelineBindPoint
 
 			local colorAtts = sub.colorAttachments or {}
 			if #colorAtts > 0 then
-				local colorRefArray = ffi.new("VkAttachmentReference[?]", #colorAtts)
+				local colorRefArray = vk.AttachmentReferenceArray(#colorAtts)
 				for j, ref in ipairs(colorAtts) do
 					colorRefArray[j - 1].attachment = ref.attachment
 					colorRefArray[j - 1].layout = ref.layout
@@ -446,7 +444,7 @@ return function(vk)
 
 			local inputAtts = sub.inputAttachments or {}
 			if #inputAtts > 0 then
-				local inputRefArray = ffi.new("VkAttachmentReference[?]", #inputAtts)
+				local inputRefArray = vk.AttachmentReferenceArray(#inputAtts)
 				for j, ref in ipairs(inputAtts) do
 					inputRefArray[j - 1].attachment = ref.attachment
 					inputRefArray[j - 1].layout = ref.layout
@@ -458,7 +456,7 @@ return function(vk)
 
 			local resolveAtts = sub.resolveAttachments or {}
 			if #resolveAtts > 0 then
-				local resolveRefArray = ffi.new("VkAttachmentReference[?]", #resolveAtts)
+				local resolveRefArray = vk.AttachmentReferenceArray(#resolveAtts)
 				for j, ref in ipairs(resolveAtts) do
 					resolveRefArray[j - 1].attachment = ref.attachment
 					resolveRefArray[j - 1].layout = ref.layout
@@ -484,7 +482,7 @@ return function(vk)
 			end
 		end
 
-		local dependencyArray = ffi.new("VkSubpassDependency[?]", math.max(#dependencies, 1))
+		local dependencyArray = vk.SubpassDependencyArray(math.max(#dependencies, 1))
 		for i, dep in ipairs(dependencies) do
 			dependencyArray[i - 1].srcSubpass = dep.srcSubpass
 			dependencyArray[i - 1].dstSubpass = dep.dstSubpass
