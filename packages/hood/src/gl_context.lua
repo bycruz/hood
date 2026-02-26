@@ -7,8 +7,8 @@ local ffi = require("ffi")
 ---@field swapBuffers fun(self: hood.gl.Context)
 ---@field destroy fun(self: hood.gl.Context)
 local Context =
-	ffi.os == "Windows" and require("hood.gl_context.win32")
-	or ffi.os == "Linux" and require("hood.gl_context.x11")
-	or error("Unsupported platform: " .. ffi.os) --[[@as hood.gl.Context]]
+	jit.os == "Windows" and require("hood.gl_context.win32")
+	or jit.os == "Linux" and require("hood.gl_context.x11")
+	or error("Unsupported platform: " .. jit.os) --[[@as hood.gl.Context]]
 
 return Context

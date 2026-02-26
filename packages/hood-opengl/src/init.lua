@@ -112,14 +112,14 @@ local nonCoreFnDefs = {
 ---@type fun(name: string): function
 local fetchNonCoreFn
 
-if ffi.os == "Linux" then
+if jit.os == "Linux" then
 	local glx = require("x11api.glx")
 
 	function fetchNonCoreFn(name)
 		---@type function: We ensure nonCoreFnDefs has only function types
 		return ffi.cast(nonCoreFnDefs[name], glx.getProcAddress(name))
 	end
-elseif ffi.os == "Windows" then
+elseif jit.os == "Windows" then
 	local wgl = require("winapi.wgl")
 
 	function fetchNonCoreFn(name)
@@ -149,8 +149,8 @@ for name in pairs(nonCoreFnDefs) do
 end
 
 local coreFns =
-	ffi.os == "Linux" and ffi.load("libGL.so.1")
-	or ffi.os == "Windows" and ffi.load("opengl32")
+	jit.os == "Linux" and ffi.load("libGL.so.1")
+	or jit.os == "Windows" and ffi.load("opengl32")
 	or error("Unsupported platform for OpenGL: " .. ffi.os)
 
 setmetatable(C, { __index = coreFns })

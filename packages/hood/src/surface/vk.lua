@@ -4,7 +4,7 @@ local hood = require("hood")
 
 local VKSwapchain = require("hood.swapchain.vk")
 
-local isWindows = ffi.os == "Windows"
+local isWindows = jit.os == "Windows"
 
 ---@type table<vk.Format, hood.TextureFormat>
 local vkFormatToHoodFormat = {

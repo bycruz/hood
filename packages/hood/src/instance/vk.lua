@@ -4,7 +4,7 @@ local vk = require("hood-vulkan")
 local VKAdapter = require("hood.adapter.vk")
 local VKSurface = require("hood.surface.vk")
 
-local isWindows = ffi.os == "Windows"
+local isWindows = jit.os == "Windows"
 
 ---@class hood.vk.Instance
 ---@field handle vk.Instance
