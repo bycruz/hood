@@ -476,3 +476,69 @@
 ---@class vk.ffi.Win32SurfaceCreateInfoKHR: vk.ffi.BaseStruct
 ---@field hinstance ffi.cdata*
 ---@field hwnd ffi.cdata*
+
+---@class vk.ffi.ImageSubresourceRange: ffi.cdata*
+---@field aspectMask vk.ImageAspectFlags
+---@field baseMipLevel number
+---@field levelCount number
+---@field baseArrayLayer number
+---@field layerCount number
+
+---@class vk.ffi.ComponentMapping: ffi.cdata*
+---@field r vk.ComponentSwizzle
+---@field g vk.ComponentSwizzle
+---@field b vk.ComponentSwizzle
+---@field a vk.ComponentSwizzle
+
+---@class vk.ffi.ImageViewCreateInfo: vk.ffi.BaseStruct
+---@field image vk.ffi.Image
+---@field viewType vk.ImageViewType
+---@field format vk.Format
+---@field components vk.ffi.ComponentMapping
+---@field subresourceRange vk.ffi.ImageSubresourceRange
+
+---@class vk.ffi.ImageMemoryBarrier: vk.ffi.BaseStruct
+---@field srcAccessMask vk.AccessFlags
+---@field dstAccessMask vk.AccessFlags
+---@field oldLayout vk.ImageLayout
+---@field newLayout vk.ImageLayout
+---@field srcQueueFamilyIndex number
+---@field dstQueueFamilyIndex number
+---@field image vk.ffi.Image
+---@field subresourceRange vk.ffi.ImageSubresourceRange
+
+---@class vk.ffi.MemoryBarrier: vk.ffi.BaseStruct
+---@field srcAccessMask vk.AccessFlags
+---@field dstAccessMask vk.AccessFlags
+
+---@class vk.ffi.ClearColorValue: ffi.cdata*
+---@field float32 ffi.cdata*
+---@field int32 ffi.cdata*
+---@field uint32 ffi.cdata*
+
+---@class vk.ffi.ClearDepthStencilValue: ffi.cdata*
+---@field depth number
+---@field stencil number
+
+---@class vk.ffi.ClearValue: ffi.cdata*
+---@field color vk.ffi.ClearColorValue
+---@field depthStencil vk.ffi.ClearDepthStencilValue
+
+---@class vk.ffi.ImageSubresourceLayers: ffi.cdata*
+---@field aspectMask vk.ImageAspectFlags
+---@field mipLevel number
+---@field baseArrayLayer number
+---@field layerCount number
+
+---@class vk.ffi.Offset3D: ffi.cdata*
+---@field x number
+---@field y number
+---@field z number
+
+---@class vk.ffi.BufferImageCopy: ffi.cdata*
+---@field bufferOffset number
+---@field bufferRowLength number
+---@field bufferImageHeight number
+---@field imageSubresource vk.ffi.ImageSubresourceLayers
+---@field imageOffset vk.ffi.Offset3D
+---@field imageExtent vk.ffi.Extent3D
