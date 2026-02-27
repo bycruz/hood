@@ -6,6 +6,11 @@ VULKAN = os.getenv("VULKAN") == "1"
 
 local hood = {}
 
+-- For self referential requires
+package.loaded[(...)] = hood
+
+hood.Instance = require("hood.instance")
+
 ---@alias hood.TextureViewDimension
 --- | "1d"
 --- | "2d"
