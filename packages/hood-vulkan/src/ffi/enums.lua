@@ -16,6 +16,7 @@ vk.ApiVersion = {
 
 ---@alias vk.DeviceExtensionName
 --- | "VK_KHR_swapchain"
+--- | "VK_KHR_maintenance1"
 
 ---@enum vk.PhysicalDeviceType
 vk.PhysicalDeviceType = {
