@@ -23,6 +23,6 @@
 		"path": ["./target/?.lua", "./target/?/init.lua"]
 	},
 	"workspace": {
-		"library": ["./examples/triangle/target"]
+		"library": ["target"]
 	}
 }
