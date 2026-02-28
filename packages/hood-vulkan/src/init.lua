@@ -94,7 +94,8 @@ do
 			or error("Failed to find structure type for " .. structureTypeName)
 
 		vk[ffiName] = function(init)
-			local info = cons(init)
+			-- Need to explicitly omit the argument since the constructor treats nil as a null pointer
+			local info = init == nil and cons() or cons(init)
 			info.sType = structType
 			return info
 		end
