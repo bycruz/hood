@@ -3,7 +3,7 @@
 	"version": "0.1.0",
 	"engine": "lpm",
 	"dependencies": {
-		"hood": { "path": "../../packages/hood" },
+		"hood": { "path": "../.." },
 		"winit": { "git": "https://github.com/codebycruz/winit" }
 	}
 }

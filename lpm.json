@@ -1,0 +1,12 @@
+{
+	"name": "hood",
+	"version": "0.1.0",
+	"dependencies": {
+		"glapi": { "git": "https://github.com/codebycruz/glapi" },
+		"vkapi": { "git": "https://github.com/codebycruz/vkapi" },
+		"winit": { "git": "https://github.com/codebycruz/winit" }
+	},
+	"devDependencies": {
+		"lpm-test": { "git": "https://github.com/codebycruz/lpm" }
+	}
+}
