@@ -3,6 +3,9 @@
 ---@field pNext ffi.cdata*?
 ---@field flags number?
 
+---@alias vk.ImageAspectFlags number
+---@alias vk.Flags number
+
 ---@class vk.ffi.Instance: number
 ---@class vk.ffi.Result: number
 ---@class vk.ffi.PhysicalDevice: ffi.cdata*
