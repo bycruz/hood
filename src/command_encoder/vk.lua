@@ -248,7 +248,7 @@ function VKCommandEncoder:writeTexture(texture, descriptor, data)
 	-- Create staging buffer
 	local stagingBuffer = self.device.handle:createBuffer({
 		size = dataSize,
-		usage = vk.BufferUsage.TRANSFER_SRC,
+		usage = vk.BufferUsageFlagBits.TRANSFER_SRC,
 	})
 
 	local memProps = vk.getPhysicalDeviceMemoryProperties(self.device.pd)
