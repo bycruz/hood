@@ -1,4 +1,4 @@
-local GLCommandBuffer = require("hood.command_buffer.gl")
+local GLCommandBuffer = require("hood.gl.command_buffer")
 
 ---@alias hood.gl.Command
 ---| { type: "beginRendering", descriptor: hood.RenderPassDescriptor }

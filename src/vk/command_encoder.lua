@@ -2,7 +2,7 @@ local ffi = require("ffi")
 local vk = require("vkapi")
 local hood = require("hood")
 
-local VKCommandBuffer = require("hood.command_buffer.vk")
+local VKCommandBuffer = require("hood.vk.command_buffer")
 
 ---@class hood.vk.CommandEncoder
 ---@field buffer hood.vk.CommandBuffer

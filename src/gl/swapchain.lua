@@ -1,4 +1,4 @@
-local GLTexture = require("hood.texture.gl")
+local GLTexture = require("hood.gl.texture")
 
 ---@class hood.gl.Swapchain
 ---@field ctx hood.gl.Context

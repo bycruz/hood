@@ -1,10 +1,10 @@
-local VKBuffer = require("hood.buffer.vk")
-local VKQueue = require("hood.queue.vk")
-local VKPipeline = require("hood.pipeline.vk")
-local VKCommandEncoder = require("hood.command_encoder.vk")
-local VKSampler = require("hood.sampler.vk")
-local VKTexture = require("hood.texture.vk")
-local VKComputePipeline = require("hood.compute_pipeline.vk")
+local VKBuffer = require("hood.vk.buffer")
+local VKQueue = require("hood.vk.queue")
+local VKPipeline = require("hood.vk.pipeline")
+local VKCommandEncoder = require("hood.vk.command_encoder")
+local VKSampler = require("hood.vk.sampler")
+local VKTexture = require("hood.vk.texture")
+local VKComputePipeline = require("hood.vk.compute_pipeline")
 
 local BindGroup = require("hood.bind_group")
 

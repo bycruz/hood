@@ -1,6 +1,6 @@
 local vk = require("vkapi")
 
-local VKDevice = require("hood.device.vk")
+local VKDevice = require("hood.vk.device")
 
 ---@class hood.vk.Adapter
 ---@field instance hood.vk.Instance

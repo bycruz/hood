@@ -3,6 +3,6 @@
 ---@field present fun(self: hood.Queue, swapchain: hood.Swapchain)
 ---@field writeBuffer fun(self: hood.Queue, buffer: hood.Buffer, size: number, data: ffi.cdata*, offset: number?)
 ---@field writeTexture fun(self: hood.Queue, texture: hood.Texture, descriptor: hood.TextureWriteDescriptor, data: ffi.cdata*)
-local Queue = VULKAN and require("hood.queue.vk") or require("hood.queue.gl") --[[@as hood.Queue]]
+local Queue = VULKAN and require("hood.vk.queue") or require("hood.gl.queue") --[[@as hood.Queue]]
 
 return Queue

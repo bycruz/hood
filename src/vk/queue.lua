@@ -1,7 +1,7 @@
 local vk = require("vkapi")
 local ffi = require("ffi")
 
-local VKCommandEncoder = require("hood.command_encoder.vk")
+local VKCommandEncoder = require("hood.vk.command_encoder")
 
 ---@class hood.vk.Queue
 ---@field device hood.vk.Device

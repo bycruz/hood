@@ -2,6 +2,6 @@
 
 ---@class hood.Buffer
 ---@field destroy fun(self: hood.Buffer)
-local Buffer = VULKAN and require("hood.buffer.vk") or require("hood.buffer.gl") --[[@as hood.Buffer]]
+local Buffer = VULKAN and require("hood.vk.buffer") or require("hood.gl.buffer") --[[@as hood.Buffer]]
 
 return Buffer

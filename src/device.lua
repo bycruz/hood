@@ -7,6 +7,6 @@
 ---@field createSampler fun(self: hood.Device, descriptor: hood.SamplerDescriptor): hood.Sampler
 ---@field createTexture fun(self: hood.Device, descriptor: hood.TextureDescriptor): hood.Texture
 ---@field createComputePipeline fun(self: hood.Device, descriptor: hood.ComputePipelineDescriptor): hood.ComputePipeline
-local Device = VULKAN and require("hood.device.vk") or require("hood.device.gl") --[[@as hood.Device]]
+local Device = VULKAN and require("hood.vk.device") or require("hood.gl.device") --[[@as hood.Device]]
 
 return Device

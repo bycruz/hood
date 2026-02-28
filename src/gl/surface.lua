@@ -1,5 +1,5 @@
-local GLContext = require("hood.gl_context")
-local GLSwapchain = require("hood.swapchain.gl")
+local GLContext = require("hood.gl.context")
+local GLSwapchain = require("hood.gl.swapchain")
 
 ---@class hood.gl.Surface
 ---@field window winit.Window

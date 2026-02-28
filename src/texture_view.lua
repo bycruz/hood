@@ -1,6 +1,6 @@
 ---@class hood.TextureView
-local TextureView = VULKAN and require("hood.texture_view.vk")
-	or require("hood.texture_view.gl") --[[@as hood.TextureView]]
+local TextureView = VULKAN and require("hood.vk.texture_view")
+	or require("hood.gl.texture_view") --[[@as hood.TextureView]]
 
 ---@class hood.TextureViewDescriptor
 ---@field format hood.TextureFormat

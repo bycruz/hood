@@ -1,5 +1,5 @@
-local GLAdapter = require("hood.adapter.gl")
-local GLSurface = require("hood.surface.gl")
+local GLAdapter = require("hood.gl.adapter")
+local GLSurface = require("hood.gl.surface")
 
 ---@class hood.gl.Instance
 local GLInstance = {}

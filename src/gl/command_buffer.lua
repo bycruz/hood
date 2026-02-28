@@ -1,7 +1,7 @@
 local gl = require("glapi")
 
 local hood = require("hood")
-local GLVAO = require("hood.gl_vao")
+local GLVAO = require("hood.gl.vao")
 
 ---@class hood.gl.CommandBuffer
 ---@field private commands hood.gl.Command[]

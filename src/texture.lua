@@ -25,6 +25,6 @@
 ---@class hood.Texture
 ---@field new fun(device: hood.Device, descriptor: hood.TextureDescriptor): hood.Texture
 ---@field destroy fun(self: hood.Texture)
-local Texture = VULKAN and require("hood.texture.vk") or require("hood.texture.gl") --[[@as hood.Texture]]
+local Texture = VULKAN and require("hood.vk.texture") or require("hood.gl.texture") --[[@as hood.Texture]]
 
 return Texture

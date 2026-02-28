@@ -1,7 +1,7 @@
 local vk = require("vkapi")
 local ffi = require("ffi")
 
-local VKTexture = require("hood.texture.vk")
+local VKTexture = require("hood.vk.texture")
 
 
 ---@class hood.vk.Swapchain

@@ -1,5 +1,5 @@
 ---@class hood.CommandBuffer
-local CommandBuffer = VULKAN and require("hood.command_buffer.vk")
-	or require("hood.command_buffer.gl") --[[@as hood.CommandBuffer]]
+local CommandBuffer = VULKAN and require("hood.vk.command_buffer")
+	or require("hood.gl.command_buffer") --[[@as hood.CommandBuffer]]
 
 return CommandBuffer

@@ -1,4 +1,4 @@
-local GLDevice = require("hood.device.gl")
+local GLDevice = require("hood.gl.device")
 
 ---@class hood.gl.Adapter
 local GLAdapter = {}

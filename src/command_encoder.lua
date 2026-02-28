@@ -38,6 +38,8 @@
 ---@field beginComputePass fun(self: hood.CommandEncoder, descriptor: hood.ComputePassDescriptor)
 ---@field dispatchWorkgroups fun(self: hood.CommandEncoder, x: number, y: number, z: number)
 ---@field setComputePipeline fun(self: hood.CommandEncoder, pipeline: hood.ComputePipeline)
-local Encoder = VULKAN and require("hood.encoder.vk") or require("hood.encoder.gl") --[[@as hood.CommandEncoder]]
+local Encoder = VULKAN
+	and require("hood.vk.command_encoder")
+	or require("hood.gl.command_encoder") --[[@as hood.CommandEncoder]]
 
 return Encoder

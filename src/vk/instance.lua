@@ -1,8 +1,8 @@
 local ffi = require("ffi")
 local vk = require("vkapi")
 
-local VKAdapter = require("hood.adapter.vk")
-local VKSurface = require("hood.surface.vk")
+local VKAdapter = require("hood.vk.adapter")
+local VKSurface = require("hood.vk.surface")
 
 local isWindows = jit.os == "Windows"
 

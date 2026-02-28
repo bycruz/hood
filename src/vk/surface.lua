@@ -2,7 +2,7 @@ local ffi = require("ffi")
 local vk = require("vkapi")
 local hood = require("hood")
 
-local VKSwapchain = require("hood.swapchain.vk")
+local VKSwapchain = require("hood.vk.swapchain")
 
 local isWindows = jit.os == "Windows"
 

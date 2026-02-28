@@ -1,4 +1,4 @@
-local GLCommandEncoder = require("hood.command_encoder.gl")
+local GLCommandEncoder = require("hood.gl.command_encoder")
 
 ---@class hood.gl.Queue
 ---@field private ctx hood.gl.Context # The headless GL context

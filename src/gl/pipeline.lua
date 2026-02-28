@@ -1,7 +1,7 @@
 local gl = require("glapi")
 local ffi = require("ffi")
 
-local GLProgram = require("hood.gl_program")
+local GLProgram = require("hood.gl.program")
 
 ---@class hood.gl.Pipeline
 ---@field fragment hood.FragmentState

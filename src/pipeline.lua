@@ -22,6 +22,6 @@
 ---@field depthStencil? hood.DepthStencilState
 
 ---@class hood.Pipeline
-local Pipeline = VULKAN and require("hood.pipeline.vk") or require("hood.pipeline.gl") --[[@as hood.Pipeline]]
+local Pipeline = VULKAN and require("hood.vk.pipeline") or require("hood.gl.pipeline") --[[@as hood.Pipeline]]
 
 return Pipeline
