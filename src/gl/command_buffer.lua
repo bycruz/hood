@@ -1,4 +1,5 @@
 local gl = require("glapi")
+local glConversions = require("hood.convert.gl")
 
 local hood = require("hood")
 local GLVAO = require("hood.gl.vao")
@@ -48,31 +49,6 @@ local pipelines = setmetatable({}, {
 local computePipelines = setmetatable({}, {
 	__mode = "k",
 })
-
----@type table<hood.IndexFormat, number>
-local indexFormatToGL = {
-	[hood.IndexType.u16] = gl.UNSIGNED_SHORT,
-	[hood.IndexType.u32] = gl.UNSIGNED_INT,
-}
-
----@type table<hood.CompareFunction, number>
-local compareFnsMap = {
-	[hood.CompareFunction.Never] = gl.NEVER,
-	[hood.CompareFunction.Less] = gl.LESS,
-	[hood.CompareFunction.Equal] = gl.EQUAL,
-	[hood.CompareFunction.LessEqual] = gl.LESS_EQUAL,
-	[hood.CompareFunction.Greater] = gl.GREATER,
-	[hood.CompareFunction.NotEqual] = gl.NOTEQUAL,
-	[hood.CompareFunction.GreaterEqual] = gl.GREATER_EQUAL,
-	[hood.CompareFunction.Always] = gl.ALWAYS,
-}
-
----@type table<hood.StorageAccess, number>
-local accessMap = {
-	["READ_ONLY"] = gl.READ_ONLY,
-	["WRITE_ONLY"] = gl.WRITE_ONLY,
-	["READ_WRITE"] = gl.READ_WRITE,
-}
 
 function GLCommandBuffer:execute()
 	---@type hood.gl.ComputePipeline?
@@ -128,7 +104,7 @@ function GLCommandBuffer:execute()
 				gl.enable(gl.DEPTH_TEST)
 
 				local compareFunc = pipeline.depthStencil.depthCompare
-				local glCompareFunc = compareFnsMap[compareFunc]
+				local glCompareFunc = glConversions.compareFunction[compareFunc]
 				gl.depthFunc(glCompareFunc)
 				gl.depthMask(pipeline.depthStencil.depthWriteEnabled)
 			else
@@ -156,7 +132,7 @@ function GLCommandBuffer:execute()
 			vao:setVertexBuffer(command.buffer, descriptor, command.slot)
 		elseif command.type == "setIndexBuffer" then
 			vao:setIndexBuffer(command.buffer)
-			indexType = indexFormatToGL[command.format]
+			indexType = glConversions.indexFormat[command.format]
 		elseif command.type == "writeBuffer" then
 			command.buffer:setSlice(command.size, command.data, command.offset)
 		elseif command.type == "writeTexture" then
@@ -187,7 +163,7 @@ function GLCommandBuffer:execute()
 						0,
 						entry.layer and 0 or 1,
 						entry.layer or 0,
-						accessMap[entry.access],
+						glConversions.storageAccess[entry.access],
 						texture.format
 					)
 				end

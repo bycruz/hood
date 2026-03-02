@@ -31,6 +31,21 @@ hood.Instance = require("hood.instance")
 --- | "fifo-relaxed"
 --- | "mailbox"
 
+---@alias hood.CompareFunction
+--- | "never"
+--- | "less"
+--- | "equal"
+--- | "less-equal"
+--- | "greater"
+--- | "not-equal"
+--- | "greater-equal"
+--- | "always"
+
+---@alias hood.AddressMode
+--- | "clamp-to-edge"
+--- | "repeat"
+--- | "mirrored-repeat"
+
 ---@alias hood.InstanceBackend "vulkan" | "opengl"
 ---@alias hood.InstanceFlag "validate"
 
@@ -52,7 +67,6 @@ hood.ColorWrites = {
 
 ---@enum hood.TextureFormat
 hood.TextureFormat = {
-	-- Equates to OpenGL's gl.RGBA + gl.UNSIGNED_BYTE
 	Rgba8UNorm = 1,
 	Rgba8Uint = 2,
 
@@ -64,36 +78,13 @@ hood.TextureFormat = {
 	Bgra8Srgb = 7,
 }
 
----@enum hood.AddressMode
-hood.AddressMode = {
-	ClampToEdge = 1,
-	Repeat = 2,
-	MirroredRepeat = 3,
-}
+---@alias hood.FilterMode
+--- | "nearest"
+--- | "linear"
 
----@enum hood.FilterMode
-hood.FilterMode = {
-	Nearest = 1,
-	Linear = 2,
-}
-
----@enum hood.CompareFunction
-hood.CompareFunction = {
-	Never = 1,
-	Less = 2,
-	Equal = 3,
-	LessEqual = 4,
-	Greater = 5,
-	NotEqual = 6,
-	GreaterEqual = 7,
-	Always = 8,
-}
-
----@enum hood.IndexFormat
-hood.IndexType = {
-	u16 = 1,
-	u32 = 2,
-}
+---@alias hood.IndexFormat
+--- | "u16"
+--- | "u32"
 
 ---@alias hood.ShaderModule
 ---| { type: "glsl", source: string }

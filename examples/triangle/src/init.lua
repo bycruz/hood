@@ -118,7 +118,7 @@ eventLoop:run(function(event, handler)
 		encoder:setPipeline(pipeline)
 		encoder:setViewport(0, 0, window.width, window.height)
 		encoder:setVertexBuffer(0, vertexBuffer)
-		encoder:setIndexBuffer(indexBuffer, hood.IndexType.u32)
+		encoder:setIndexBuffer(indexBuffer, "u32")
 		encoder:drawIndexed(3, 1)
 		encoder:endRendering()
 

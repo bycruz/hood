@@ -29,6 +29,7 @@ vkConversions.textureFormat = {
 	[hood.TextureFormat.Depth24Plus] = vk.Format.X8_D24_UNORM_PACK32,
 	[hood.TextureFormat.Depth32Float] = vk.Format.D32_SFLOAT,
 	[hood.TextureFormat.Bgra8UNorm] = vk.Format.B8G8R8A8_UNORM,
+	[hood.TextureFormat.Bgra8Srgb] = vk.Format.B8G8R8A8_SRGB
 }
 
 ---@type table<number, vk.SampleCountFlagBits>
@@ -53,27 +54,33 @@ vkConversions.textureUsage = {
 
 ---@type table<hood.CompareFunction, vk.CompareOp>
 vkConversions.compareFunction = {
-	[hood.CompareFunction.Never] = vk.CompareOp.NEVER,
-	[hood.CompareFunction.Less] = vk.CompareOp.LESS,
-	[hood.CompareFunction.Equal] = vk.CompareOp.EQUAL,
-	[hood.CompareFunction.LessEqual] = vk.CompareOp.LESS_OR_EQUAL,
-	[hood.CompareFunction.Greater] = vk.CompareOp.GREATER,
-	[hood.CompareFunction.NotEqual] = vk.CompareOp.NOT_EQUAL,
-	[hood.CompareFunction.GreaterEqual] = vk.CompareOp.GREATER_OR_EQUAL,
-	[hood.CompareFunction.Always] = vk.CompareOp.ALWAYS,
+	["never"] = vk.CompareOp.NEVER,
+	["less"] = vk.CompareOp.LESS,
+	["equal"] = vk.CompareOp.EQUAL,
+	["less-equal"] = vk.CompareOp.LESS_OR_EQUAL,
+	["greater"] = vk.CompareOp.GREATER,
+	["not-equal"] = vk.CompareOp.NOT_EQUAL,
+	["greater-equal"] = vk.CompareOp.GREATER_OR_EQUAL,
+	["always"] = vk.CompareOp.ALWAYS,
 }
 
 ---@type table<hood.FilterMode, vk.Filter>
 vkConversions.filterMode = {
-	[hood.FilterMode.Nearest] = vk.Filter.NEAREST,
-	[hood.FilterMode.Linear] = vk.Filter.LINEAR,
+	["nearest"] = vk.Filter.NEAREST,
+	["linear"] = vk.Filter.LINEAR,
 }
 
 ---@type table<hood.AddressMode, vk.SamplerAddressMode>
 vkConversions.addressMode = {
-	[hood.AddressMode.ClampToEdge] = vk.SamplerAddressMode.CLAMP_TO_EDGE,
-	[hood.AddressMode.Repeat] = vk.SamplerAddressMode.REPEAT,
-	[hood.AddressMode.MirroredRepeat] = vk.SamplerAddressMode.MIRRORED_REPEAT,
+	["clamp-to-edge"] = vk.SamplerAddressMode.CLAMP_TO_EDGE,
+	["repeat"] = vk.SamplerAddressMode.REPEAT,
+	["mirrored-repeat"] = vk.SamplerAddressMode.MIRRORED_REPEAT,
+}
+
+---@type table<hood.IndexFormat, vk.IndexType>
+vkConversions.indexFormat = {
+	["u16"] = vk.IndexType.UINT16,
+	["u32"] = vk.IndexType.UINT32,
 }
 
 return vkConversions

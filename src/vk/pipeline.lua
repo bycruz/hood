@@ -1,5 +1,8 @@
 local ffi = require("ffi")
+
 local vk = require("vkapi")
+local vkConversions = require("hood.convert.vk")
+
 local hood = require("hood")
 
 ---@type table<string, vk.Format[]>
@@ -16,29 +19,6 @@ local attributeFormatMap = {
 		[3] = vk.Format.R32G32B32_SINT,
 		[4] = vk.Format.R32G32B32A32_SINT,
 	},
-}
-
----@type table<hood.TextureFormat, vk.Format>
-local textureFormatMap = {
-	[hood.TextureFormat.Rgba8UNorm] = vk.Format.R8G8B8A8_UNORM,
-	[hood.TextureFormat.Rgba8Uint] = vk.Format.R8G8B8A8_UINT,
-	[hood.TextureFormat.Depth16Unorm] = vk.Format.D16_UNORM,
-	[hood.TextureFormat.Depth24Plus] = vk.Format.X8_D24_UNORM_PACK32,
-	[hood.TextureFormat.Depth32Float] = vk.Format.D32_SFLOAT,
-	[hood.TextureFormat.Bgra8UNorm] = vk.Format.B8G8R8A8_UNORM,
-	[hood.TextureFormat.Bgra8Srgb] = vk.Format.B8G8R8A8_SRGB,
-}
-
----@type table<hood.CompareFunction, vk.CompareOp>
-local compareFunctionMap = {
-	[hood.CompareFunction.Never] = vk.CompareOp.NEVER,
-	[hood.CompareFunction.Less] = vk.CompareOp.LESS,
-	[hood.CompareFunction.Equal] = vk.CompareOp.EQUAL,
-	[hood.CompareFunction.LessEqual] = vk.CompareOp.LESS_OR_EQUAL,
-	[hood.CompareFunction.Greater] = vk.CompareOp.GREATER,
-	[hood.CompareFunction.NotEqual] = vk.CompareOp.NOT_EQUAL,
-	[hood.CompareFunction.GreaterEqual] = vk.CompareOp.GREATER_OR_EQUAL,
-	[hood.CompareFunction.Always] = vk.CompareOp.ALWAYS,
 }
 
 ---@param format hood.TextureFormat
@@ -130,7 +110,7 @@ function VKPipeline.new(device, descriptor)
 		depthStencilState = {
 			depthTestEnable = true,
 			depthWriteEnable = descriptor.depthStencil.depthWriteEnabled,
-			depthCompareOp = compareFunctionMap[descriptor.depthStencil.depthCompare],
+			depthCompareOp = vkConversions.compareFunction[descriptor.depthStencil.depthCompare],
 		}
 	end
 
@@ -145,7 +125,7 @@ function VKPipeline.new(device, descriptor)
 	local colorRefs = {}
 
 	for _, target in ipairs(targets) do
-		local vkFormat = textureFormatMap[target.format]
+		local vkFormat = vkConversions.textureFormat[target.format]
 		if not vkFormat then
 			error("Unsupported texture format: " .. tostring(target.format))
 		end
@@ -170,7 +150,7 @@ function VKPipeline.new(device, descriptor)
 	---@type vk.AttachmentReference?
 	local depthRef = nil
 	if descriptor.depthStencil then
-		local vkFormat = textureFormatMap[descriptor.depthStencil.format]
+		local vkFormat = vkConversions.textureFormat[descriptor.depthStencil.format]
 		if not vkFormat then
 			error("Unsupported depth format: " .. tostring(descriptor.depthStencil.format))
 		end

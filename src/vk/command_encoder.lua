@@ -1,6 +1,7 @@
 local ffi = require("ffi")
+
 local vk = require("vkapi")
-local hood = require("hood")
+local vkConversions = require("hood.convert.vk")
 
 local VKCommandBuffer = require("hood.vk.command_buffer")
 
@@ -169,16 +170,12 @@ do
 	end
 end
 
-local indexTypeMap = {
-	[hood.IndexType.u16] = 0, -- VK_INDEX_TYPE_UINT16
-	[hood.IndexType.u32] = 1, -- VK_INDEX_TYPE_UINT32
-}
-
 ---@param buffer hood.vk.Buffer
 ---@param format hood.IndexFormat
 ---@param offset number?
 function VKCommandEncoder:setIndexBuffer(buffer, format, offset)
-	self.device.handle:cmdBindIndexBuffer(self.buffer.handle, buffer.handle, offset or 0, indexTypeMap[format])
+	self.device.handle:cmdBindIndexBuffer(self.buffer.handle, buffer.handle, offset or 0,
+		vkConversions.indexFormat[format])
 end
 
 ---@param indexCount number
