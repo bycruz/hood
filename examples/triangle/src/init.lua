@@ -88,7 +88,7 @@ local pipeline = device:createPipeline({
 		},
 		targets = {
 			{
-				blend = hood.BlendState.AlphaBlending,
+				blend = "alpha-blending",
 				writeMask = hood.ColorWrites.All,
 				format = swapchain.format,
 			},

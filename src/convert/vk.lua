@@ -1,4 +1,3 @@
-local hood = require("hood")
 local vk = require("vkapi")
 
 local vkConversions = {}
@@ -8,6 +7,14 @@ vkConversions.textureType = {
 	["1d"] = vk.ImageType.TYPE_1D,
 	["2d"] = vk.ImageType.TYPE_2D,
 	["3d"] = vk.ImageType.TYPE_3D
+}
+
+---@type table<hood.PresentMode, vk.PresentModeKHR>
+vkConversions.presentMode = {
+	["immediate"] = vk.PresentModeKHR.IMMEDIATE,
+	["fifo"] = vk.PresentModeKHR.FIFO,
+	["fifo-relaxed"] = vk.PresentModeKHR.FIFO_RELAXED,
+	["mailbox"] = vk.PresentModeKHR.MAILBOX,
 }
 
 ---@type table<hood.TextureViewDimension, vk.SampleCountFlagBits>
@@ -23,13 +30,13 @@ vkConversions.textureViewType = {
 
 ---@type table<hood.TextureFormat, vk.Format>
 vkConversions.textureFormat = {
-	[hood.TextureFormat.Rgba8UNorm] = vk.Format.R8G8B8A8_UNORM,
-	[hood.TextureFormat.Rgba8Uint] = vk.Format.R8G8B8A8_UINT,
-	[hood.TextureFormat.Depth16Unorm] = vk.Format.D16_UNORM,
-	[hood.TextureFormat.Depth24Plus] = vk.Format.X8_D24_UNORM_PACK32,
-	[hood.TextureFormat.Depth32Float] = vk.Format.D32_SFLOAT,
-	[hood.TextureFormat.Bgra8UNorm] = vk.Format.B8G8R8A8_UNORM,
-	[hood.TextureFormat.Bgra8Srgb] = vk.Format.B8G8R8A8_SRGB
+	["rgba8unorm"] = vk.Format.R8G8B8A8_UNORM,
+	["rgba8uint"] = vk.Format.R8G8B8A8_UINT,
+	["depth16unorm"] = vk.Format.D16_UNORM,
+	["depth24plus"] = vk.Format.X8_D24_UNORM_PACK32,
+	["depth32float"] = vk.Format.D32_SFLOAT,
+	["bgra8unorm"] = vk.Format.B8G8R8A8_UNORM,
+	["bgra8unorm-srgb"] = vk.Format.B8G8R8A8_SRGB
 }
 
 ---@type table<number, vk.SampleCountFlagBits>
@@ -82,5 +89,18 @@ vkConversions.indexFormat = {
 	["u16"] = vk.IndexType.UINT16,
 	["u32"] = vk.IndexType.UINT32,
 }
+
+
+local function invert(t)
+	local inverted = {}
+	for k, v in pairs(t) do
+		inverted[v] = k
+	end
+	return inverted
+end
+
+--- LuaLS sucks so I have to do the typing manually here, generics don't resolve.
+vkConversions.from = {}
+vkConversions.from.textureFormat = invert(vkConversions.textureFormat) ---@type table<vk.Format, hood.TextureFormat>
 
 return vkConversions

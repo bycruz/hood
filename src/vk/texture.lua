@@ -1,4 +1,3 @@
-local hood = require("hood")
 local vk = require("vkapi")
 
 local vkConvert = require("hood.convert.vk")

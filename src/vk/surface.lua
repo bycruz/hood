@@ -1,26 +1,9 @@
-local ffi = require("ffi")
 local vk = require("vkapi")
-local hood = require("hood")
+local vkConversions = require("hood.convert.vk")
 
 local VKSwapchain = require("hood.vk.swapchain")
 
 local isWindows = jit.os == "Windows"
-
----@type table<vk.Format, hood.TextureFormat>
-local vkFormatToHoodFormat = {
-	[vk.Format.R8G8B8A8_UNORM] = hood.TextureFormat.Rgba8UNorm,
-	[vk.Format.B8G8R8A8_UNORM] = hood.TextureFormat.Bgra8UNorm,
-	[vk.Format.R8G8B8A8_UINT] = hood.TextureFormat.Rgba8Uint,
-	[vk.Format.B8G8R8A8_SRGB] = hood.TextureFormat.Bgra8Srgb,
-}
-
----@type table<hood.PresentMode, vk.PresentModeKHR>
-local hoodPresentToVkPresent = {
-	["immediate"] = vk.PresentModeKHR.IMMEDIATE,
-	["fifo"] = vk.PresentModeKHR.FIFO,
-	["fifo-relaxed"] = vk.PresentModeKHR.FIFO_RELAXED,
-	["mailbox"] = vk.PresentModeKHR.MAILBOX,
-}
 
 ---@class hood.vk.Surface
 ---@field window winit.Window
@@ -71,14 +54,14 @@ function VKSurface:configure(device, config)
 		extent.height = self.window.height
 	end
 
-	local hoodFormat = vkFormatToHoodFormat[format.format]
+	local hoodFormat = vkConversions.from.textureFormat[format.format]
 	if not hoodFormat then
 		error("Unsupported swapchain format: " .. tostring(format.format))
 	end
 
 	-- Query supported present modes and validate requested mode
 	local presentModes = vk.getPhysicalDeviceSurfacePresentModesKHR(device.pd, self.handle)
-	local requestedPresentMode = hoodPresentToVkPresent[config.presentMode]
+	local requestedPresentMode = vkConversions.presentMode[config.presentMode]
 
 	---@type vk.PresentModeKHR?
 	local presentMode = nil
@@ -106,6 +89,7 @@ function VKSurface:configure(device, config)
 		compositeAlpha = vk.CompositeAlphaFlagBitsKHR.OPAQUE,
 		presentMode = presentMode,
 		clipped = 1,
+		oldSwapchain = nil
 	})
 end
 

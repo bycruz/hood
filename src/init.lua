@@ -6,9 +6,6 @@ VULKAN = os.getenv("VULKAN") == "1"
 
 local hood = {}
 
--- For self referential requires
-package.loaded[(...)] = hood
-
 hood.Instance = require("hood.instance")
 
 ---@alias hood.TextureViewDimension
@@ -49,11 +46,9 @@ hood.Instance = require("hood.instance")
 ---@alias hood.InstanceBackend "vulkan" | "opengl"
 ---@alias hood.InstanceFlag "validate"
 
---- No. You aren't getting a full implementation of this anytime soon.
----@enum hood.BlendState
-hood.BlendState = {
-	AlphaBlending = 1,
-}
+--- TODO: This will be entirely removed and reworked, use with caution
+---@alias hood.BlendState
+--- | "alpha-blending"
 
 ---@enum hood.ColorWrites
 hood.ColorWrites = {
@@ -65,18 +60,14 @@ hood.ColorWrites = {
 	All = 0b1111,
 }
 
----@enum hood.TextureFormat
-hood.TextureFormat = {
-	Rgba8UNorm = 1,
-	Rgba8Uint = 2,
-
-	Depth16Unorm = 3,
-	Depth24Plus = 4,
-	Depth32Float = 5,
-
-	Bgra8UNorm = 6,
-	Bgra8Srgb = 7,
-}
+---@alias hood.TextureFormat
+--- | "rgba8unorm"
+--- | "rgba8uint"
+--- | "bgra8unorm"
+--- | "bgra8unorm-srgb"
+--- | "depth16unorm"
+--- | "depth24plus"
+--- | "depth32float"
 
 ---@alias hood.FilterMode
 --- | "nearest"

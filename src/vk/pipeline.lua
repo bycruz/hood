@@ -3,8 +3,6 @@ local ffi = require("ffi")
 local vk = require("vkapi")
 local vkConversions = require("hood.convert.vk")
 
-local hood = require("hood")
-
 ---@type table<string, vk.Format[]>
 local attributeFormatMap = {
 	f32 = {
@@ -23,9 +21,9 @@ local attributeFormatMap = {
 
 ---@param format hood.TextureFormat
 local function isDepthFormat(format)
-	return format == hood.TextureFormat.Depth16Unorm
-		or format == hood.TextureFormat.Depth24Plus
-		or format == hood.TextureFormat.Depth32Float
+	return format == "depth16unorm"
+		or format == "depth24plus"
+		or format == "depth32float"
 end
 
 ---@class hood.vk.Pipeline
@@ -91,7 +89,7 @@ function VKPipeline.new(device, descriptor)
 			colorWriteMask = target.writeMask or 0xF,
 		}
 
-		if target.blend == hood.BlendState.AlphaBlending then
+		if target.blend == "alpha-blending" then
 			att.blendEnable = true
 			att.srcColorBlendFactor = vk.BlendFactor.SRC_ALPHA
 			att.dstColorBlendFactor = vk.BlendFactor.ONE_MINUS_SRC_ALPHA

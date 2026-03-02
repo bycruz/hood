@@ -1,7 +1,6 @@
 local gl = require("glapi")
 local glConversions = require("hood.convert.gl")
 
-local hood = require("hood")
 local GLVAO = require("hood.gl.vao")
 
 ---@class hood.gl.CommandBuffer
@@ -112,7 +111,7 @@ function GLCommandBuffer:execute()
 			end
 
 			for _, target in ipairs(pipeline.fragment.targets) do
-				if target.blend == hood.BlendState.AlphaBlending then
+				if target.blend == "alpha-blending" then
 					gl.enable(gl.BLEND)
 					gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA)
 				else
