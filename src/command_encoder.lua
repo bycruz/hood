@@ -27,7 +27,7 @@
 ---@field endRendering fun(self: hood.CommandEncoder)
 ---@field setViewport fun(self: hood.CommandEncoder, x: number, y: number, width: number, height: number)
 ---@field setVertexBuffer fun(self: hood.CommandEncoder, slot: number, buffer: hood.Buffer, offset: number?)
----@field setIndexBuffer fun(self: hood.CommandEncoder, buffer: hood.Buffer, offset: number?)
+---@field setIndexBuffer fun(self: hood.CommandEncoder, buffer: hood.Buffer, format: hood.IndexFormat, offset: number?)
 ---@field setBindGroup fun(self: hood.CommandEncoder, index: number, bindGroup: hood.BindGroup)
 ---@field setPipeline fun(self: hood.CommandEncoder, pipeline: hood.Pipeline)
 ---@field draw fun(self: hood.CommandEncoder, vertexCount: number, instanceCount: number, firstVertex: number?, firstInstance: number?)
