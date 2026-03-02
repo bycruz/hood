@@ -51,4 +51,29 @@ vkConversions.textureUsage = {
 	["RENDER_ATTACHMENT"] = vk.ImageUsageFlagBits.COLOR_ATTACHMENT,
 }
 
+---@type table<hood.CompareFunction, vk.CompareOp>
+vkConversions.compareFunction = {
+	[hood.CompareFunction.Never] = vk.CompareOp.NEVER,
+	[hood.CompareFunction.Less] = vk.CompareOp.LESS,
+	[hood.CompareFunction.Equal] = vk.CompareOp.EQUAL,
+	[hood.CompareFunction.LessEqual] = vk.CompareOp.LESS_OR_EQUAL,
+	[hood.CompareFunction.Greater] = vk.CompareOp.GREATER,
+	[hood.CompareFunction.NotEqual] = vk.CompareOp.NOT_EQUAL,
+	[hood.CompareFunction.GreaterEqual] = vk.CompareOp.GREATER_OR_EQUAL,
+	[hood.CompareFunction.Always] = vk.CompareOp.ALWAYS,
+}
+
+---@type table<hood.FilterMode, vk.Filter>
+vkConversions.filterMode = {
+	[hood.FilterMode.Nearest] = vk.Filter.NEAREST,
+	[hood.FilterMode.Linear] = vk.Filter.LINEAR,
+}
+
+---@type table<hood.AddressMode, vk.SamplerAddressMode>
+vkConversions.addressMode = {
+	[hood.AddressMode.ClampToEdge] = vk.SamplerAddressMode.CLAMP_TO_EDGE,
+	[hood.AddressMode.Repeat] = vk.SamplerAddressMode.REPEAT,
+	[hood.AddressMode.MirroredRepeat] = vk.SamplerAddressMode.MIRRORED_REPEAT,
+}
+
 return vkConversions
