@@ -1,4 +1,3 @@
-local ffi = require("ffi")
 local vk = require("vkapi")
 
 local VKAdapter = require("hood.vk.adapter")
@@ -6,7 +5,7 @@ local VKSurface = require("hood.vk.surface")
 
 local isWindows = jit.os == "Windows"
 
----@class hood.vk.Instance
+---@class hood.vk.Instance: hood.Instance
 ---@field handle vk.Instance
 local VKInstance = {}
 VKInstance.__index = VKInstance

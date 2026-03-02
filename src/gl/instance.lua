@@ -1,11 +1,12 @@
 local GLAdapter = require("hood.gl.adapter")
 local GLSurface = require("hood.gl.surface")
 
----@class hood.gl.Instance
+---@class hood.gl.Instance: hood.Instance
 local GLInstance = {}
 GLInstance.__index = GLInstance
 
-function GLInstance.new()
+---@param _descriptor hood.InstanceDescriptor
+function GLInstance.new(_descriptor)
 	return setmetatable({}, GLInstance)
 end
 

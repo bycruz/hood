@@ -6,8 +6,6 @@ local VKSampler = require("hood.vk.sampler")
 local VKTexture = require("hood.vk.texture")
 local VKComputePipeline = require("hood.vk.compute_pipeline")
 
-local BindGroup = require("hood.bind_group")
-
 ---@class hood.vk.Device
 ---@field public queue hood.vk.Queue
 ---@field handle vk.Device
@@ -49,8 +47,9 @@ function VKDevice:createCommandEncoder()
 end
 
 ---@param entries hood.BindGroupEntry[]
+---@return hood.BindGroup
 function VKDevice:createBindGroup(entries)
-	return BindGroup.new(entries)
+	return { entries = entries }
 end
 
 ---@param descriptor hood.TextureDescriptor

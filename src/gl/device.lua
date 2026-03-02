@@ -7,8 +7,6 @@ local GLSampler = require("hood.gl.sampler")
 local GLTexture = require("hood.gl.texture")
 local GLComputePipeline = require("hood.gl.compute_pipeline")
 
-local BindGroup = require("hood.bind_group")
-
 ---@class hood.gl.Device
 ---@field public queue hood.gl.Queue
 ---@field ctx hood.gl.Context
@@ -39,9 +37,10 @@ function GLDevice:createPipeline(descriptor)
 end
 
 ---@param entries hood.BindGroupEntry[]
+---@return hood.BindGroup
 function GLDevice:createBindGroup(entries)
 	self.ctx:makeCurrent()
-	return BindGroup.new(entries)
+	return { entries = entries }
 end
 
 ---@param descriptor hood.SamplerDescriptor

@@ -1,10 +1,15 @@
+---@alias hood.AddressMode
+--- | "clamp-to-edge"
+--- | "repeat"
+--- | "mirrored-repeat"
+
 ---@class hood.SamplerDescriptor
 ---@field addressModeU hood.AddressMode
 ---@field addressModeV hood.AddressMode
 ---@field addressModeW hood.AddressMode
 ---@field magFilter hood.FilterMode
 ---@field minFilter hood.FilterMode
--- @field mipmapFilter hood.FilterMode
+---@field mipmapFilter hood.FilterMode
 ---@field lodMinClamp number?
 ---@field lodMaxClamp number?
 ---@field maxAnisotropy number?
@@ -13,4 +18,3 @@
 ---@class hood.Sampler
 ---@field new fun(desc: hood.SamplerDescriptor): hood.Sampler
 ---@field destroy fun(self: hood.Sampler)
-local Sampler = VULKAN and require("hood.vk.sampler") or require("hood.gl.sampler") --[[@as hood.Sampler]]

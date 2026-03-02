@@ -2,9 +2,6 @@ local ffi = require("ffi")
 local winit = require("winit")
 local hood = require("hood")
 
-local Instance = require("hood.instance")
-local VertexLayout = require("hood.vertex_layout")
-
 ---@type hood.InstanceBackend
 local backend = os.getenv("VULKAN") and "vulkan" or "opengl"
 print("Using backend:", backend)
@@ -19,16 +16,16 @@ eventLoop:register(window)
 window:setTitle("Triangle - Running on " .. backend .. " backend")
 
 -- Create hood instance, adapter, and device
-local instance = Instance.new({ backend = backend, flags = { "validate" } })
+local instance = hood.Instance.new({ backend = backend, flags = {} })
 local adapter = instance:requestAdapter({ powerPreference = "high-performance" })
 local device = adapter:requestDevice()
 
 -- Create surface and swapchain
 local surface = instance:createSurface(window)
-local swapchain = surface:configure(device, { presentMode = "fifo" })
+local swapchain = surface:configure(device, { presentMode = "immediate" })
 
 -- Define vertex layout: position (vec3) + color (vec4)
-local vertexLayout = VertexLayout.new()
+local vertexLayout = hood.VertexLayout.new()
 	:withAttribute({ type = "f32", size = 3, offset = 0 }) -- position
 	:withAttribute({ type = "f32", size = 4, offset = 12 }) -- color
 
