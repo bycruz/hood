@@ -1,5 +1,5 @@
 local gl = require("glapi")
-local hood = require("hood")
+local glConversions = require("hood.convert.gl")
 
 ---@class hood.gl.Texture
 ---@field framebuffer number
@@ -10,25 +10,12 @@ local hood = require("hood")
 local GLTexture = {}
 GLTexture.__index = GLTexture
 
-local glInternalFormatMap = {
-	[hood.TextureFormat.Rgba8UNorm] = gl.RGBA8,
-	[hood.TextureFormat.Depth24Plus] = gl.DEPTH_COMPONENT24,
-}
-
-local glFormatMap = {
-	[hood.TextureFormat.Rgba8UNorm] = gl.RGBA,
-}
-
-local glTypeMap = {
-	[hood.TextureFormat.Rgba8UNorm] = gl.UNSIGNED_BYTE,
-}
-
 ---@param device hood.gl.Device
 ---@param descriptor hood.TextureDescriptor
 function GLTexture.new(device, descriptor)
 	local levels = descriptor.mipLevelCount or 1
 	local extents = descriptor.extents
-	local format = assert(glInternalFormatMap[descriptor.format], "Unsupported texture format")
+	local format = assert(glConversions.internalTextureFormat[descriptor.format], "Unsupported texture format")
 
 	local id ---@type number
 	if extents.dim == "1d" then
@@ -66,8 +53,8 @@ function GLTexture:writeData(desc, data)
 	local mip = desc.mip or 0
 	local layer = desc.layer or 0
 
-	local format = assert(glFormatMap[self.descriptor.format], "Unsupported texture format")
-	local type = assert(glTypeMap[self.descriptor.format], "Unsupported texture format")
+	local format = assert(glConversions.textureFormat[self.descriptor.format], "Unsupported texture format")
+	local type = assert(glConversions.textureType[self.descriptor.format], "Unsupported texture format")
 
 	data = data + (desc.offset or 0)
 	local bytesPerRow = desc.bytesPerRow
