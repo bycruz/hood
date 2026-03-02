@@ -2,7 +2,7 @@ local vk = require("vkapi")
 
 ---@class hood.vk.CommandBuffer
 ---@field device hood.vk.Device
----@field pool vk.CommandPool
+---@field pool vk.ffi.CommandPool
 ---@field handle vk.ffi.CommandBuffer
 local VKCommandBuffer = {}
 VKCommandBuffer.__index = VKCommandBuffer
