@@ -11,6 +11,7 @@ local VKCommandBuffer = require("hood.vk.command_buffer")
 ---@field pendingDescriptor hood.RenderPassDescriptor?
 ---@field imageViews vk.ffi.ImageView[]
 ---@field framebuffers vk.ffi.Framebuffer[]
+---@field pipeline hood.vk.Pipeline?
 local VKCommandEncoder = {}
 VKCommandEncoder.__index = VKCommandEncoder
 
@@ -39,6 +40,7 @@ function VKCommandEncoder:setPipeline(pipeline)
 		self.pendingDescriptor = nil
 	end
 
+	self.pipeline = pipeline
 	self.device.handle:cmdBindPipeline(self.buffer.handle, vk.PipelineBindPoint.GRAPHICS, pipeline.handle)
 end
 
@@ -189,9 +191,21 @@ function VKCommandEncoder:drawIndexed(indexCount, instanceCount, firstIndex, bas
 end
 
 ---@param index number
----@param bindGroup hood.BindGroup
+---@param bindGroup hood.vk.BindGroup
 function VKCommandEncoder:setBindGroup(index, bindGroup)
-	-- TODO: implement descriptor set binding for Vulkan
+	if not self.pipeline then
+		error("Pipeline not set")
+	end
+
+	self.device.handle:cmdBindDescriptorSets(
+		self.buffer.handle,
+		vk.PipelineBindPoint.GRAPHICS,
+		self.pipeline.layout,
+		index,
+		1,
+		bindGroup.set,
+		0
+	)
 end
 
 function VKCommandEncoder:endRendering()

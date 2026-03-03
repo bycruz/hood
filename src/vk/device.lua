@@ -5,11 +5,13 @@ local VKCommandEncoder = require("hood.vk.command_encoder")
 local VKSampler = require("hood.vk.sampler")
 local VKTexture = require("hood.vk.texture")
 local VKComputePipeline = require("hood.vk.compute_pipeline")
+local VKBindGroup = require("hood.vk.bind_group")
 
 ---@class hood.vk.Device
 ---@field public queue hood.vk.Queue
 ---@field handle vk.Device
 ---@field pd vk.ffi.PhysicalDevice
+---@field descriptorPool vk.ffi.DescriptorPool
 local VKDevice = {}
 VKDevice.__index = VKDevice
 
@@ -29,6 +31,11 @@ function VKDevice.new(adapter)
 	local device = setmetatable({ pd = adapter.pd, handle = handle }, VKDevice)
 	device.queue = VKQueue.new(device, adapter.gfxQueueFamilyIdx, 0)
 
+	-- TODO: Replace with a growing array of descriptor pools later
+	device.descriptorPool = handle:createDescriptorPool({
+		maxSets = 512
+	})
+
 	return device
 end
 
@@ -47,9 +54,9 @@ function VKDevice:createCommandEncoder()
 end
 
 ---@param entries hood.BindGroupEntry[]
----@return hood.BindGroup
+---@return hood.vk.BindGroup
 function VKDevice:createBindGroup(entries)
-	return { entries = entries }
+	return VKBindGroup.new(self, entries)
 end
 
 ---@param descriptor hood.TextureDescriptor
