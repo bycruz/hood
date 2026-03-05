@@ -1,8 +1,8 @@
 ---@class hood.TextureView
 
 ---@class hood.TextureViewDescriptor
----@field format hood.TextureFormat
----@field dimension hood.TextureViewDimension
+---@field format hood.TextureFormat?
+---@field dimension hood.TextureViewDimension?
 ---@field usages hood.TextureUsage[]?
 ---@field aspect hood.TextureAspect?
 ---@field baseMipLevel number?

@@ -49,6 +49,23 @@ function BindGroup.new(device, descriptor)
 			imageInfos[0].imageLayout = vk.ImageLayout.SHADER_READ_ONLY_OPTIMAL
 
 			writes[i - 1].pImageInfo = imageInfos
+		elseif entry.type == "storageTexture" then
+			local vkTextureView = entry.texture --[[@as hood.vk.TextureView]]
+
+			local imageInfos = vk.DescriptorImageInfoArray(1)
+			imageInfos[0].imageView = vkTextureView.handle
+			imageInfos[0].imageLayout = vk.ImageLayout.GENERAL
+
+			writes[i - 1].pImageInfo = imageInfos
+		elseif entry.type == "sampler" then
+			local vkSampler = entry.sampler --[[@as hood.vk.Sampler]]
+
+			local imageInfos = vk.DescriptorImageInfoArray(1)
+			imageInfos[0].sampler = vkSampler.handle
+
+			writes[i - 1].pImageInfo = imageInfos
+		else
+			error("Unsupported bind group entry type: " .. entry.type)
 		end
 	end
 

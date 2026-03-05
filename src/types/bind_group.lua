@@ -39,7 +39,7 @@
 
 ---@class hood.Binding.StorageTexture: hood.Binding.Base
 ---@field type "storageTexture"
----@field texture hood.Texture
+---@field texture hood.TextureView
 ---@field layer number?
 ---@field access hood.StorageAccess
 
