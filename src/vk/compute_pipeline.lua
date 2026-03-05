@@ -20,7 +20,16 @@ function VKComputePipeline.new(device, descriptor)
 		pCode = ffi.cast("const uint32_t*", descriptor.module.source),
 	})
 
-	local layout = device.handle:createPipelineLayout({})
+	local descriptorSetLayouts = vk.DescriptorSetLayoutArray(1)
+	do
+		local bgLayout = descriptor.layout --[[@as hood.vk.BindGroupLayout]]
+		descriptorSetLayouts[0] = bgLayout.handle
+	end
+
+	local layout = device.handle:createPipelineLayout({
+		setLayoutCount = 1,
+		pSetLayouts = descriptorSetLayouts,
+	})
 
 	local handle = device.handle:createComputePipeline(nil, {
 		stage = {
