@@ -33,9 +33,9 @@ function VKTexture.new(device, descriptor)
 		extent = {
 			width = descriptor.extents.width,
 			height = descriptor.extents.height,
-			depth = descriptor.extents.depth,
+			depth = descriptor.extents.depth or 1,
 		},
-		mipLevels = descriptor.mipLevelCount,
+		mipLevels = descriptor.mipLevelCount or 1,
 		arrayLayers = layers,
 		samples = samples,
 		tiling = vk.ImageTiling.OPTIMAL,
