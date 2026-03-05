@@ -42,14 +42,13 @@ function BindGroup.new(device, descriptor)
 
 			writes[i - 1].pBufferInfo = bufferInfos
 		elseif entry.type == "texture" then
-			-- TODO: This
-			local vkTexture = entry.texture --[[@as hood.vk.Texture]]
+			local vkTextureView = entry.texture --[[@as hood.vk.TextureView]]
 
 			local imageInfos = vk.DescriptorImageInfoArray(1)
-			imageInfos[0].imageView = vkTexture.view
+			imageInfos[0].imageView = vkTextureView.handle
 			imageInfos[0].imageLayout = vk.ImageLayout.SHADER_READ_ONLY_OPTIMAL
 
-			writes[i - 1].pImageInfo = ffi.new("VkDescriptorImageInfo[1]", imageInfos)
+			writes[i - 1].pImageInfo = imageInfos
 		end
 	end
 

@@ -10,6 +10,8 @@ local VKTextureView = require("hood.vk.texture_view")
 ---@field format vk.Format?
 ---@field width number?
 ---@field height number?
+---@field viewType vk.ImageViewType
+---@field isDepth boolean?
 ---@field private device hood.vk.Device
 local VKTexture = {}
 VKTexture.__index = VKTexture
@@ -22,6 +24,23 @@ local function isDepthFormat(format)
 		or format == "depth32float"
 end
 
+---@param extents hood.TextureExtents
+local function viewTypeFromExtents(extents)
+	if extents.dim == "3d" then
+		return vk.ImageViewType.TYPE_3D
+	elseif extents.dim == "2d" and (extents.count and extents.count > 1) then
+		return vk.ImageViewType.TYPE_2D_ARRAY
+	elseif extents.dim == "2d" then
+		return vk.ImageViewType.TYPE_2D
+	elseif extents.dim == "1d" and (extents.count and extents.count > 1) then
+		return vk.ImageViewType.TYPE_1D_ARRAY
+	elseif extents.dim == "1d" then
+		return vk.ImageViewType.TYPE_1D
+	else
+		error("Unsupported texture dimension: " .. tostring(extents.dim))
+	end
+end
+
 ---@param device hood.vk.Device
 ---@param descriptor hood.TextureDescriptor
 function VKTexture.new(device, descriptor)
@@ -31,21 +50,25 @@ function VKTexture.new(device, descriptor)
 	end
 
 	local layers = descriptor.extents.dim ~= "3d" and descriptor.extents.count or 1
+	local isDepth = isDepthFormat(descriptor.format)
 
 	---@type vk.ImageUsageFlagBits
 	local vkUsage = 0
 	for _, usage in ipairs(descriptor.usages) do
 		local flag = vkConvert.textureUsage[usage]
-		if usage == "RENDER_ATTACHMENT" and isDepthFormat(descriptor.format) then
+		if usage == "RENDER_ATTACHMENT" and isDepth then
 			flag = vk.ImageUsageFlagBits.DEPTH_STENCIL_ATTACHMENT
 		end
 
 		vkUsage = bit.bor(vkUsage, flag)
 	end
 
+	assert(descriptor.format, "Texture format must be specified")
+	local format = vkConvert.textureFormat[descriptor.format]
+
 	local handle = device.handle:createImage({
 		imageType = vkConvert.textureType[descriptor.extents.dim],
-		format = vkConvert.textureFormat[descriptor.format],
+		format = format,
 		extent = {
 			width = descriptor.extents.width,
 			height = descriptor.extents.height,
@@ -75,7 +98,8 @@ function VKTexture.new(device, descriptor)
 			if not fallbackIndex then
 				fallbackIndex = i
 			end
-			if bit.band(tonumber(memProps.memoryTypes[i].propertyFlags), vk.MemoryPropertyFlagBits.DEVICE_LOCAL) ~= 0 then
+
+			if bit.band(memProps.memoryTypes[i].propertyFlags, vk.MemoryPropertyFlagBits.DEVICE_LOCAL) ~= 0 then
 				memTypeIndex = i
 				break
 			end
@@ -97,9 +121,11 @@ function VKTexture.new(device, descriptor)
 		device = device,
 		handle = handle,
 		memory = memory,
-		format = vkConvert.textureFormat[descriptor.format],
+		format = format,
 		width = descriptor.extents.width,
 		height = descriptor.extents.height,
+		isDepth = isDepth,
+		viewType = viewTypeFromExtents(descriptor.extents),
 	}, VKTexture)
 end
 

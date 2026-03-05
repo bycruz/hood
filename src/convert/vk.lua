@@ -39,6 +39,14 @@ vkConversions.textureFormat = {
 	["bgra8unorm-srgb"] = vk.Format.B8G8R8A8_SRGB
 }
 
+---@type table<hood.TextureAspect, vk.ImageAspectFlagBits>
+vkConversions.textureAspect = {
+	["color"] = vk.ImageAspectFlagBits.COLOR,
+	["depth"] = vk.ImageAspectFlagBits.DEPTH,
+	["stencil"] = vk.ImageAspectFlagBits.STENCIL,
+	["all"] = bit.bor(vk.ImageAspectFlagBits.COLOR, vk.ImageAspectFlagBits.DEPTH, vk.ImageAspectFlagBits.STENCIL),
+}
+
 ---@type table<number, vk.SampleCountFlagBits>
 vkConversions.sampleCount = {
 	[1] = vk.SampleCountFlagBits.COUNT_1,

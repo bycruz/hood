@@ -35,7 +35,7 @@
 
 ---@class hood.Binding.Texture: hood.Binding.Base
 ---@field type "texture"
----@field texture hood.Texture
+---@field texture hood.TextureView
 
 ---@class hood.Binding.StorageTexture: hood.Binding.Base
 ---@field type "storageTexture"

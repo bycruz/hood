@@ -38,6 +38,7 @@
 --- | "all"
 --- | "stencil"
 --- | "depth"
+--- | "color"
 
 ---@class hood.TextureDescriptor
 ---@field extents hood.TextureExtents
