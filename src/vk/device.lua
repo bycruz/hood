@@ -70,10 +70,10 @@ function VKDevice:createCommandEncoder()
 	return VKCommandEncoder.new(self)
 end
 
----@param entries hood.Binding[]
+---@param descriptor hood.BindGroupDescriptor
 ---@return hood.vk.BindGroup
-function VKDevice:createBindGroup(entries)
-	return VKBindGroup.new(self, entries)
+function VKDevice:createBindGroup(descriptor)
+	return VKBindGroup.new(self, descriptor)
 end
 
 ---@param entries hood.BindingLayout[]

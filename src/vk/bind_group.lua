@@ -10,29 +10,14 @@ local BindGroup = {}
 BindGroup.__index = BindGroup
 
 ---@param device hood.vk.Device
----@param entries hood.Binding[]
-function BindGroup.new(device, entries)
-	local bindings = vk.DescriptorSetLayoutBindingArray(#entries)
-	for i, entry in ipairs(entries) do
-		local stageFlags = 0
-		for _, stage in ipairs(entry.visibility) do
-			stageFlags = bit.bor(stageFlags, vkConversions.shaderStage[stage])
-		end
-
-		bindings[i - 1].binding = entry.binding
-		bindings[i - 1].descriptorType = vkConversions.bindingType[entry.type]
-		bindings[i - 1].descriptorCount = 1
-		bindings[i - 1].stageFlags = stageFlags
-	end
-
-	local layout = device.handle:createDescriptorSetLayout({
-		bindingCount = #entries,
-		pBindings = bindings
-	})
+---@param descriptor hood.BindGroupDescriptor
+function BindGroup.new(device, descriptor)
+	local entries = descriptor.entries
+	local layout = descriptor.layout --[[@as hood.vk.BindGroupLayout]]
 
 	-- SAFETY: Vulkan only needs to read it for the lifetime of the call
 	local layoutArray = vk.DescriptorSetLayoutArray(1)
-	layoutArray[0] = layout
+	layoutArray[0] = layout.handle
 
 	local set = device.handle:allocateDescriptorSets({
 		descriptorPool = device.descriptorPool,
@@ -46,6 +31,26 @@ function BindGroup.new(device, entries)
 		writes[i - 1].dstBinding = entry.binding
 		writes[i - 1].descriptorCount = 1 -- TODO: Support types with count?
 		writes[i - 1].descriptorType = vkConversions.bindingType[entry.type]
+
+		if entry.type == "buffer" then
+			local vkBuffer = entry.buffer --[[@as hood.vk.Buffer]]
+
+			local bufferInfos = vk.DescriptorBufferInfoArray(1)
+			bufferInfos[0].buffer = vkBuffer.handle
+			bufferInfos[0].offset = 0
+			bufferInfos[0].range = vk.WHOLE_SIZE
+
+			writes[i - 1].pBufferInfo = bufferInfos
+		elseif entry.type == "texture" then
+			-- TODO: This
+			local vkTexture = entry.texture --[[@as hood.vk.Texture]]
+
+			local imageInfos = vk.DescriptorImageInfoArray(1)
+			imageInfos[0].imageView = vkTexture.view
+			imageInfos[0].imageLayout = vk.ImageLayout.SHADER_READ_ONLY_OPTIMAL
+
+			writes[i - 1].pImageInfo = ffi.new("VkDescriptorImageInfo[1]", imageInfos)
+		end
 	end
 
 	device.handle:updateDescriptorSets(1, writes)

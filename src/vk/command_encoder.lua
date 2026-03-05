@@ -71,6 +71,7 @@ function VKCommandEncoder:_beginRenderPass(renderPass, descriptor)
 				layerCount = 1,
 			},
 		})
+
 		imageViews[i - 1] = iv
 		self.imageViews[#self.imageViews + 1] = iv
 	end
@@ -301,7 +302,8 @@ function VKCommandEncoder:writeTexture(texture, descriptor, data)
 	local layer = descriptor.layer or 0
 
 	-- Use tracked layout if available, otherwise UNDEFINED for first use
-	local oldLayout = texture.currentLayout or vk.ImageLayout.UNDEFINED
+	texture.layerLayouts = texture.layerLayouts or {}
+	local oldLayout = texture.layerLayouts[layer] or vk.ImageLayout.UNDEFINED
 	local srcAccessMask = 0
 	local srcStage = vk.PipelineStageFlagBits.TOP_OF_PIPE
 	if oldLayout == vk.ImageLayout.SHADER_READ_ONLY_OPTIMAL then
@@ -357,8 +359,8 @@ function VKCommandEncoder:writeTexture(texture, descriptor, data)
 		vk.PipelineStageFlagBits.FRAGMENT_SHADER,
 		1, barriers)
 
-	-- Track current layout
-	texture.currentLayout = vk.ImageLayout.SHADER_READ_ONLY_OPTIMAL
+	-- Track current layout per layer
+	texture.layerLayouts[layer] = vk.ImageLayout.SHADER_READ_ONLY_OPTIMAL
 end
 
 ---@param descriptor hood.ComputePassDescriptor

@@ -1,6 +1,10 @@
 ---@class hood.BindGroup
 ---@field entries hood.Binding[]
 
+---@class hood.BindGroupDescriptor
+---@field layout hood.BindGroupLayout
+---@field entries hood.Binding[]
+
 ---@alias hood.ShaderStage
 --- | "VERTEX"
 --- | "FRAGMENT"

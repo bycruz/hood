@@ -11,6 +11,14 @@ local vkConvert = require("hood.convert.vk")
 local VKTexture = {}
 VKTexture.__index = VKTexture
 
+--- TODO: Deduplicate this code from the pipeline
+---@param format hood.TextureFormat
+local function isDepthFormat(format)
+	return format == "depth16unorm"
+		or format == "depth24plus"
+		or format == "depth32float"
+end
+
 ---@param device hood.vk.Device
 ---@param descriptor hood.TextureDescriptor
 function VKTexture.new(device, descriptor)
@@ -24,7 +32,12 @@ function VKTexture.new(device, descriptor)
 	---@type vk.ImageUsageFlagBits
 	local vkUsage = 0
 	for _, usage in ipairs(descriptor.usages) do
-		vkUsage = bit.bor(vkUsage, vkConvert.textureUsage[usage])
+		local flag = vkConvert.textureUsage[usage]
+		if usage == "RENDER_ATTACHMENT" and isDepthFormat(descriptor.format) then
+			flag = vk.ImageUsageFlagBits.DEPTH_STENCIL_ATTACHMENT
+		end
+
+		vkUsage = bit.bor(vkUsage, flag)
 	end
 
 	local handle = device.handle:createImage({
