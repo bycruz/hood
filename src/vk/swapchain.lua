@@ -59,12 +59,15 @@ function VKSwapchain.new(device, format, info)
 	}, VKSwapchain)
 end
 
+local fenceArray = vk.FenceArray(1)
+
 function VKSwapchain:getCurrentTexture()
 	local fence = self.inFlightFences[self.currentFrame]
+	fenceArray[0] = fence
 
 	-- Wait for this frame's previous work to complete before reusing its semaphores
-	self.device.handle:waitForFences({ fence }, true, math.huge)
-	self.device.handle:resetFences({ fence })
+	self.device.handle:waitForFences(1, fenceArray, true, math.huge)
+	self.device.handle:resetFences(1, fenceArray)
 
 	local prevBuf = self.pendingCommandBuffers[self.currentFrame]
 	if prevBuf then

@@ -1,10 +1,10 @@
 local ffi = require("ffi")
 
----@alias AttributeType "f32" | "i32"
----@alias Attribute { type: "f32" | "i32", size: number, offset: number, normalized: boolean }
+---@alias hood.VertexLayout.AttributeType "f32" | "i32"
+---@alias hood.VertexLayout.Attribute { type: "f32" | "i32", size: number, offset: number, normalized: boolean }
 
 ---@class hood.VertexLayout
----@field attributes Attribute[]
+---@field attributes hood.VertexLayout.Attribute[]
 ---@field stride number?
 local VertexLayout = {}
 VertexLayout.__index = VertexLayout
@@ -13,14 +13,9 @@ function VertexLayout.new()
 	return setmetatable({ attributes = {}, stride = 0 }, VertexLayout)
 end
 
----@param attribute Attribute
+---@param attribute hood.VertexLayout.Attribute
 function VertexLayout:withAttribute(attribute)
 	table.insert(self.attributes, attribute)
-	return self
-end
-
-function VertexLayout:withStride(stride)
-	self.stride = stride
 	return self
 end
 

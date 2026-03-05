@@ -69,8 +69,13 @@ device.queue:writeBuffer(
 local shaderType = backend == "opengl" and "glsl" or "spirv"
 local shaderExt = backend == "opengl" and "glsl" or "spv"
 
+-- None needed for this example.
+-- In the future, this will not be needed with spirv reflection.
+local bindGroupLayout = device:createBindGroupLayout({})
+
 -- Create pipeline
 local pipeline = device:createPipeline({
+	layout = bindGroupLayout,
 	vertex = {
 		module = {
 			type = shaderType,

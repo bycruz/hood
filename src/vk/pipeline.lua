@@ -112,9 +112,16 @@ function VKPipeline.new(device, descriptor)
 		}
 	end
 
+	-- TODO: Support multiple descriptor set layouts when we have bind group support
+	local descriptorSetLayouts = vk.DescriptorSetLayoutArray(1)
+	do
+		local layout = descriptor.layout --[[@as hood.vk.BindGroupLayout]]
+		descriptorSetLayouts[0] = layout.handle
+	end
+
 	local layout = device.handle:createPipelineLayout({
-		descriptorSetLayouts = descriptor.descriptorSetLayouts,
-		pushConstantRanges = descriptor.pushConstantRanges,
+		setLayoutCount = 1,
+		pSetLayouts = descriptorSetLayouts,
 	})
 
 	---@type vk.AttachmentDescription[]
@@ -200,8 +207,8 @@ function VKPipeline.new(device, descriptor)
 	local pipelines = device.handle:createGraphicsPipelines(0, {
 		{
 			stages = {
-				{ stage = vk.ShaderStageFlagBits.VERTEX_BIT,   module = vertModule },
-				{ stage = vk.ShaderStageFlagBits.FRAGMENT_BIT, module = fragModule },
+				{ stage = vk.ShaderStageFlagBits.VERTEX,   module = vertModule },
+				{ stage = vk.ShaderStageFlagBits.FRAGMENT, module = fragModule },
 			},
 			vertexInputState = {
 				bindings = bindings,

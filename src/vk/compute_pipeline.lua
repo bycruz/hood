@@ -24,7 +24,7 @@ function VKComputePipeline.new(device, descriptor)
 
 	local handle = device.handle:createComputePipeline(nil, {
 		stage = {
-			stage = vk.ShaderStageFlagBits.COMPUTE_BIT,
+			stage = vk.ShaderStageFlagBits.COMPUTE,
 			module = shaderModule,
 			name = "main",
 		},

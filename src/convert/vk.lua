@@ -90,6 +90,20 @@ vkConversions.indexFormat = {
 	["u32"] = vk.IndexType.UINT32,
 }
 
+---@type table<hood.BindingType, vk.DescriptorType>
+vkConversions.bindingType = {
+	["buffer"] = vk.DescriptorType.STORAGE_BUFFER,
+	["sampler"] = vk.DescriptorType.SAMPLER,
+	["texture"] = vk.DescriptorType.SAMPLED_IMAGE,
+	["storageTexture"] = vk.DescriptorType.STORAGE_IMAGE,
+}
+
+---@type table<hood.ShaderStage, vk.ShaderStageFlagBits>
+vkConversions.shaderStage = {
+	["VERTEX"] = vk.ShaderStageFlagBits.VERTEX,
+	["FRAGMENT"] = vk.ShaderStageFlagBits.FRAGMENT,
+	["COMPUTE"] = vk.ShaderStageFlagBits.COMPUTE,
+}
 
 local function invert(t)
 	local inverted = {}

@@ -190,6 +190,8 @@ function VKCommandEncoder:drawIndexed(indexCount, instanceCount, firstIndex, bas
 		baseVertex or 0, firstInstance or 0)
 end
 
+local descriptorSetArray = vk.DescriptorSetArray(1)
+
 ---@param index number
 ---@param bindGroup hood.vk.BindGroup
 function VKCommandEncoder:setBindGroup(index, bindGroup)
@@ -197,13 +199,15 @@ function VKCommandEncoder:setBindGroup(index, bindGroup)
 		error("Pipeline not set")
 	end
 
+	descriptorSetArray[0] = bindGroup.set
+
 	self.device.handle:cmdBindDescriptorSets(
 		self.buffer.handle,
 		vk.PipelineBindPoint.GRAPHICS,
 		self.pipeline.layout,
 		index,
 		1,
-		bindGroup.set,
+		descriptorSetArray,
 		0
 	)
 end

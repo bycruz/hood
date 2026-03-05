@@ -17,6 +17,7 @@
 ---@field targets? hood.ColorTargetState[]
 
 ---@class hood.PipelineDescriptor
+---@field layout hood.BindGroupLayout?
 ---@field vertex hood.VertexState
 ---@field fragment hood.FragmentState
 ---@field depthStencil? hood.DepthStencilState

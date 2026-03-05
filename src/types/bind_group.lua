@@ -1,5 +1,5 @@
 ---@class hood.BindGroup
----@field entries hood.BindGroupEntry[]
+---@field entries hood.Binding[]
 
 ---@alias hood.ShaderStage
 --- | "VERTEX"
@@ -11,8 +11,36 @@
 --- | "WRITE_ONLY"
 --- | "READ_WRITE"
 
----@alias hood.BindGroupEntry
---- | { type: "buffer", binding: number, buffer: hood.Buffer, visibility: hood.ShaderStage[] }
---- | { type: "sampler", binding: number, sampler: hood.Sampler, visibility: hood.ShaderStage[] }
---- | { type: "texture", binding: number, texture: hood.Texture, visibility: hood.ShaderStage[] }
---- | { type: "storageTexture", binding: number, texture: hood.Texture, layer: number?, access: hood.StorageAccess, visibility: hood.ShaderStage[] }
+---@alias hood.BindingType
+--- | "buffer"
+--- | "sampler"
+--- | "texture"
+--- | "storageTexture"
+
+---@class hood.Binding.Base
+---@field binding number
+---@field visibility hood.ShaderStage[]
+
+---@class hood.Binding.Buffer: hood.Binding.Base
+---@field type "buffer"
+---@field buffer hood.Buffer
+
+---@class hood.Binding.Sampler: hood.Binding.Base
+---@field type "sampler"
+---@field sampler hood.Sampler
+
+---@class hood.Binding.Texture: hood.Binding.Base
+---@field type "texture"
+---@field texture hood.Texture
+
+---@class hood.Binding.StorageTexture: hood.Binding.Base
+---@field type "storageTexture"
+---@field texture hood.Texture
+---@field layer number?
+---@field access hood.StorageAccess
+
+---@alias hood.Binding
+--- | hood.Binding.Buffer
+--- | hood.Binding.Sampler
+--- | hood.Binding.Texture
+--- | hood.Binding.StorageTexture
