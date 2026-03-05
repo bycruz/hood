@@ -9,6 +9,7 @@ local VKTexture = require("hood.vk.texture")
 local VKComputePipeline = require("hood.vk.compute_pipeline")
 local VKBindGroup = require("hood.vk.bind_group")
 local VKBindGroupLayout = require("hood.vk.bind_group_layout")
+local VKTextureView = require("hood.vk.texture_view")
 
 ---@class hood.vk.Device
 ---@field public queue hood.vk.Queue

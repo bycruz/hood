@@ -7,4 +7,5 @@
 ---@field createBindGroupLayout fun(self: hood.Device, entries: hood.BindingLayout[]): hood.BindGroupLayout
 ---@field createSampler fun(self: hood.Device, descriptor: hood.SamplerDescriptor): hood.Sampler
 ---@field createTexture fun(self: hood.Device, descriptor: hood.TextureDescriptor): hood.Texture
+---@field createTextureView fun(self: hood.Device, descriptor: hood.TextureViewDescriptor): hood.TextureView
 ---@field createComputePipeline fun(self: hood.Device, descriptor: hood.ComputePipelineDescriptor): hood.ComputePipeline

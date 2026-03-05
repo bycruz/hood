@@ -49,3 +49,4 @@
 ---@class hood.Texture
 ---@field new fun(device: hood.Device, descriptor: hood.TextureDescriptor): hood.Texture
 ---@field destroy fun(self: hood.Texture)
+---@field createView fun(self: hood.Texture, descriptor: hood.TextureViewDescriptor): hood.TextureView

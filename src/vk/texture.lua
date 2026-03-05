@@ -2,12 +2,15 @@ local vk = require("vkapi")
 
 local vkConvert = require("hood.convert.vk")
 
+local VKTextureView = require("hood.vk.texture_view")
+
 ---@class hood.vk.Texture
 ---@field handle vk.ffi.Image
 ---@field memory vk.ffi.DeviceMemory?
 ---@field format vk.Format?
 ---@field width number?
 ---@field height number?
+---@field private device hood.vk.Device
 local VKTexture = {}
 VKTexture.__index = VKTexture
 
@@ -91,6 +94,7 @@ function VKTexture.new(device, descriptor)
 	device.handle:bindImageMemory(handle, memory, 0)
 
 	return setmetatable({
+		device = device,
 		handle = handle,
 		memory = memory,
 		format = vkConvert.textureFormat[descriptor.format],
@@ -103,7 +107,9 @@ function VKTexture.fromRaw(device, handle, format, width, height)
 	return setmetatable({ handle = handle, format = format, width = width, height = height }, VKTexture)
 end
 
+---@param descriptor hood.TextureViewDescriptor
 function VKTexture:createView(descriptor)
+	return VKTextureView.new(self.device, self, descriptor)
 end
 
 return VKTexture
