@@ -196,16 +196,23 @@ local descriptorSetArray = vk.DescriptorSetArray(1)
 ---@param index number
 ---@param bindGroup hood.vk.BindGroup
 function VKCommandEncoder:setBindGroup(index, bindGroup)
-	if not self.pipeline then
-		error("Pipeline not set")
+	local bindPoint, layout
+	if self.pipeline then
+		bindPoint = vk.PipelineBindPoint.GRAPHICS
+		layout = self.pipeline.layout
+	elseif self.computePipeline then
+		bindPoint = vk.PipelineBindPoint.COMPUTE
+		layout = self.computePipeline.layout
+	else
+		error("No pipeline set")
 	end
 
 	descriptorSetArray[0] = bindGroup.set
 
 	self.device.handle:cmdBindDescriptorSets(
 		self.buffer.handle,
-		vk.PipelineBindPoint.GRAPHICS,
-		self.pipeline.layout,
+		bindPoint,
+		layout,
 		index,
 		1,
 		descriptorSetArray,
@@ -369,6 +376,8 @@ end
 
 ---@param pipeline hood.vk.ComputePipeline
 function VKCommandEncoder:setComputePipeline(pipeline)
+	self.computePipeline = pipeline
+	self.pipeline = nil
 	self.device.handle:cmdBindPipeline(self.buffer.handle, vk.PipelineBindPoint.COMPUTE, pipeline.handle)
 end
 
