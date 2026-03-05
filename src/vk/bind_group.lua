@@ -69,7 +69,7 @@ function BindGroup.new(device, descriptor)
 		end
 	end
 
-	device.handle:updateDescriptorSets(1, writes)
+	device.handle:updateDescriptorSets(#entries, writes)
 
 	return setmetatable({ layout = layout, set = set, entries = entries }, BindGroup)
 end
