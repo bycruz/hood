@@ -12,6 +12,8 @@ local VKCommandBuffer = require("hood.vk.command_buffer")
 ---@field imageViews vk.ffi.ImageView[]
 ---@field framebuffers vk.ffi.Framebuffer[]
 ---@field pipeline hood.vk.Pipeline?
+---@field computePipeline hood.vk.ComputePipeline?
+---@field bindGroups table<number, hood.vk.BindGroup>
 local VKCommandEncoder = {}
 VKCommandEncoder.__index = VKCommandEncoder
 
@@ -25,6 +27,7 @@ function VKCommandEncoder.new(device)
 		buffer = buffer,
 		imageViews = {},
 		framebuffers = {},
+		bindGroups = {},
 	}, VKCommandEncoder)
 end
 
@@ -207,6 +210,7 @@ function VKCommandEncoder:setBindGroup(index, bindGroup)
 		error("No pipeline set")
 	end
 
+	self.bindGroups[index] = bindGroup
 	descriptorSetArray[0] = bindGroup.set
 
 	self.device.handle:cmdBindDescriptorSets(
@@ -370,8 +374,47 @@ function VKCommandEncoder:writeTexture(texture, descriptor, data)
 	texture.layerLayouts[layer] = vk.ImageLayout.SHADER_READ_ONLY_OPTIMAL
 end
 
+local storageBarrier = vk.ImageMemoryBarrierArray(1)
+
 ---@param descriptor hood.ComputePassDescriptor
 function VKCommandEncoder:beginComputePass(descriptor)
+	for _, bindGroup in pairs(self.bindGroups) do
+		for _, entry in ipairs(bindGroup.entries) do
+			if entry.type == "storageTexture" then
+				local view = entry.texture --[[@as hood.vk.TextureView]]
+				local tex = view.texture
+				local layer = view.baseArrayLayer
+				tex.layerLayouts = tex.layerLayouts or {}
+				local currentLayout = tex.layerLayouts[layer] or vk.ImageLayout.UNDEFINED
+				if currentLayout ~= vk.ImageLayout.GENERAL then
+					local srcAccess = 0
+					local srcStage = vk.PipelineStageFlagBits.TOP_OF_PIPE
+					if currentLayout == vk.ImageLayout.SHADER_READ_ONLY_OPTIMAL then
+						srcAccess = vk.AccessFlags.SHADER_READ
+						srcStage = vk.PipelineStageFlagBits.FRAGMENT_SHADER
+					end
+					storageBarrier[0].srcAccessMask = srcAccess
+					storageBarrier[0].dstAccessMask = vk.AccessFlags.SHADER_WRITE
+					storageBarrier[0].oldLayout = currentLayout
+					storageBarrier[0].newLayout = vk.ImageLayout.GENERAL
+					storageBarrier[0].srcQueueFamilyIndex = 0xFFFFFFFF
+					storageBarrier[0].dstQueueFamilyIndex = 0xFFFFFFFF
+					storageBarrier[0].image = tex.handle
+					storageBarrier[0].subresourceRange.aspectMask = vk.ImageAspectFlagBits.COLOR
+					storageBarrier[0].subresourceRange.baseMipLevel = 0
+					storageBarrier[0].subresourceRange.levelCount = 1
+					storageBarrier[0].subresourceRange.baseArrayLayer = layer
+					storageBarrier[0].subresourceRange.layerCount = view.layerCount
+					self.device.handle:cmdPipelineBarrier(
+						self.buffer.handle,
+						srcStage,
+						vk.PipelineStageFlagBits.COMPUTE_SHADER,
+						1, storageBarrier)
+					tex.layerLayouts[layer] = vk.ImageLayout.GENERAL
+				end
+			end
+		end
+	end
 end
 
 ---@param pipeline hood.vk.ComputePipeline

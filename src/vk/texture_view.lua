@@ -49,7 +49,12 @@ function VKTextureView.new(device, texture, descriptor)
 		components = nil -- TODO: Support swizzling
 	})
 
-	return setmetatable({ handle = handle }, VKTextureView)
+	return setmetatable({
+		handle = handle,
+		texture = texture,
+		baseArrayLayer = descriptor.baseArrayLayer or 0,
+		layerCount = descriptor.layerCount or 1,
+	}, VKTextureView)
 end
 
 return VKTextureView

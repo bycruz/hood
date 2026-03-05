@@ -29,5 +29,6 @@
 ---@field writeTexture fun(self: hood.CommandEncoder, texture: hood.Texture, descriptor: hood.TextureWriteDescriptor, data: ffi.cdata*)
 --- Compute
 ---@field beginComputePass fun(self: hood.CommandEncoder, descriptor: hood.ComputePassDescriptor)
+---@field endComputePass fun(self: hood.CommandEncoder)
 ---@field dispatchWorkgroups fun(self: hood.CommandEncoder, x: number, y: number, z: number)
 ---@field setComputePipeline fun(self: hood.CommandEncoder, pipeline: hood.ComputePipeline)
