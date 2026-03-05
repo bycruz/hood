@@ -34,12 +34,23 @@ function VKDevice.new(adapter)
 	local device = setmetatable({ pd = adapter.pd, handle = handle }, VKDevice)
 	device.queue = VKQueue.new(device, adapter.gfxQueueFamilyIdx, 0)
 
-	local sizes = vk.DescriptorPoolSizeArray(2)
+	local sizes = vk.DescriptorPoolSizeArray(5)
+	sizes[0].type = vk.DescriptorType.STORAGE_BUFFER
+	sizes[0].descriptorCount = 256
+	sizes[1].type = vk.DescriptorType.SAMPLED_IMAGE
+	sizes[1].descriptorCount = 256
+	sizes[2].type = vk.DescriptorType.STORAGE_IMAGE
+	sizes[2].descriptorCount = 256
+	sizes[3].type = vk.DescriptorType.SAMPLER
+	sizes[3].descriptorCount = 256
+	sizes[4].type = vk.DescriptorType.UNIFORM_BUFFER
+	sizes[4].descriptorCount = 256
 
 	-- TODO: Replace with a growing array of descriptor pools later
 	device.descriptorPool = handle:createDescriptorPool({
 		maxSets = 512,
-
+		poolSizeCount = 5,
+		pPoolSizes = sizes,
 	})
 
 	return device
