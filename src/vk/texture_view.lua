@@ -35,6 +35,8 @@ function VKTextureView.new(device, texture, descriptor)
 		end
 	end
 
+	local layerCount = descriptor.layerCount or vk.REMAINING_ARRAY_LAYERS
+
 	local handle = device.handle:createImageView({
 		image = texture.handle,
 		viewType = viewType,
@@ -44,7 +46,7 @@ function VKTextureView.new(device, texture, descriptor)
 			baseMipLevel = descriptor.baseMipLevel or 0,
 			levelCount = descriptor.levelCount or 1,
 			baseArrayLayer = descriptor.baseArrayLayer or 0,
-			layerCount = descriptor.layerCount or 1,
+			layerCount = layerCount,
 		},
 		components = nil -- TODO: Support swizzling
 	})
@@ -53,7 +55,7 @@ function VKTextureView.new(device, texture, descriptor)
 		handle = handle,
 		texture = texture,
 		baseArrayLayer = descriptor.baseArrayLayer or 0,
-		layerCount = descriptor.layerCount or 1,
+		layerCount = layerCount,
 	}, VKTextureView)
 end
 

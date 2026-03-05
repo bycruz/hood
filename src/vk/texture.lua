@@ -7,7 +7,7 @@ local VKTextureView = require("hood.vk.texture_view")
 ---@class hood.vk.Texture
 ---@field handle vk.ffi.Image
 ---@field memory vk.ffi.DeviceMemory?
----@field format vk.Format?
+---@field format vk.Format
 ---@field width number?
 ---@field height number?
 ---@field viewType vk.ImageViewType
