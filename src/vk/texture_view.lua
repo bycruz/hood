@@ -3,6 +3,9 @@ local vkConversions = require("hood.convert.vk")
 
 ---@class hood.vk.TextureView
 ---@field handle vk.ffi.ImageView
+---@field texture hood.vk.Texture
+---@field baseArrayLayer integer
+---@field layerCount integer
 local VKTextureView = {}
 VKTextureView.__index = VKTextureView
 

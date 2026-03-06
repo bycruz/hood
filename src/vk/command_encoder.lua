@@ -432,19 +432,38 @@ function VKCommandEncoder:dispatchWorkgroups(x, y, z)
 end
 
 function VKCommandEncoder:endComputePass()
-	-- Memory barrier to ensure compute writes are visible to subsequent passes
-	local barrier = vk.MemoryBarrier({
-		srcAccessMask = bit.bor(vk.AccessFlags.SHADER_READ, vk.AccessFlags.SHADER_WRITE),
-		dstAccessMask = bit.bor(vk.AccessFlags.SHADER_READ, vk.AccessFlags.SHADER_WRITE,
-			vk.AccessFlags.VERTEX_ATTRIBUTE_READ, vk.AccessFlags.INDEX_READ),
-	})
-
-	self.device.handle:cmdPipelineBarrier(
-		self.buffer.handle,
-		vk.PipelineStageFlagBits.COMPUTE_SHADER,
-		bit.bor(vk.PipelineStageFlagBits.VERTEX_INPUT, vk.PipelineStageFlagBits.VERTEX_SHADER,
-			vk.PipelineStageFlagBits.FRAGMENT_SHADER, vk.PipelineStageFlagBits.COMPUTE_SHADER),
-		0, nil, 1, barrier)
+	-- Transition storage textures back to SHADER_READ_ONLY_OPTIMAL so the render pass can sample them
+	for _, bindGroup in pairs(self.bindGroups) do
+		for _, entry in ipairs(bindGroup.entries) do
+			if entry.type == "storageTexture" then
+				local view = entry.texture --[[@as hood.vk.TextureView]]
+				local tex = view.texture
+				local layer = view.baseArrayLayer
+				tex.layerLayouts = tex.layerLayouts or {}
+				local currentLayout = tex.layerLayouts[layer] or vk.ImageLayout.UNDEFINED
+				if currentLayout ~= vk.ImageLayout.SHADER_READ_ONLY_OPTIMAL then
+					storageBarrier[0].srcAccessMask = vk.AccessFlags.SHADER_WRITE
+					storageBarrier[0].dstAccessMask = vk.AccessFlags.SHADER_READ
+					storageBarrier[0].oldLayout = currentLayout
+					storageBarrier[0].newLayout = vk.ImageLayout.SHADER_READ_ONLY_OPTIMAL
+					storageBarrier[0].srcQueueFamilyIndex = 0xFFFFFFFF
+					storageBarrier[0].dstQueueFamilyIndex = 0xFFFFFFFF
+					storageBarrier[0].image = tex.handle
+					storageBarrier[0].subresourceRange.aspectMask = vk.ImageAspectFlagBits.COLOR
+					storageBarrier[0].subresourceRange.baseMipLevel = 0
+					storageBarrier[0].subresourceRange.levelCount = 1
+					storageBarrier[0].subresourceRange.baseArrayLayer = layer
+					storageBarrier[0].subresourceRange.layerCount = view.layerCount
+					self.device.handle:cmdPipelineBarrier(
+						self.buffer.handle,
+						vk.PipelineStageFlagBits.COMPUTE_SHADER,
+						vk.PipelineStageFlagBits.FRAGMENT_SHADER,
+						1, storageBarrier)
+					tex.layerLayouts[layer] = vk.ImageLayout.SHADER_READ_ONLY_OPTIMAL
+				end
+			end
+		end
+	end
 end
 
 function VKCommandEncoder:finish()
