@@ -107,6 +107,11 @@ function GLTexture:destroy()
 	gl.deleteTextures({ self.id })
 end
 
+---@param descriptor hood.TextureViewDescriptor
+function GLTexture:createView(descriptor)
+	error("Texture views are unimplemented in the OpenGL backend")
+end
+
 function GLTexture:__tostring()
 	if self.context then
 		return "GLBackbuffer(" .. tostring(self.context) .. ")"
