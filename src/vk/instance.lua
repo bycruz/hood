@@ -20,6 +20,16 @@ function VKInstance.new(descriptor)
 		end
 	end
 
+	---@type string[]
+	local layers = {}
+	if hasValidate then
+		layers[#layers + 1] = "VK_LAYER_KHRONOS_validation"
+	end
+
+	if os.getenv("RENDERDOC_CAPTUREFILE_PREFIX") then
+		layers[#layers + 1] = "VK_LAYER_RENDERDOC_Capture"
+	end
+
 	local handle = vk.createInstance({
 		applicationInfo = {
 			name = "Hood",
@@ -28,7 +38,7 @@ function VKInstance.new(descriptor)
 			engineVersion = 1,
 			apiVersion = vk.ApiVersion.V1_0
 		},
-		enabledLayerNames = hasValidate and { "VK_LAYER_KHRONOS_validation" },
+		enabledLayerNames = layers,
 		enabledExtensionNames = {
 			"VK_KHR_surface",
 			isWindows and "VK_KHR_win32_surface" or "VK_KHR_xlib_surface",
