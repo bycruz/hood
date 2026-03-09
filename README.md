@@ -31,5 +31,5 @@ lpm add --git https://github.com/codebycruz/hood
 You can run the example quite simply with
 
 ```bash
-lpm x triangle --git https://github.com/codebycruz/hood
+lpx triangle --git https://github.com/codebycruz/hood
 ```
