@@ -223,7 +223,9 @@ function VKPipeline.new(device, descriptor)
 			},
 			rasterizationState = {
 				polygonMode = vk.PolygonMode.FILL,
-				cullMode = vk.CullModeFlagBits.BACK,
+				-- Flip culling due to flip in coordinate system
+				-- TODO: Take a user input for cull mode, and flip from FRONT->BACK vice versa before using.
+				cullMode = vk.CullModeFlagBits.FRONT,
 				frontFace = vk.FrontFace.COUNTER_CLOCKWISE,
 				lineWidth = 1.0,
 			},
