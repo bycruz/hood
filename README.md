@@ -1,6 +1,6 @@
 # hood
 
-A cross-platform graphics library for LuaJIT entirely from scratch.  
+A cross-platform graphics library for LuaJIT entirely from scratch.
 Based upon the WebGPU and Vulkan specifications.
 
 <p align="center">
@@ -16,7 +16,7 @@ Based upon the WebGPU and Vulkan specifications.
 | Backend     | Windows | Linux | macOS |
 | ----------- | ------- | ----- | ----- |
 | OpenGL 4.3+ | ✅      | ✅    | ❌    |
-| Vulkan      | 🚧      | 🚧    | ❌    |
+| Vulkan      | ❓      | ✅    | ❌    |
 
 ## Installation
 
