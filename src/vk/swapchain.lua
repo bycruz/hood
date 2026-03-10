@@ -80,7 +80,7 @@ function VKSwapchain:getCurrentTexture()
 	local imageHandle = self.images[currentVkImageIdx + 1]
 
 	self.currentVkImageIdx = currentVkImageIdx
-	return VKTexture.fromRaw(self.device, imageHandle, self.imageFormat, self.width, self.height)
+	return VKTexture.fromSwapchainImg(self.device, imageHandle, self.imageFormat, self.width, self.height)
 end
 
 return VKSwapchain

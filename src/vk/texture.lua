@@ -12,6 +12,7 @@ local VKTextureView = require("hood.vk.texture_view")
 ---@field height number?
 ---@field viewType vk.ImageViewType
 ---@field isDepth boolean?
+---@field isSwapchain boolean?
 ---@field private device hood.vk.Device
 local VKTexture = {}
 VKTexture.__index = VKTexture
@@ -129,8 +130,21 @@ function VKTexture.new(device, descriptor)
 	}, VKTexture)
 end
 
-function VKTexture.fromRaw(device, handle, format, width, height)
-	return setmetatable({ handle = handle, format = format, width = width, height = height }, VKTexture)
+---@param device hood.vk.Device
+---@param handle vk.ffi.Image
+---@param format vk.Format
+---@param width number
+---@param height number
+function VKTexture.fromSwapchainImg(device, handle, format, width, height)
+	return setmetatable({
+		device = device,
+		handle = handle,
+		format = format,
+		width = width,
+		height = height,
+		isSwapchain = true,
+		viewType = vk.ImageViewType.TYPE_2D,
+	}, VKTexture)
 end
 
 ---@param descriptor hood.TextureViewDescriptor
