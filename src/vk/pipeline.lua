@@ -223,10 +223,15 @@ function VKPipeline.new(device, descriptor)
 			},
 			rasterizationState = {
 				polygonMode = vk.PolygonMode.FILL,
-				-- Flip culling due to flip in coordinate system
-				-- TODO: Take a user input for cull mode, and flip from FRONT->BACK vice versa before using.
+				-- When using negative viewport height (VK_KHR_maintenance1), the Y-axis is flipped
+				-- AND the winding order is also flipped per the Vulkan spec. This means:
+				-- - Triangles wound CCW in vertex data appear CW after the flip
+				-- - We set frontFace = CLOCKWISE to treat these as front-facing
+				-- - cullMode = FRONT still culls back faces (which are now CCW after flip)
+				-- This is the correct behavior per spec; some Linux drivers were lenient about this.
+				-- TODO: Take user input for cull mode and flip FRONT<->BACK accordingly
 				cullMode = vk.CullModeFlagBits.FRONT,
-				frontFace = vk.FrontFace.COUNTER_CLOCKWISE,
+				frontFace = vk.FrontFace.CLOCKWISE,
 				lineWidth = 1.0,
 			},
 			multisampleState = {
