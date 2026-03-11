@@ -18,11 +18,15 @@ local VKCommandBuffer = require("hood.vk.command_buffer")
 local VKCommandEncoder = {}
 VKCommandEncoder.__index = VKCommandEncoder
 
+local beginInfo = vk.CommandBufferBeginInfo({
+	flags = vk.CommandBufferUsageFlagBits.SIMULTANEOUS_USE
+})
+
 ---@param device hood.vk.Device
 ---@return hood.vk.CommandEncoder
 function VKCommandEncoder.new(device)
 	local buffer = VKCommandBuffer.new(device)
-	device.handle:beginCommandBuffer(buffer.handle)
+	device.handle:beginCommandBuffer(buffer.handle, beginInfo)
 	return setmetatable({
 		device = device,
 		buffer = buffer,
