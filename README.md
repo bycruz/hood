@@ -16,7 +16,7 @@ Based upon the WebGPU and Vulkan specifications.
 | Backend     | Windows | Linux | macOS |
 | ----------- | ------- | ----- | ----- |
 | OpenGL 4.3+ | ✅      | ✅    | ❌    |
-| Vulkan      | ❓      | ✅    | ❌    |
+| Vulkan      | ✅      | ✅    | ❌    |
 
 ## Installation
 
