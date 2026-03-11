@@ -231,7 +231,7 @@ function VKPipeline.new(device, descriptor)
 				-- This is the correct behavior per spec; some Linux drivers were lenient about this.
 				-- TODO: Take user input for cull mode and flip FRONT<->BACK accordingly
 				cullMode = vk.CullModeFlagBits.FRONT,
-				frontFace = vk.FrontFace.CLOCKWISE,
+				frontFace = vk.FrontFace.COUNTER_CLOCKWISE,
 				lineWidth = 1.0,
 			},
 			multisampleState = {
