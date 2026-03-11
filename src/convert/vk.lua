@@ -113,6 +113,19 @@ vkConversions.shaderStage = {
 	["COMPUTE"] = vk.ShaderStageFlagBits.COMPUTE,
 }
 
+---@type table<hood.CullMode, vk.CullModeFlagBits>
+vkConversions.cullMode = {
+	["none"] = vk.CullModeFlagBits.NONE,
+	["front"] = vk.CullModeFlagBits.FRONT,
+	["back"] = vk.CullModeFlagBits.BACK,
+}
+
+---@type table<hood.FrontFace, vk.FrontFace>
+vkConversions.frontFace = {
+	["clockwise"] = vk.FrontFace.CLOCKWISE,
+	["counter-clockwise"] = vk.FrontFace.COUNTER_CLOCKWISE,
+}
+
 local function invert(t)
 	local inverted = {}
 	for k, v in pairs(t) do

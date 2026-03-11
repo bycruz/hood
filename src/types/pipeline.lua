@@ -16,10 +16,15 @@
 ---@field module hood.ShaderModule
 ---@field targets? hood.ColorTargetState[]
 
+---@class hood.PrimitiveState
+---@field cullMode hood.CullMode?
+---@field frontFace hood.FrontFace?
+
 ---@class hood.PipelineDescriptor
 ---@field layout hood.BindGroupLayout?
 ---@field vertex hood.VertexState
 ---@field fragment hood.FragmentState
+---@field primitive hood.PrimitiveState?
 ---@field depthStencil? hood.DepthStencilState
 
 ---@class hood.Pipeline

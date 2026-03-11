@@ -204,6 +204,24 @@ function VKPipeline.new(device, descriptor)
 		},
 	})
 
+	local frontFace, cullMode = vk.FrontFace.COUNTER_CLOCKWISE, vk.CullModeFlagBits.NONE
+	if descriptor.primitive then
+		--- Flip it since we invert Y viewport
+		---@type table<vk.FrontFace, vk.FrontFace>
+		local inverse = {
+			[vk.FrontFace.CLOCKWISE] = vk.FrontFace.COUNTER_CLOCKWISE,
+			[vk.FrontFace.COUNTER_CLOCKWISE] = vk.FrontFace.CLOCKWISE
+		}
+
+		if descriptor.primitive.frontFace then
+			frontFace = inverse[vkConversions.frontFace[descriptor.primitive.frontFace]]
+		end
+
+		if descriptor.primitive.cullMode then
+			cullMode = vkConversions.cullMode[descriptor.primitive.cullMode]
+		end
+	end
+
 	local pipelines = device.handle:createGraphicsPipelines(0, {
 		{
 			stages = {
@@ -223,15 +241,8 @@ function VKPipeline.new(device, descriptor)
 			},
 			rasterizationState = {
 				polygonMode = vk.PolygonMode.FILL,
-				-- When using negative viewport height (VK_KHR_maintenance1), the Y-axis is flipped
-				-- AND the winding order is also flipped per the Vulkan spec. This means:
-				-- - Triangles wound CCW in vertex data appear CW after the flip
-				-- - We set frontFace = CLOCKWISE to treat these as front-facing
-				-- - cullMode = FRONT still culls back faces (which are now CCW after flip)
-				-- This is the correct behavior per spec; some Linux drivers were lenient about this.
-				-- TODO: Take user input for cull mode and flip FRONT<->BACK accordingly
-				cullMode = vk.CullModeFlagBits.FRONT,
-				frontFace = vk.FrontFace.COUNTER_CLOCKWISE,
+				cullMode = cullMode,
+				frontFace = frontFace,
 				lineWidth = 1.0,
 			},
 			multisampleState = {

@@ -35,3 +35,12 @@
 ---| { type: "spirv", source: string }
 
 ---@alias hood.Color { r: number, g: number, b: number, a: number }
+
+---@alias hood.CullMode
+--- | "none"
+--- | "front"
+--- | "back"
+
+---@alias hood.FrontFace
+--- | "clockwise"
+--- | "counter-clockwise"
