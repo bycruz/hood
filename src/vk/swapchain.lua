@@ -83,12 +83,4 @@ function VKSwapchain:getCurrentTexture()
 	return VKTexture.fromRaw(self.device, imageHandle, self.imageFormat, self.width, self.height)
 end
 
----@param queue hood.vk.Queue
-function VKSwapchain:present(queue)
-	local sem = self.renderFinishedSemaphores[self.currentFrame]
-	self.device.handle:queuePresentKHR(queue.handle, self.handle, self.currentVkImageIdx, sem)
-
-	self.currentFrame = (self.currentFrame % #self.images) + 1
-end
-
 return VKSwapchain

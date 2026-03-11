@@ -40,8 +40,10 @@ function VKQueue:submit(buffer, swapchain)
 	info.pCommandBuffers = commandBuffers
 
 	if swapchain then
+		-- Use currentFrame for imageAvailable (per frame-in-flight)
 		waitSemaphores[0] = swapchain.imageAvailableSemaphores[swapchain.currentFrame]
-		signalSemaphores[0] = swapchain.renderFinishedSemaphores[swapchain.currentFrame]
+		-- Use imageIndex for renderFinished (per swapchain image)
+		signalSemaphores[0] = swapchain.renderFinishedSemaphores[swapchain.currentVkImageIdx + 1]
 		info.waitSemaphoreCount = 1
 		info.pWaitSemaphores = waitSemaphores
 		info.pWaitDstStageMask = waitStages
@@ -94,7 +96,11 @@ end
 
 ---@param swapchain hood.vk.Swapchain
 function VKQueue:present(swapchain)
-	swapchain:present(self)
+	-- Use imageIndex for renderFinished semaphore in present
+	local sem = swapchain.renderFinishedSemaphores[swapchain.currentVkImageIdx + 1]
+	swapchain.device.handle:queuePresentKHR(self.handle, swapchain.handle, swapchain.currentVkImageIdx, sem)
+
+	swapchain.currentFrame = (swapchain.currentFrame % #swapchain.images) + 1
 end
 
 return VKQueue
