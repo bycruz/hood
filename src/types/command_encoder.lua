@@ -9,8 +9,8 @@
 ---@field rowsPerImage number?
 
 ---@class hood.RenderPassDescriptor
----@field colorAttachments { op: hood.LoadOp, texture: hood.Texture }[]
----@field depthStencilAttachment? { op: hood.DepthOp, texture: hood.Texture }
+---@field colorAttachments { op: hood.LoadOp, texture: hood.TextureView }[]
+---@field depthStencilAttachment? { op: hood.DepthOp, texture: hood.TextureView }
 
 ---@class hood.ComputePassDescriptor
 

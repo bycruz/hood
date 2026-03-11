@@ -114,7 +114,7 @@ eventLoop:run(function(event, handler)
 						type = "clear",
 						color = { r = 0.1, g = 0.1, b = 0.1, a = 1.0 },
 					},
-					texture = swapchain:getCurrentTexture(),
+					texture = swapchain:getCurrentTexture():createView({}),
 				},
 			},
 		})

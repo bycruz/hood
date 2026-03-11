@@ -14,6 +14,7 @@ local VKCommandBuffer = require("hood.vk.command_buffer")
 ---@field pipeline hood.vk.Pipeline?
 ---@field computePipeline hood.vk.ComputePipeline?
 ---@field bindGroups table<number, hood.vk.BindGroup>
+---@field renderPasses vk.ffi.RenderPass[]
 local VKCommandEncoder = {}
 VKCommandEncoder.__index = VKCommandEncoder
 
@@ -27,6 +28,7 @@ function VKCommandEncoder.new(device)
 		buffer = buffer,
 		imageViews = {},
 		framebuffers = {},
+		renderPasses = {},
 		bindGroups = {},
 	}, VKCommandEncoder)
 end
@@ -39,7 +41,7 @@ end
 ---@param pipeline hood.vk.Pipeline
 function VKCommandEncoder:setPipeline(pipeline)
 	if self.pendingDescriptor then
-		self:_beginRenderPass(pipeline.renderPass, self.pendingDescriptor)
+		self:_beginRenderPass(pipeline, self.pendingDescriptor)
 		self.pendingDescriptor = nil
 	end
 
@@ -47,54 +49,100 @@ function VKCommandEncoder:setPipeline(pipeline)
 	self.device.handle:cmdBindPipeline(self.buffer.handle, vk.PipelineBindPoint.GRAPHICS, pipeline.handle)
 end
 
----@param renderPass vk.ffi.RenderPass
+---@param pipeline hood.vk.Pipeline
 ---@param descriptor hood.RenderPassDescriptor
-function VKCommandEncoder:_beginRenderPass(renderPass, descriptor)
+function VKCommandEncoder:_beginRenderPass(pipeline, descriptor)
 	local colorAttachments = descriptor.colorAttachments or {}
 	local depthAttachment = descriptor.depthStencilAttachment
 	local totalAttachments = #colorAttachments + (depthAttachment and 1 or 0)
 
-	local firstTexture = colorAttachments[1] and colorAttachments[1].texture
-		or depthAttachment and depthAttachment.texture
-	local width = firstTexture.width
-	local height = firstTexture.height
+	local width, height
+	if colorAttachments[1] then
+		local view = colorAttachments[1].texture --[[@as hood.vk.TextureView]]
+		width, height = view.texture.width, view.texture.height
+	elseif depthAttachment then
+		local view = depthAttachment.texture --[[@as hood.vk.TextureView]]
+		width, height = view.texture.width, view.texture.height
+	end
 
 	local imageViews = ffi.new("VkImageView[?]", totalAttachments)
+	local attachmentDescs = {}
+	local colorRefs = {}
 
+	-- Color attachments: att.texture is a TextureView, att.texture.handle is already a VkImageView
 	for i, att in ipairs(colorAttachments) do
-		local iv = self.device.handle:createImageView({
-			image = att.texture.handle,
-			viewType = vk.ImageViewType.TYPE_2D,
-			format = att.texture.format,
-			subresourceRange = {
-				aspectMask = vk.ImageAspectFlagBits.COLOR,
-				baseMipLevel = 0,
-				levelCount = 1,
-				baseArrayLayer = 0,
-				layerCount = 1,
-			},
-		})
+		local view = att.texture --[[@as hood.vk.TextureView]]
+		imageViews[i - 1] = view.handle
 
-		imageViews[i - 1] = iv
-		self.imageViews[#self.imageViews + 1] = iv
+		local isSwapchain = view.texture and view.texture.isSwapchain
+		attachmentDescs[#attachmentDescs + 1] = {
+			format = view.texture.format,
+			samples = vk.SampleCountFlagBits.COUNT_1,
+			loadOp = att.op.type == "clear" and vk.AttachmentLoadOp.CLEAR or vk.AttachmentLoadOp.LOAD,
+			storeOp = vk.AttachmentStoreOp.STORE,
+			stencilLoadOp = vk.AttachmentLoadOp.DONT_CARE,
+			stencilStoreOp = vk.AttachmentStoreOp.DONT_CARE,
+			initialLayout = vk.ImageLayout.UNDEFINED,
+			finalLayout = isSwapchain and vk.ImageLayout.PRESENT_SRC_KHR or vk.ImageLayout.SHADER_READ_ONLY_OPTIMAL,
+		}
+
+		colorRefs[#colorRefs + 1] = {
+			attachment = #attachmentDescs - 1,
+			layout = vk.ImageLayout.COLOR_ATTACHMENT_OPTIMAL
+		}
 	end
 
+	local depthRef = nil
 	if depthAttachment then
-		local iv = self.device.handle:createImageView({
-			image = depthAttachment.texture.handle,
-			viewType = vk.ImageViewType.TYPE_2D,
-			format = depthAttachment.texture.format,
-			subresourceRange = {
-				aspectMask = vk.ImageAspectFlagBits.DEPTH,
-				baseMipLevel = 0,
-				levelCount = 1,
-				baseArrayLayer = 0,
-				layerCount = 1,
-			},
-		})
-		imageViews[totalAttachments - 1] = iv
-		self.imageViews[#self.imageViews + 1] = iv
+		local view = depthAttachment.texture --[[@as hood.vk.TextureView]]
+		imageViews[totalAttachments - 1] = view.handle
+
+		attachmentDescs[#attachmentDescs + 1] = {
+			format = view.texture.format,
+			samples = vk.SampleCountFlagBits.COUNT_1,
+			loadOp = depthAttachment.op.type == "clear" and vk.AttachmentLoadOp.CLEAR or vk.AttachmentLoadOp.LOAD,
+			storeOp = vk.AttachmentStoreOp.STORE,
+			stencilLoadOp = vk.AttachmentLoadOp.DONT_CARE,
+			stencilStoreOp = vk.AttachmentStoreOp.DONT_CARE,
+			initialLayout = vk.ImageLayout.UNDEFINED,
+			finalLayout = vk.ImageLayout.DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+		}
+
+		depthRef = {
+			attachment = #attachmentDescs - 1,
+			layout = vk.ImageLayout.DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+		}
 	end
+
+	local depthStageMask = 0
+	local depthAccessMask = 0
+	if depthAttachment then
+		depthStageMask = bit.bor(vk.PipelineStageFlagBits.EARLY_FRAGMENT_TESTS,
+			vk.PipelineStageFlagBits.LATE_FRAGMENT_TESTS)
+		depthAccessMask = bit.bor(vk.AccessFlags.DEPTH_STENCIL_ATTACHMENT_READ,
+			vk.AccessFlags.DEPTH_STENCIL_ATTACHMENT_WRITE)
+	end
+
+	local renderPass = self.device.handle:createRenderPass({
+		attachments = attachmentDescs,
+		subpasses = {
+			{
+				pipelineBindPoint = vk.PipelineBindPoint.GRAPHICS,
+				colorAttachments = colorRefs,
+				depthStencilAttachment = depthRef,
+			},
+		},
+		dependencies = {
+			{
+				srcSubpass = vk.SUBPASS_EXTERNAL,
+				dstSubpass = 0,
+				srcStageMask = bit.bor(vk.PipelineStageFlagBits.COLOR_ATTACHMENT_OUTPUT, depthStageMask),
+				dstStageMask = bit.bor(vk.PipelineStageFlagBits.COLOR_ATTACHMENT_OUTPUT, depthStageMask),
+				dstAccessMask = bit.bor(vk.AccessFlags.COLOR_ATTACHMENT_WRITE, depthAccessMask),
+			},
+		},
+	})
+	self.renderPasses[#self.renderPasses + 1] = renderPass
 
 	local framebuffer = self.device.handle:createFramebuffer({
 		renderPass = renderPass,
@@ -282,11 +330,11 @@ function VKCommandEncoder:writeTexture(texture, descriptor, data)
 	local requiredFlags = bit.bor(vk.MemoryPropertyFlagBits.HOST_VISIBLE, vk.MemoryPropertyFlagBits.HOST_COHERENT)
 	local memTypeIndex
 	local requirements = self.device.handle:getBufferMemoryRequirements(stagingBuffer)
-	local typeBits = tonumber(requirements.memoryTypeBits)
-	local count = tonumber(memProps.memoryTypeCount)
+	local typeBits = requirements.memoryTypeBits
+	local count = memProps.memoryTypeCount
 	for i = 0, count - 1 do
 		if (typeBits == 0 or bit.band(typeBits, bit.lshift(1, i)) ~= 0)
-			and bit.band(tonumber(memProps.memoryTypes[i].propertyFlags), requiredFlags) == requiredFlags then
+			and bit.band(memProps.memoryTypes[i].propertyFlags, requiredFlags) == requiredFlags then
 			memTypeIndex = i
 			break
 		end
@@ -472,6 +520,7 @@ function VKCommandEncoder:finish()
 	-- Transfer ownership of transient resources to the command buffer for deferred cleanup
 	self.buffer.imageViews = self.imageViews
 	self.buffer.framebuffers = self.framebuffers
+	self.buffer.renderPasses = self.renderPasses
 
 	return self.buffer
 end

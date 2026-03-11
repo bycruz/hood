@@ -54,6 +54,14 @@ function VKCommandBuffer:destroy()
 		self.framebuffers = nil
 	end
 
+	-- Free render passes
+	if self.renderPasses then
+		for _, rp in ipairs(self.renderPasses) do
+			self.device.handle:destroyRenderPass(rp)
+		end
+		self.renderPasses = nil
+	end
+
 	-- Destroying the pool implicitly frees all command buffers allocated from it
 	self.device.handle:destroyCommandPool(self.pool)
 end
