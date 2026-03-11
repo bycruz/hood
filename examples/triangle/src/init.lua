@@ -6,8 +6,10 @@ local hood = require("hood")
 local backend = os.getenv("VULKAN") and "vulkan" or "opengl"
 print("Using backend:", backend)
 
+local pathSep = string.sub(package.config, 1, 1)
+
 ---@type string
-local dirName = debug.getinfo(1, "S").source:sub(2):match("(.*/)")
+local dirName = debug.getinfo(1, "S").source:sub(2):match("(.*)" .. pathSep)
 
 -- Create event loop and window
 local eventLoop = winit.EventLoop.new()
@@ -16,7 +18,7 @@ eventLoop:register(window)
 window:setTitle("Triangle - Running on " .. backend .. " backend")
 
 -- Create hood instance, adapter, and device
-local instance = hood.Instance.new({ backend = backend, flags = {} })
+local instance = hood.Instance.new({ backend = backend, flags = { "validate" } })
 local adapter = instance:requestAdapter({ powerPreference = "high-performance" })
 local device = adapter:requestDevice()
 
@@ -79,14 +81,14 @@ local pipeline = device:createPipeline({
 	vertex = {
 		module = {
 			type = shaderType,
-			source = io.open(dirName .. "../../shaders/triangle.vert." .. shaderExt, "r"):read("*a"),
+			source = io.open(dirName .. "/../../shaders/triangle.vert." .. shaderExt, "rb"):read("*a"),
 		},
 		buffers = { vertexLayout },
 	},
 	fragment = {
 		module = {
 			type = shaderType,
-			source = io.open(dirName .. "../../shaders/triangle.frag." .. shaderExt, "r"):read("*a"),
+			source = io.open(dirName .. "/../../shaders/triangle.frag." .. shaderExt, "rb"):read("*a"),
 		},
 		targets = {
 			{
