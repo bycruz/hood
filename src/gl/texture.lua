@@ -1,5 +1,6 @@
 local gl = require("glapi")
 local glConversions = require("hood.convert.gl")
+local GLTextureView = require("hood.gl.texture_view")
 
 ---@class hood.gl.Texture
 ---@field framebuffer number
@@ -109,7 +110,7 @@ end
 
 ---@param descriptor hood.TextureViewDescriptor
 function GLTexture:createView(descriptor)
-	error("Texture views are unimplemented in the OpenGL backend")
+	return GLTextureView.new(self, descriptor)
 end
 
 function GLTexture:__tostring()
