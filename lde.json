@@ -7,6 +7,6 @@
 		"winit": { "git": "https://github.com/codebycruz/winit" }
 	},
 	"devDependencies": {
-		"lpm-test": { "git": "https://github.com/codebycruz/lpm" }
+		"lpm-test": { "git": "https://github.com/lde-org/lde" }
 	}
 }
