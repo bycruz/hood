@@ -426,6 +426,56 @@ function VKCommandEncoder:writeTexture(texture, descriptor, data)
 	texture.layerLayouts[layer] = vk.ImageLayout.SHADER_READ_ONLY_OPTIMAL
 end
 
+local copyBarrier = vk.ImageMemoryBarrierArray(1)
+
+---@param source hood.ImageCopyTexture
+---@param destination hood.ImageCopyBuffer
+---@param copySize hood.Extent3D
+function VKCommandEncoder:copyTextureToBuffer(source, destination, copySize)
+	local texture = source.texture --[[@as hood.vk.Texture]]
+	local buffer = destination.buffer --[[@as hood.vk.Buffer]]
+	local mipLevel = source.mipLevel or 0
+	local origin = source.origin or {}
+
+	copyBarrier[0].srcAccessMask = vk.AccessFlags.COLOR_ATTACHMENT_WRITE
+	copyBarrier[0].dstAccessMask = vk.AccessFlags.TRANSFER_READ
+	copyBarrier[0].oldLayout = vk.ImageLayout.SHADER_READ_ONLY_OPTIMAL
+	copyBarrier[0].newLayout = vk.ImageLayout.TRANSFER_SRC_OPTIMAL
+	copyBarrier[0].srcQueueFamilyIndex = 0xFFFFFFFF
+	copyBarrier[0].dstQueueFamilyIndex = 0xFFFFFFFF
+	copyBarrier[0].image = texture.handle
+	copyBarrier[0].subresourceRange.aspectMask = vk.ImageAspectFlagBits.COLOR
+	copyBarrier[0].subresourceRange.baseMipLevel = mipLevel
+	copyBarrier[0].subresourceRange.levelCount = 1
+	copyBarrier[0].subresourceRange.baseArrayLayer = 0
+	copyBarrier[0].subresourceRange.layerCount = 1
+
+	self.device.handle:cmdPipelineBarrier(
+		self.buffer.handle,
+		vk.PipelineStageFlagBits.COLOR_ATTACHMENT_OUTPUT,
+		vk.PipelineStageFlagBits.TRANSFER,
+		1, copyBarrier)
+
+	local region = vk.BufferImageCopyArray(1)
+	region[0].bufferOffset = destination.offset or 0
+	region[0].bufferRowLength = destination.bytesPerRow and (destination.bytesPerRow / 4) or 0
+	region[0].bufferImageHeight = destination.rowsPerImage or 0
+	region[0].imageSubresource.aspectMask = vk.ImageAspectFlagBits.COLOR
+	region[0].imageSubresource.mipLevel = mipLevel
+	region[0].imageSubresource.baseArrayLayer = 0
+	region[0].imageSubresource.layerCount = 1
+	region[0].imageOffset.x = origin.x or 0
+	region[0].imageOffset.y = origin.y or 0
+	region[0].imageOffset.z = origin.z or 0
+	region[0].imageExtent.width = copySize.width
+	region[0].imageExtent.height = copySize.height
+	region[0].imageExtent.depth = copySize.depthOrArrayLayers or 1
+
+	self.device.handle:cmdCopyImageToBuffer(
+		self.buffer.handle, texture.handle,
+		vk.ImageLayout.TRANSFER_SRC_OPTIMAL, buffer.handle, 1, region)
+end
+
 local storageBarrier = vk.ImageMemoryBarrierArray(1)
 
 ---@param descriptor hood.ComputePassDescriptor

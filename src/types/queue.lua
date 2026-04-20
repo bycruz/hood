@@ -3,3 +3,4 @@
 ---@field present fun(self: hood.Queue, swapchain: hood.Swapchain)
 ---@field writeBuffer fun(self: hood.Queue, buffer: hood.Buffer, size: number, data: ffi.cdata*, offset: number?)
 ---@field writeTexture fun(self: hood.Queue, texture: hood.Texture, descriptor: hood.TextureWriteDescriptor, data: ffi.cdata*)
+---@field waitIdle fun(self: hood.Queue)

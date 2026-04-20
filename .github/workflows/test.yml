@@ -1,0 +1,34 @@
+name: Test
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-22.04
+          - os: ubuntu-22.04-arm
+          - os: windows-latest
+          - os: windows-11-arm
+          - os: macos-15
+          - os: macos-15-intel
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup lde
+        uses: lde-org/setup-lde@master
+        with:
+          version: nightly
+
+      - name: Run tests
+        run: lde test

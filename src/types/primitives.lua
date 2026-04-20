@@ -16,7 +16,7 @@
 --- | "always"
 
 ---@alias hood.InstanceBackend "vulkan" | "opengl"
----@alias hood.InstanceFlag "validate"
+---@alias hood.InstanceFlag "validate" | "headless"
 
 --- TODO: This will be entirely removed and reworked, use with caution
 ---@alias hood.BlendState

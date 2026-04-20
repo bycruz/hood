@@ -1,3 +1,19 @@
+---@class hood.ImageCopyTexture
+---@field texture hood.Texture
+---@field mipLevel number?
+---@field origin { x: number?, y: number?, z: number? }?
+
+---@class hood.ImageCopyBuffer
+---@field buffer hood.Buffer
+---@field offset number?
+---@field bytesPerRow number
+---@field rowsPerImage number?
+
+---@class hood.Extent3D
+---@field width number
+---@field height number
+---@field depthOrArrayLayers number?
+
 ---@class hood.TextureWriteDescriptor
 ---@field width number
 ---@field height number
@@ -27,6 +43,7 @@
 ---@field drawIndexed fun(self: hood.CommandEncoder, indexCount: number, instanceCount: number, firstIndex: number?, baseVertex: number?, firstInstance: number?)
 ---@field writeBuffer fun(self: hood.CommandEncoder, buffer: hood.Buffer, size: number, data: ffi.cdata*, offset: number?)
 ---@field writeTexture fun(self: hood.CommandEncoder, texture: hood.Texture, descriptor: hood.TextureWriteDescriptor, data: ffi.cdata*)
+---@field copyTextureToBuffer fun(self: hood.CommandEncoder, source: hood.ImageCopyTexture, destination: hood.ImageCopyBuffer, copySize: hood.Extent3D)
 --- Compute
 ---@field beginComputePass fun(self: hood.CommandEncoder, descriptor: hood.ComputePassDescriptor)
 ---@field endComputePass fun(self: hood.CommandEncoder)

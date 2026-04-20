@@ -94,6 +94,10 @@ function VKQueue:writeTexture(texture, descriptor, data)
 	buf:destroy()
 end
 
+function VKQueue:waitIdle()
+	self.device.handle:queueWaitIdle(self.handle)
+end
+
 ---@param swapchain hood.vk.Swapchain
 function VKQueue:present(swapchain)
 	-- Use imageIndex for renderFinished semaphore in present

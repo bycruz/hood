@@ -18,7 +18,7 @@ eventLoop:register(window)
 window:setTitle("Triangle - Running on " .. backend .. " backend")
 
 -- Create hood instance, adapter, and device
-local instance = hood.Instance.new({ backend = backend, flags = { "validate" } })
+local instance = hood.Instance.new({ backend = backend, flags = {} })
 local adapter = instance:requestAdapter({ powerPreference = "high-performance" })
 local device = adapter:requestDevice()
 

@@ -1,7 +1,8 @@
 local vk = require("vkapi")
 
----@class hood.vk.Buffer
+---@class hood.vk.Buffer: hood.Buffer
 ---@field handle vk.ffi.Buffer
+---@field memory vk.ffi.DeviceMemory
 ---@field device hood.vk.Device
 ---@field descriptor hood.BufferDescriptor
 local VKBuffer = {}
@@ -11,6 +12,7 @@ VKBuffer.__index = VKBuffer
 ---@param descriptor hood.BufferDescriptor
 function VKBuffer.new(device, descriptor)
 	local vkUsage = 0
+	local needsHostVisible = false
 
 	for _, usage in ipairs(descriptor.usages) do
 		if usage == "VERTEX" then
@@ -25,6 +27,9 @@ function VKBuffer.new(device, descriptor)
 			vkUsage = bit.bor(vkUsage, vk.BufferUsageFlagBits.TRANSFER_SRC)
 		elseif usage == "STORAGE" then
 			vkUsage = bit.bor(vkUsage, vk.BufferUsageFlagBits.STORAGE_BUFFER)
+		elseif usage == "MAP_READ" then
+			needsHostVisible = true
+			vkUsage = bit.bor(vkUsage, vk.BufferUsageFlagBits.TRANSFER_DST)
 		else
 			error("Invalid buffer usage: " .. tostring(usage))
 		end
@@ -37,24 +42,24 @@ function VKBuffer.new(device, descriptor)
 	---@diagnostic disable-next-line: assign-type-mismatch: vkUsage is checked above
 	local handle = device.handle:createBuffer({ size = descriptor.size, usage = vkUsage })
 
-	-- Allocate and attach memory
 	local requirements = device.handle:getBufferMemoryRequirements(handle)
 	local memProps = vk.getPhysicalDeviceMemoryProperties(device.pd)
 	local memTypeIndex = nil
 	local fallbackIndex = nil
 
-	-- Prefer DEVICE_LOCAL, fall back to any compatible type
+	local requiredFlags = needsHostVisible
+		and bit.bor(vk.MemoryPropertyFlagBits.HOST_VISIBLE, vk.MemoryPropertyFlagBits.HOST_COHERENT)
+		or vk.MemoryPropertyFlagBits.DEVICE_LOCAL
+
 	-- TODO: Refactor this slop
 	local typeBits = tonumber(requirements.memoryTypeBits)
 	local count = tonumber(memProps.memoryTypeCount)
 	for i = 0, count - 1 do
-		-- If memoryTypeBits is 0 (driver doesn't constrain), consider all types
 		if typeBits == 0 or bit.band(typeBits, bit.lshift(1, i)) ~= 0 then
 			if not fallbackIndex then
 				fallbackIndex = i
 			end
-
-			if bit.band(tonumber(memProps.memoryTypes[i].propertyFlags), vk.MemoryPropertyFlagBits.DEVICE_LOCAL) ~= 0 then
+			if bit.band(tonumber(memProps.memoryTypes[i].propertyFlags), requiredFlags) == requiredFlags then
 				memTypeIndex = i
 				break
 			end
@@ -72,11 +77,27 @@ function VKBuffer.new(device, descriptor)
 	})
 	device.handle:bindBufferMemory(handle, memory, 0)
 
-	return setmetatable({ device = device, handle = handle, descriptor = descriptor }, VKBuffer)
+	return setmetatable({ device = device, handle = handle, memory = memory, descriptor = descriptor }, VKBuffer)
 end
 
 function VKBuffer:destroy()
 	self.device.handle:destroyBuffer(self.handle)
+end
+
+function VKBuffer:mapAsync()
+	-- No-op: memory is HOST_COHERENT, no explicit flush needed.
+	-- Caller must ensure GPU work is complete (queue:waitIdle) before reading.
+end
+
+---@param offset number?
+---@param size number?
+---@return ffi.cdata*
+function VKBuffer:getMappedRange(offset, size)
+	return self.device.handle:mapMemory(self.memory, offset or 0, size or self.descriptor.size)
+end
+
+function VKBuffer:unmap()
+	self.device.handle:unmapMemory(self.memory)
 end
 
 function VKBuffer:__tostring()

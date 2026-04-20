@@ -13,11 +13,10 @@ VKInstance.__index = VKInstance
 ---@param descriptor hood.InstanceDescriptor
 function VKInstance.new(descriptor)
 	local hasValidate = false
+	local hasHeadless = false
 	for _, flag in ipairs(descriptor.flags or {}) do
-		if flag == "validate" then
-			hasValidate = true
-			break
-		end
+		if flag == "validate" then hasValidate = true end
+		if flag == "headless" then hasHeadless = true end
 	end
 
 	---@type string[]
@@ -39,13 +38,13 @@ function VKInstance.new(descriptor)
 			apiVersion = vk.ApiVersion.V1_0
 		},
 		enabledLayerNames = layers,
-		enabledExtensionNames = {
+		enabledExtensionNames = hasHeadless and {} or {
 			"VK_KHR_surface",
 			isWindows and "VK_KHR_win32_surface" or "VK_KHR_xlib_surface",
 		}
 	})
 
-	return setmetatable({ handle = handle }, VKInstance)
+	return setmetatable({ handle = handle, headless = hasHeadless }, VKInstance)
 end
 
 ---@param config hood.AdapterConfig

@@ -21,8 +21,13 @@ VKDevice.__index = VKDevice
 
 ---@param adapter hood.vk.Adapter
 function VKDevice.new(adapter)
+	local extensions = { "VK_KHR_maintenance1" }
+	if not adapter.headless then
+		extensions[#extensions + 1] = "VK_KHR_swapchain"
+	end
+
 	local handle = adapter.instance.handle:createDevice(adapter.pd, {
-		enabledExtensionNames = { "VK_KHR_swapchain", "VK_KHR_maintenance1" },
+		enabledExtensionNames = extensions,
 		queueCreateInfos = {
 			{
 				queueFamilyIndex = adapter.gfxQueueFamilyIdx,

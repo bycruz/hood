@@ -26,7 +26,12 @@ function VKAdapter.new(instance, physicalDevice)
 		error("No graphics queue family found")
 	end
 
-	return setmetatable({ instance = instance, pd = physicalDevice, gfxQueueFamilyIdx = gfxQueueFamilyIdx }, VKAdapter)
+	return setmetatable({
+		instance = instance,
+		pd = physicalDevice,
+		gfxQueueFamilyIdx = gfxQueueFamilyIdx,
+		headless = instance.headless,
+	}, VKAdapter)
 end
 
 function VKAdapter:requestDevice()
