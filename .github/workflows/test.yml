@@ -11,12 +11,9 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: ubuntu-22.04
-          - os: ubuntu-22.04-arm
+          - os: ubuntu-24.04
+          - os: ubuntu-24.04-arm
           - os: windows-latest
-          - os: windows-11-arm
-          - os: macos-15
-          - os: macos-15-intel
 
     runs-on: ${{ matrix.os }}
 
@@ -29,6 +26,44 @@ jobs:
         uses: lde-org/setup-lde@master
         with:
           version: nightly
+
+      - name: Install Vulkan tools (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get install -y glslc mesa-vulkan-drivers
+
+      - name: Cache Vulkan SDK (Windows)
+        if: runner.os == 'Windows'
+        id: cache-vulkan-sdk
+        uses: actions/cache@v4
+        with:
+          path: C:\VulkanSDK
+          key: vulkan-sdk-1.4.341.1-windows
+
+      - name: Install Vulkan SDK (Windows)
+        if: runner.os == 'Windows' && steps.cache-vulkan-sdk.outputs.cache-hit != 'true'
+        shell: pwsh
+        run: |
+          Invoke-WebRequest https://sdk.lunarg.com/sdk/download/1.4.341.1/windows/vulkansdk-windows-X64-1.4.341.1.exe -OutFile vulkan-sdk.exe
+          Start-Process -Wait vulkan-sdk.exe -ArgumentList '/S'
+
+      - name: Add Vulkan SDK to PATH (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: echo "C:\VulkanSDK\1.4.341.1\Bin" >> $env:GITHUB_PATH
+
+      - name: Install Vulkan software renderer (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          Invoke-WebRequest https://github.com/pal1000/mesa-dist-win/releases/download/26.0.4/mesa3d-26.0.4-release-mingw.7z -OutFile mesa.7z
+          7z e mesa.7z "x64/vulkan_lvp.dll" "x64/lvp_icd.x86_64.json" -o"$env:TEMP\mesa" -y
+          "$env:TEMP\mesa" >> $env:GITHUB_PATH
+          "VK_ICD_FILENAMES=$env:TEMP\mesa\lvp_icd.x86_64.json" >> $env:GITHUB_ENV
+
+      - name: Build shaders
+        env:
+          VULKAN: "1"
+        run: lde -C ./examples/triangle sync
 
       - name: Run tests
         run: lde test
