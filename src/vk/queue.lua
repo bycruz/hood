@@ -100,7 +100,7 @@ end
 
 ---@param swapchain hood.vk.Swapchain
 function VKQueue:present(swapchain)
-	-- Use imageIndex for renderFinished semaphore in present
+	assert(swapchain.currentVkImageIdx ~= nil, "present() called without a successful getCurrentTexture()")
 	local sem = swapchain.renderFinishedSemaphores[swapchain.currentVkImageIdx + 1]
 	swapchain.device.handle:queuePresentKHR(self.handle, swapchain.handle, swapchain.currentVkImageIdx, sem)
 
