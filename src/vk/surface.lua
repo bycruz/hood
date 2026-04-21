@@ -38,6 +38,10 @@ end
 ---@param oldSwapchain hood.vk.Swapchain?
 ---@return hood.vk.Swapchain
 function VKSurface:configure(device, config, oldSwapchain)
+	if oldSwapchain then
+		device.queue:waitIdle()
+	end
+
 	local caps = vk.getPhysicalDeviceSurfaceCapabilitiesKHR(device.pd, self.handle)
 	local formats = vk.getPhysicalDeviceSurfaceFormatsKHR(device.pd, self.handle)
 

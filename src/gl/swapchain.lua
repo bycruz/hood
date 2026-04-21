@@ -14,6 +14,9 @@ function GLSwapchain:getCurrentTexture()
 	return GLTexture.forContextViewport(self.ctx)
 end
 
+function GLSwapchain:destroy()
+end
+
 function GLSwapchain:present()
 	self.ctx:makeCurrent()
 	self.ctx:swapBuffers()
