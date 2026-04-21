@@ -23,7 +23,7 @@ Based upon the WebGPU and Vulkan specifications.
 Use this package with the [lde](https://lde.sh/) package manager.
 
 ```bash
-lde add --git https://github.com/codebycruz/hood
+lde add --git https://github.com/bycruz/hood
 ```
 
 ## Example
@@ -31,5 +31,5 @@ lde add --git https://github.com/codebycruz/hood
 You can run the example quite simply with
 
 ```bash
-ldx triangle --git https://github.com/codebycruz/hood
+ldx triangle --git https://github.com/bycruz/hood
 ```

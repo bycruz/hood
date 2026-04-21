@@ -2,9 +2,9 @@
 	"name": "hood",
 	"version": "0.1.0",
 	"dependencies": {
-		"glapi": { "git": "https://github.com/codebycruz/glapi" },
-		"vkapi": { "git": "https://github.com/codebycruz/vkapi" },
-		"winit": { "git": "https://github.com/codebycruz/winit" }
+		"glapi": { "git": "https://github.com/bycruz/glapi" },
+		"vkapi": { "git": "https://github.com/bycruz/vkapi" },
+		"winit": { "git": "https://github.com/bycruz/winit" }
 	},
 	"devDependencies": {
 		"lde-test": { "git": "https://github.com/lde-org/lde" }
