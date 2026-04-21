@@ -39,7 +39,7 @@ end
 ---@return hood.vk.Swapchain
 function VKSurface:configure(device, config, oldSwapchain)
 	if oldSwapchain then
-		device.queue:waitIdle()
+		oldSwapchain:_destroySyncObjects()
 	end
 
 	local caps = vk.getPhysicalDeviceSurfaceCapabilitiesKHR(device.pd, self.handle)
@@ -81,7 +81,7 @@ function VKSurface:configure(device, config, oldSwapchain)
 		error("Requested present mode not supported: " .. tostring(config.presentMode))
 	end
 
-	return VKSwapchain.new(device, hoodFormat, {
+	local newSwapchain = VKSwapchain.new(device, hoodFormat, {
 		surface = self.handle,
 		minImageCount = imageCount,
 		imageFormat = format.format,
@@ -96,6 +96,10 @@ function VKSurface:configure(device, config, oldSwapchain)
 		clipped = 1,
 		oldSwapchain = oldSwapchain and oldSwapchain.handle or nil
 	})
+	if oldSwapchain then
+		device.handle:destroySwapchainKHR(oldSwapchain.handle)
+	end
+	return newSwapchain
 end
 
 return VKSurface

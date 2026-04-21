@@ -89,13 +89,17 @@ function VKSwapchain:getCurrentTexture()
 	return VKTexture.fromSwapchainImg(self.device, imageHandle, self.imageFormat, self.width, self.height)
 end
 
-function VKSwapchain:destroy()
+function VKSwapchain:_destroySyncObjects()
 	self.device.handle:queueWaitIdle(self.device.queue.handle)
 	for i = 1, #self.images do
 		self.device.handle:destroySemaphore(self.imageAvailableSemaphores[i])
 		self.device.handle:destroySemaphore(self.renderFinishedSemaphores[i])
 		self.device.handle:destroyFence(self.inFlightFences[i])
 	end
+end
+
+function VKSwapchain:destroy()
+	self:_destroySyncObjects()
 	self.device.handle:destroySwapchainKHR(self.handle)
 end
 
