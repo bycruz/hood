@@ -76,7 +76,13 @@ function VKSwapchain:getCurrentTexture()
 	end
 
 	local sem = self.imageAvailableSemaphores[self.currentFrame]
-	local currentVkImageIdx = self.device.handle:acquireNextImageKHR(self.handle, math.huge, sem)
+	local result, currentVkImageIdx = self.device.handle:acquireNextImageKHR(self.handle, math.huge, sem)
+	if result == vk.Result.ERROR_OUT_OF_DATE_KHR then
+		return nil
+	elseif result ~= vk.Result.SUCCESS then
+		error("Failed to acquire next image: " .. result)
+	end
+
 	local imageHandle = self.images[currentVkImageIdx + 1]
 
 	self.currentVkImageIdx = currentVkImageIdx

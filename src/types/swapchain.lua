@@ -1,3 +1,3 @@
 ---@class hood.Swapchain
 ---@field present fun(self: hood.Swapchain)
----@field getCurrentTexture fun(self: hood.Swapchain): hood.Texture
+---@field getCurrentTexture fun(self: hood.Swapchain): hood.Texture?

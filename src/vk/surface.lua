@@ -35,8 +35,9 @@ end
 
 ---@param device hood.vk.Device
 ---@param config hood.SurfaceConfig
+---@param oldSwapchain hood.vk.Swapchain?
 ---@return hood.vk.Swapchain
-function VKSurface:configure(device, config)
+function VKSurface:configure(device, config, oldSwapchain)
 	local caps = vk.getPhysicalDeviceSurfaceCapabilitiesKHR(device.pd, self.handle)
 	local formats = vk.getPhysicalDeviceSurfaceFormatsKHR(device.pd, self.handle)
 
@@ -89,7 +90,7 @@ function VKSurface:configure(device, config)
 		compositeAlpha = vk.CompositeAlphaFlagBitsKHR.OPAQUE,
 		presentMode = presentMode,
 		clipped = 1,
-		oldSwapchain = nil
+		oldSwapchain = oldSwapchain and oldSwapchain.handle or nil
 	})
 end
 
