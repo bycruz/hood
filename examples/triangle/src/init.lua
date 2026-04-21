@@ -107,6 +107,11 @@ eventLoop:run(function(event, handler)
 	elseif event.name == "redraw" then
 		local encoder = device:createCommandEncoder()
 
+		local texture = swapchain:getCurrentTexture()
+		if not texture then
+			return
+		end
+
 		encoder:beginRendering({
 			colorAttachments = {
 				{
@@ -114,7 +119,7 @@ eventLoop:run(function(event, handler)
 						type = "clear",
 						color = { r = 0.1, g = 0.1, b = 0.1, a = 1.0 },
 					},
-					texture = swapchain:getCurrentTexture():createView({}),
+					texture = texture:createView({}),
 				},
 			},
 		})
@@ -129,6 +134,8 @@ eventLoop:run(function(event, handler)
 		local commandBuffer = encoder:finish()
 		device.queue:submit(commandBuffer, swapchain)
 		device.queue:present(swapchain)
+	elseif event.name == "resize" then
+		swapchain = surface:configure(device, { presentMode = "immediate" }, swapchain)
 	elseif event.name == "aboutToWait" then
 		handler:requestRedraw(window)
 	end
