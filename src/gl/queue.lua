@@ -1,3 +1,4 @@
+local gl = require("glapi")
 local GLCommandEncoder = require("hood.gl.command_encoder")
 
 ---@class hood.gl.Queue
@@ -20,6 +21,11 @@ end
 function GLQueue:present(swapchain)
 	self.ctx:makeCurrent()
 	swapchain:present()
+end
+
+function GLQueue:waitIdle()
+	self.ctx:makeCurrent()
+	gl.finish()
 end
 
 --- Helper method to write data to a buffer
