@@ -1,4 +1,5 @@
 ---@class hood.TextureView
+---@field destroy fun(self: hood.TextureView)
 
 ---@class hood.TextureViewDescriptor
 ---@field format hood.TextureFormat?

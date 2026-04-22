@@ -31,6 +31,7 @@ end
 ---@field layout vk.ffi.PipelineLayout
 ---@field renderPass vk.ffi.RenderPass
 ---@field descriptor hood.PipelineDescriptor
+---@field private device hood.vk.Device
 local VKPipeline = {}
 VKPipeline.__index = VKPipeline
 
@@ -266,11 +267,18 @@ function VKPipeline.new(device, descriptor)
 	device.handle:destroyShaderModule(fragModule)
 
 	return setmetatable({
+		device = device,
 		handle = pipelines[1],
 		layout = layout,
 		renderPass = renderPass,
 		descriptor = descriptor,
 	}, VKPipeline)
+end
+
+function VKPipeline:destroy()
+	self.device.handle:destroyPipeline(self.handle)
+	self.device.handle:destroyPipelineLayout(self.layout)
+	self.device.handle:destroyRenderPass(self.renderPass)
 end
 
 return VKPipeline

@@ -6,6 +6,7 @@ local vkConversions = require("hood.convert.vk")
 ---@class hood.vk.BindGroup: hood.BindGroup
 ---@field layout vk.ffi.DescriptorSetLayout
 ---@field set vk.ffi.DescriptorSet
+---@field private device hood.vk.Device
 local BindGroup = {}
 BindGroup.__index = BindGroup
 
@@ -71,7 +72,11 @@ function BindGroup.new(device, descriptor)
 
 	device.handle:updateDescriptorSets(#entries, writes)
 
-	return setmetatable({ layout = layout, set = set, entries = entries }, BindGroup)
+	return setmetatable({ device = device, layout = layout, set = set, entries = entries }, BindGroup)
+end
+
+function BindGroup:destroy()
+	self.device.handle:destroyDescriptorSetLayout(self.layout)
 end
 
 return BindGroup

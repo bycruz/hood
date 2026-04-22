@@ -147,6 +147,14 @@ function VKTexture.fromSwapchainImg(device, handle, format, width, height)
 	}, VKTexture)
 end
 
+function VKTexture:destroy()
+	if self.isSwapchain then return end
+	self.device.handle:destroyImage(self.handle)
+	if self.memory then
+		self.device.handle:freeMemory(self.memory)
+	end
+end
+
 ---@param descriptor hood.TextureViewDescriptor
 function VKTexture:createView(descriptor)
 	return VKTextureView.new(self.device, self, descriptor)

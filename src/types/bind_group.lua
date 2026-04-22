@@ -1,5 +1,6 @@
 ---@class hood.BindGroup
 ---@field entries hood.Binding[]
+---@field destroy fun(self: hood.BindGroup)
 
 ---@class hood.BindGroupDescriptor
 ---@field layout hood.BindGroupLayout

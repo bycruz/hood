@@ -3,7 +3,9 @@ local vkConversions = require("hood.convert.vk")
 
 ---@class hood.vk.BindGroupLayout: hood.BindGroupLayout
 ---@field handle vk.ffi.DescriptorSetLayout
+---@field private device hood.vk.Device
 local VKBindGroupLayout = {}
+VKBindGroupLayout.__index = VKBindGroupLayout
 
 ---@param device hood.vk.Device
 ---@param entries hood.BindingLayout[]
@@ -27,7 +29,11 @@ function VKBindGroupLayout.new(device, entries)
 		pBindings = bindings
 	})
 
-	return setmetatable({ handle = handle, entries = entries }, VKBindGroupLayout)
+	return setmetatable({ device = device, handle = handle, entries = entries }, VKBindGroupLayout)
+end
+
+function VKBindGroupLayout:destroy()
+	self.device.handle:destroyDescriptorSetLayout(self.handle)
 end
 
 return VKBindGroupLayout

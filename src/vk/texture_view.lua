@@ -6,6 +6,7 @@ local vkConversions = require("hood.convert.vk")
 ---@field texture hood.vk.Texture
 ---@field baseArrayLayer integer
 ---@field layerCount integer
+---@field private device hood.vk.Device
 local VKTextureView = {}
 VKTextureView.__index = VKTextureView
 
@@ -55,11 +56,16 @@ function VKTextureView.new(device, texture, descriptor)
 	})
 
 	return setmetatable({
+		device = device,
 		handle = handle,
 		texture = texture,
 		baseArrayLayer = descriptor.baseArrayLayer or 0,
 		layerCount = layerCount,
 	}, VKTextureView)
+end
+
+function VKTextureView:destroy()
+	self.device.handle:destroyImageView(self.handle)
 end
 
 return VKTextureView

@@ -3,3 +3,4 @@
 ---@field layout hood.BindGroupLayout
 
 ---@class hood.ComputePipeline
+---@field destroy fun(self: hood.ComputePipeline)

@@ -28,3 +28,4 @@
 ---@field depthStencil? hood.DepthStencilState
 
 ---@class hood.Pipeline
+---@field destroy fun(self: hood.Pipeline)

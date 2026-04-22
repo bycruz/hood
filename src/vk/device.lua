@@ -54,6 +54,7 @@ function VKDevice.new(adapter)
 
 	-- TODO: Replace with a growing array of descriptor pools later
 	device.descriptorPool = handle:createDescriptorPool({
+		flags = vk.DescriptorPoolCreateFlagBits.FREE_DESCRIPTOR_SET,
 		maxSets = 512,
 		poolSizeCount = 5,
 		pPoolSizes = sizes,

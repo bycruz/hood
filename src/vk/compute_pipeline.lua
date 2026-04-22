@@ -47,4 +47,9 @@ function VKComputePipeline.new(device, descriptor)
 	return setmetatable({ handle = handle, layout = layout, device = device }, VKComputePipeline)
 end
 
+function VKComputePipeline:destroy()
+	self.device.handle:destroyPipeline(self.handle)
+	self.device.handle:destroyPipelineLayout(self.layout)
+end
+
 return VKComputePipeline

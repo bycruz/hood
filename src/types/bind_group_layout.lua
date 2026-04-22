@@ -1,4 +1,5 @@
 ---@class hood.BindGroupLayout
+---@field destroy fun(self: hood.BindGroupLayout)
 
 ---@class hood.BindingLayout.Base
 ---@field binding number
