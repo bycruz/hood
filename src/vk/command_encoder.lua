@@ -436,10 +436,21 @@ function VKCommandEncoder:copyTextureToBuffer(source, destination, copySize)
 	local buffer = destination.buffer --[[@as hood.vk.Buffer]]
 	local mipLevel = source.mipLevel or 0
 	local origin = source.origin or {}
+	local layer = origin.z or 0
 
-	copyBarrier[0].srcAccessMask = vk.AccessFlags.COLOR_ATTACHMENT_WRITE
+	texture.layerLayouts = texture.layerLayouts or {}
+	local oldLayout = texture.layerLayouts[layer] or vk.ImageLayout.SHADER_READ_ONLY_OPTIMAL
+
+	local srcAccessMask = vk.AccessFlags.COLOR_ATTACHMENT_WRITE
+	local srcStage = vk.PipelineStageFlagBits.COLOR_ATTACHMENT_OUTPUT
+	if oldLayout == vk.ImageLayout.SHADER_READ_ONLY_OPTIMAL then
+		srcAccessMask = vk.AccessFlags.SHADER_READ
+		srcStage = vk.PipelineStageFlagBits.FRAGMENT_SHADER
+	end
+
+	copyBarrier[0].srcAccessMask = srcAccessMask
 	copyBarrier[0].dstAccessMask = vk.AccessFlags.TRANSFER_READ
-	copyBarrier[0].oldLayout = vk.ImageLayout.SHADER_READ_ONLY_OPTIMAL
+	copyBarrier[0].oldLayout = oldLayout
 	copyBarrier[0].newLayout = vk.ImageLayout.TRANSFER_SRC_OPTIMAL
 	copyBarrier[0].srcQueueFamilyIndex = 0xFFFFFFFF
 	copyBarrier[0].dstQueueFamilyIndex = 0xFFFFFFFF
@@ -447,12 +458,12 @@ function VKCommandEncoder:copyTextureToBuffer(source, destination, copySize)
 	copyBarrier[0].subresourceRange.aspectMask = vk.ImageAspectFlagBits.COLOR
 	copyBarrier[0].subresourceRange.baseMipLevel = mipLevel
 	copyBarrier[0].subresourceRange.levelCount = 1
-	copyBarrier[0].subresourceRange.baseArrayLayer = 0
+	copyBarrier[0].subresourceRange.baseArrayLayer = layer
 	copyBarrier[0].subresourceRange.layerCount = 1
 
 	self.device.handle:cmdPipelineBarrier(
 		self.buffer.handle,
-		vk.PipelineStageFlagBits.COLOR_ATTACHMENT_OUTPUT,
+		srcStage,
 		vk.PipelineStageFlagBits.TRANSFER,
 		1, copyBarrier)
 
@@ -462,11 +473,11 @@ function VKCommandEncoder:copyTextureToBuffer(source, destination, copySize)
 	region[0].bufferImageHeight = destination.rowsPerImage or 0
 	region[0].imageSubresource.aspectMask = vk.ImageAspectFlagBits.COLOR
 	region[0].imageSubresource.mipLevel = mipLevel
-	region[0].imageSubresource.baseArrayLayer = 0
+	region[0].imageSubresource.baseArrayLayer = layer
 	region[0].imageSubresource.layerCount = 1
 	region[0].imageOffset.x = origin.x or 0
 	region[0].imageOffset.y = origin.y or 0
-	region[0].imageOffset.z = origin.z or 0
+	region[0].imageOffset.z = 0
 	region[0].imageExtent.width = copySize.width
 	region[0].imageExtent.height = copySize.height
 	region[0].imageExtent.depth = copySize.depthOrArrayLayers or 1
@@ -474,6 +485,20 @@ function VKCommandEncoder:copyTextureToBuffer(source, destination, copySize)
 	self.device.handle:cmdCopyImageToBuffer(
 		self.buffer.handle, texture.handle,
 		vk.ImageLayout.TRANSFER_SRC_OPTIMAL, buffer.handle, 1, region)
+
+	-- Transition back so the next writeTexture on this layer sees the correct layout
+	copyBarrier[0].srcAccessMask = vk.AccessFlags.TRANSFER_READ
+	copyBarrier[0].dstAccessMask = vk.AccessFlags.SHADER_READ
+	copyBarrier[0].oldLayout = vk.ImageLayout.TRANSFER_SRC_OPTIMAL
+	copyBarrier[0].newLayout = vk.ImageLayout.SHADER_READ_ONLY_OPTIMAL
+
+	self.device.handle:cmdPipelineBarrier(
+		self.buffer.handle,
+		vk.PipelineStageFlagBits.TRANSFER,
+		vk.PipelineStageFlagBits.FRAGMENT_SHADER,
+		1, copyBarrier)
+
+	texture.layerLayouts[layer] = vk.ImageLayout.SHADER_READ_ONLY_OPTIMAL
 end
 
 local storageBarrier = vk.ImageMemoryBarrierArray(1)
