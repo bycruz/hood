@@ -12,6 +12,7 @@ local GLCommandBuffer = require("hood.gl.command_buffer")
 ---| { type: "drawIndexed", indexCount: number, instanceCount: number, firstIndex: number, baseVertex: number, firstInstance: number }
 ---| { type: "writeBuffer", buffer: hood.gl.Buffer, size: number, data: ffi.cdata*, offset: number }
 ---| { type: "writeTexture", texture: hood.gl.Texture, descriptor: hood.TextureWriteDescriptor, data: ffi.cdata* }
+---| { type: "copyTextureToBuffer", source: hood.ImageCopyTexture, destination: hood.ImageCopyBuffer, copySize: hood.Extent3D }
 --- # Compute
 ---| { type: "beginComputePass", descriptor: hood.ComputePassDescriptor }
 ---| { type: "dispatchWorkgroups", x: number, y: number, z: number }
@@ -120,6 +121,18 @@ function GLCommandEncoder:writeTexture(texture, descriptor, data)
 		texture = texture,
 		descriptor = descriptor,
 		data = data,
+	}
+end
+
+---@param source hood.ImageCopyTexture
+---@param destination hood.ImageCopyBuffer
+---@param copySize hood.Extent3D
+function GLCommandEncoder:copyTextureToBuffer(source, destination, copySize)
+	self.commands[#self.commands + 1] = {
+		type = "copyTextureToBuffer",
+		source = source,
+		destination = destination,
+		copySize = copySize,
 	}
 end
 

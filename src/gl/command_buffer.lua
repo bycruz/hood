@@ -1,5 +1,6 @@
 local gl = require("glapi")
 local glConversions = require("hood.convert.gl")
+local ffi = require("ffi")
 
 local GLVAO = require("hood.gl.vao")
 
@@ -136,6 +137,35 @@ function GLCommandBuffer:execute()
 			command.buffer:setSlice(command.size, command.data, command.offset)
 		elseif command.type == "writeTexture" then
 			command.texture:writeData(command.descriptor, command.data)
+		elseif command.type == "copyTextureToBuffer" then
+			local texture = command.source.texture --[[@as hood.gl.Texture]]
+			local buffer = command.destination.buffer --[[@as hood.gl.Buffer]]
+			local mipLevel = command.source.mipLevel or 0
+			local origin = command.source.origin or {}
+			local copySize = command.copySize
+			local destination = command.destination
+
+			local format = assert(glConversions.textureFormat[texture.descriptor.format], "Unsupported texture format for copyTextureToBuffer")
+			local dataType = assert(glConversions.textureType[texture.descriptor.format], "Unsupported texture format for copyTextureToBuffer")
+
+			gl.pixelStorei(gl.PACK_ALIGNMENT, 1)
+			gl.pixelStorei(gl.PACK_ROW_LENGTH, destination.bytesPerRow and (destination.bytesPerRow / 4) or 0)
+			gl.pixelStorei(gl.PACK_IMAGE_HEIGHT, destination.rowsPerImage or 0)
+
+			gl.bindBuffer(gl.PIXEL_PACK_BUFFER, buffer.id)
+			gl.getTextureSubImage(
+				texture.id, mipLevel,
+				origin.x or 0, origin.y or 0, origin.z or 0,
+				copySize.width, copySize.height, copySize.depthOrArrayLayers or 1,
+				format, dataType,
+				buffer.descriptor.size,
+				ffi.cast("void*", destination.offset or 0)
+			)
+			gl.bindBuffer(gl.PIXEL_PACK_BUFFER, 0)
+
+			gl.pixelStorei(gl.PACK_ALIGNMENT, 4)
+			gl.pixelStorei(gl.PACK_ROW_LENGTH, 0)
+			gl.pixelStorei(gl.PACK_IMAGE_HEIGHT, 0)
 		elseif command.type == "setBindGroup" then
 			for _, entry in ipairs(command.bindGroup.entries) do
 				if entry.type == "buffer" then
