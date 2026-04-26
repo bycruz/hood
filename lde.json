@@ -7,6 +7,8 @@
 		"winit": { "git": "https://github.com/bycruz/winit" }
 	},
 	"devDependencies": {
-		"lde-test": { "git": "https://github.com/lde-org/lde" }
+		"lde-test": { "git": "https://github.com/lde-org/lde" },
+		"fs": { "git": "https://github.com/lde-org/fs" },
+		"path": { "git": "https://github.com/lde-org/path" }
 	}
 }

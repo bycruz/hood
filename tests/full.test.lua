@@ -2,10 +2,27 @@ local ffi = require("ffi")
 local test = require("lde-test")
 
 local hood = require("hood")
+local glslc = require("tests.fixtures.glslc")
 
-local pathSep = string.sub(package.config, 1, 1)
-local dirName = debug.getinfo(1, "S").source:sub(2):match("(.*)" .. pathSep)
-local shaderDir = dirName .. "/../examples/triangle/shaders"
+local vertSpv = glslc.compile([[
+#version 430 core
+layout(location = 0) in vec3 aPos;
+layout(location = 1) in vec4 aColor;
+layout(location = 0) out vec4 vertexColor;
+void main() {
+    gl_Position = vec4(aPos, 1.0);
+    vertexColor = aColor;
+}
+]], "vert")
+
+local fragSpv = glslc.compile([[
+#version 430 core
+layout(location = 0) in vec4 vertexColor;
+layout(location = 0) out vec4 fragColor;
+void main() {
+    fragColor = vertexColor;
+}
+]], "frag")
 
 local WIDTH, HEIGHT = 64, 64
 
@@ -54,17 +71,11 @@ test.it("should work headless", function()
 	local pipeline = device:createPipeline({
 		layout = bindGroupLayout,
 		vertex = {
-			module = {
-				type = "spirv",
-				source = io.open(shaderDir .. "/triangle.vert.spv", "rb"):read("*a"),
-			},
+			module = { type = "spirv", source = vertSpv },
 			buffers = { vertexLayout },
 		},
 		fragment = {
-			module = {
-				type = "spirv",
-				source = io.open(shaderDir .. "/triangle.frag.spv", "rb"):read("*a"),
-			},
+			module = { type = "spirv", source = fragSpv },
 			targets = {
 				{
 					blend = "alpha-blending",
