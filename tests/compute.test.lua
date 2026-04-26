@@ -105,6 +105,60 @@ void main() {
 	unmap()
 end)
 
+test.it("compute: uniform buffer values are readable in shader", function()
+	local N = 4
+	local spv = glslc.compile([[
+#version 430 core
+layout(local_size_x = 4) in;
+layout(set = 0, binding = 0) uniform Uniforms { uvec4 values; };
+layout(set = 0, binding = 1) buffer Out { uint data[]; };
+void main() {
+    uint i = gl_GlobalInvocationID.x;
+    data[i] = values[i];
+}
+]], "comp")
+
+	local bgl = device:createBindGroupLayout({
+		{ type = "uniform-buffer", binding = 0, visibility = { "COMPUTE" } },
+		{ type = "storage-buffer", binding = 1, visibility = { "COMPUTE" } },
+	})
+
+	local cp = device:createComputePipeline({
+		module = { type = "spirv", source = spv },
+		layout = bgl,
+	})
+
+	local uniforms = ffi.new("uint32_t[4]", { 11, 22, 33, 44 })
+	local uniformBuf = device:createBuffer({ size = N * ffi.sizeof("uint32_t"), usages = { "UNIFORM", "COPY_DST" } })
+	device.queue:writeBuffer(uniformBuf, ffi.sizeof(uniforms), uniforms)
+
+	local outBuf = device:createBuffer({ size = N * ffi.sizeof("uint32_t"), usages = { "STORAGE", "MAP_READ" } })
+
+	local bg = device:createBindGroup({
+		layout = bgl,
+		entries = {
+			{ type = "uniform-buffer", binding = 0, visibility = { "COMPUTE" }, buffer = uniformBuf },
+			{ type = "storage-buffer", binding = 1, visibility = { "COMPUTE" }, buffer = outBuf },
+		},
+	})
+
+	local encoder = device:createCommandEncoder()
+	encoder:setComputePipeline(cp)
+	encoder:setBindGroup(0, bg)
+	encoder:beginComputePass({})
+	encoder:dispatchWorkgroups(1, 1, 1)
+	encoder:endComputePass()
+	device.queue:submit(encoder:finish())
+	device.queue:waitIdle()
+
+	outBuf:mapAsync()
+	local dst = ffi.cast("uint32_t*", outBuf:getMappedRange())
+	for i = 0, N - 1 do
+		test.equal(tonumber(dst[i]), tonumber(uniforms[i]))
+	end
+	outBuf:unmap()
+end)
+
 test.it("compute: constant fill across all elements", function()
 	local MAGIC = 0xDEADBEEF
 
