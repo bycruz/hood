@@ -17,7 +17,9 @@
 --- | "READ_WRITE"
 
 ---@alias hood.BindingType
---- | "buffer"
+--- | "uniform-buffer"
+--- | "storage-buffer"
+--- | "buffer" -- deprecated alias for storage-buffer
 --- | "sampler"
 --- | "texture"
 --- | "storageTexture"
@@ -26,7 +28,15 @@
 ---@field binding number
 ---@field visibility hood.ShaderStage[]
 
----@class hood.Binding.Buffer: hood.Binding.Base
+---@class hood.Binding.UniformBuffer: hood.Binding.Base
+---@field type "uniform-buffer"
+---@field buffer hood.Buffer
+
+---@class hood.Binding.StorageBuffer: hood.Binding.Base
+---@field type "storage-buffer"
+---@field buffer hood.Buffer
+
+---@class hood.Binding.Buffer: hood.Binding.Base -- deprecated: use uniform-buffer or storage-buffer
 ---@field type "buffer"
 ---@field buffer hood.Buffer
 
@@ -45,6 +55,8 @@
 ---@field access hood.StorageAccess
 
 ---@alias hood.Binding
+--- | hood.Binding.UniformBuffer
+--- | hood.Binding.StorageBuffer
 --- | hood.Binding.Buffer
 --- | hood.Binding.Sampler
 --- | hood.Binding.Texture

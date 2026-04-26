@@ -4,7 +4,7 @@ local vk = require("vkapi")
 local vkConversions = require("hood.convert.vk")
 
 ---@class hood.vk.BindGroup: hood.BindGroup
----@field layout vk.ffi.DescriptorSetLayout
+---@field layout hood.vk.BindGroupLayout
 ---@field set vk.ffi.DescriptorSet
 ---@field private device hood.vk.Device
 local BindGroup = {}
@@ -33,7 +33,7 @@ function BindGroup.new(device, descriptor)
 		writes[i - 1].descriptorCount = 1 -- TODO: Support types with count?
 		writes[i - 1].descriptorType = vkConversions.bindingType[entry.type]
 
-		if entry.type == "buffer" then
+		if entry.type == "uniform-buffer" or entry.type == "storage-buffer" or entry.type == "buffer" then
 			local vkBuffer = entry.buffer --[[@as hood.vk.Buffer]]
 
 			local bufferInfos = vk.DescriptorBufferInfoArray(1)
@@ -76,7 +76,7 @@ function BindGroup.new(device, descriptor)
 end
 
 function BindGroup:destroy()
-	self.device.handle:destroyDescriptorSetLayout(self.layout)
+	self.device.handle:destroyDescriptorSetLayout(self.layout.handle)
 end
 
 return BindGroup

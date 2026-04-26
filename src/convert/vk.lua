@@ -100,7 +100,9 @@ vkConversions.indexFormat = {
 
 ---@type table<hood.BindingType, vk.DescriptorType>
 vkConversions.bindingType = {
-	["buffer"] = vk.DescriptorType.STORAGE_BUFFER,
+	["uniform-buffer"] = vk.DescriptorType.UNIFORM_BUFFER,
+	["storage-buffer"] = vk.DescriptorType.STORAGE_BUFFER,
+	["buffer"] = vk.DescriptorType.STORAGE_BUFFER, -- deprecated alias for storage-buffer
 	["sampler"] = vk.DescriptorType.SAMPLER,
 	["texture"] = vk.DescriptorType.SAMPLED_IMAGE,
 	["storageTexture"] = vk.DescriptorType.STORAGE_IMAGE,

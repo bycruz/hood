@@ -87,6 +87,41 @@ test.it("buffer: destroy does not error", function()
 	test.equal(true, true)
 end)
 
+-- ─── BindGroupLayout / BindGroup ─────────────────────────────────────────────
+
+test.it("bind group layout: uniform-buffer binding", function()
+	local layout = device:createBindGroupLayout({
+		{ binding = 0, visibility = { "VERTEX" }, type = "uniform-buffer" },
+	})
+	test.equal(type(layout), "table")
+	layout:destroy()
+end)
+
+test.it("bind group layout: storage-buffer binding", function()
+	local layout = device:createBindGroupLayout({
+		{ binding = 0, visibility = { "COMPUTE" }, type = "storage-buffer" },
+	})
+	test.equal(type(layout), "table")
+	layout:destroy()
+end)
+
+test.it("bind group: uniform-buffer binding round-trip", function()
+	local layout = device:createBindGroupLayout({
+		{ binding = 0, visibility = { "VERTEX", "FRAGMENT" }, type = "uniform-buffer" },
+	})
+	local buf = device:createBuffer({ size = 64, usages = { "UNIFORM", "COPY_DST" } })
+	local group = device:createBindGroup({
+		layout = layout,
+		entries = {
+			{ binding = 0, visibility = { "VERTEX", "FRAGMENT" }, type = "uniform-buffer", buffer = buf },
+		},
+	})
+	test.equal(type(group), "table")
+	group:destroy()
+	buf:destroy()
+	layout:destroy()
+end)
+
 -- ─── Texture ─────────────────────────────────────────────────────────────────
 
 test.it("texture: create 2D rgba8unorm", function()
