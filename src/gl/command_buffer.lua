@@ -68,13 +68,17 @@ function GLCommandBuffer:execute()
 			local attachments = command.descriptor.colorAttachments
 			for _, attachment in ipairs(attachments) do
 				local texture = attachment.texture --[[@as hood.gl.Texture]]
-				if not texture.id then -- rendering to a framebuffer
-					texture.context:makeCurrent()
-					if not vaos[texture.context] then
-						local vao = GLVAO.new()
-						vaos[texture.context] = vao
+
+				-- Determine which context to use: for the swapchain (no texture id) it's stored on the texture,
+				-- but for offscreen textures we need the current context
+				local ctx = not texture.id and texture.context or nil
+				if ctx then
+					ctx:makeCurrent()
+					if not vaos[ctx] then
+						local newVao = GLVAO.new()
+						vaos[ctx] = newVao
 					end
-					vao = vaos[texture.context]
+					vao = vaos[ctx]
 					vao:bind()
 				end
 
