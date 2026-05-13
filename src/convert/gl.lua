@@ -27,18 +27,6 @@ glConversions.indexFormat = {
 	["u32"] = gl.UNSIGNED_INT,
 }
 
----@type table<hood.CompareFunction, number>
-glConversions.compareFunction = {
-	["never"] = gl.NEVER,
-	["less"] = gl.LESS,
-	["equal"] = gl.EQUAL,
-	["less-equal"] = gl.LEQUAL,
-	["greater"] = gl.GREATER,
-	["not-equal"] = gl.NOTEQUAL,
-	["greater-equal"] = gl.GEQUAL,
-	["always"] = gl.ALWAYS,
-}
-
 ---@type table<hood.StorageAccess, number>
 glConversions.storageAccess = {
 	["READ_ONLY"] = gl.READ_ONLY,

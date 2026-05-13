@@ -145,8 +145,10 @@ function GLCommandBuffer:execute()
 			local copySize = command.copySize
 			local destination = command.destination
 
-			local format = assert(glConversions.textureFormat[texture.descriptor.format], "Unsupported texture format for copyTextureToBuffer")
-			local dataType = assert(glConversions.textureType[texture.descriptor.format], "Unsupported texture format for copyTextureToBuffer")
+			local format = assert(glConversions.textureFormat[texture.descriptor.format],
+				"Unsupported texture format for copyTextureToBuffer")
+			local dataType = assert(glConversions.textureType[texture.descriptor.format],
+				"Unsupported texture format for copyTextureToBuffer")
 
 			gl.pixelStorei(gl.PACK_ALIGNMENT, 1)
 			gl.pixelStorei(gl.PACK_ROW_LENGTH, destination.bytesPerRow and (destination.bytesPerRow / 4) or 0)
@@ -193,7 +195,7 @@ function GLCommandBuffer:execute()
 						entry.layer and 0 or 1,
 						entry.layer or 0,
 						glConversions.storageAccess[entry.access],
-						texture.format
+						glConversions.textureFormat[texture.format]
 					)
 				end
 			end

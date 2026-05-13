@@ -40,12 +40,12 @@ function GLPipeline:genForCurrentContext()
 	local pipeline = gl.genProgramPipelines(1)[1]
 
 	do -- Vertex
-		local program = GLProgram.new(gl.ShaderType.VERTEX, self.vertex.module.source)
+		local program = GLProgram.new(gl.ShaderType.Vertex, self.vertex.module.source)
 		gl.useProgramStages(pipeline, gl.VERTEX_SHADER_BIT, program.id)
 	end
 
 	do -- Fragment
-		local program = GLProgram.new(gl.ShaderType.FRAGMENT, self.fragment.module.source)
+		local program = GLProgram.new(gl.ShaderType.Fragment, self.fragment.module.source)
 		gl.useProgramStages(pipeline, gl.FRAGMENT_SHADER_BIT, program.id)
 	end
 
