@@ -50,14 +50,14 @@ local computePipelines = setmetatable({}, {
 	__mode = "k",
 })
 
-function GLCommandBuffer:execute()
+---@param queueCtx hood.gl.Context # The queue's context; used as fallback for offscreen textures
+function GLCommandBuffer:execute(queueCtx)
 	---@type hood.gl.ComputePipeline?
 	local computePipeline
 
 	---@type hood.gl.Pipeline?
 	local pipeline
 
-	--- TODO: absolutely cache the vao somewhere instead of recreating it every frame
 	---@type hood.gl.VAO?
 	local vao
 
@@ -69,18 +69,17 @@ function GLCommandBuffer:execute()
 			for _, attachment in ipairs(attachments) do
 				local texture = attachment.texture --[[@as hood.gl.Texture]]
 
-				-- Determine which context to use: for the swapchain (no texture id) it's stored on the texture,
-				-- but for offscreen textures we need the current context
-				local ctx = not texture.id and texture.context or nil
-				if ctx then
-					ctx:makeCurrent()
-					if not vaos[ctx] then
-						local newVao = GLVAO.new()
-						vaos[ctx] = newVao
-					end
-					vao = vaos[ctx]
-					vao:bind()
+				-- Use the texture's context for the swapchain (id is nil),
+				-- or fall back to the queue's context for offscreen textures
+				local ctx = not texture.id and texture.context or queueCtx
+				ctx:makeCurrent()
+
+				if not vaos[ctx] then
+					local newVao = GLVAO.new()
+					vaos[ctx] = newVao
 				end
+				vao = vaos[ctx]
+				vao:bind()
 
 				assert(texture.framebuffer == 0, "Unimplemented: support for different frame buffers")
 				gl.bindFramebuffer(gl.FRAMEBUFFER, texture.framebuffer)

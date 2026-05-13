@@ -14,7 +14,7 @@ end
 ---@param buffer hood.gl.CommandBuffer
 function GLQueue:submit(buffer)
 	self.ctx:makeCurrent()
-	buffer:execute()
+	buffer:execute(self.ctx)
 end
 
 ---@param swapchain hood.gl.Swapchain
