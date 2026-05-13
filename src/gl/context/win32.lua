@@ -42,6 +42,12 @@ function Win32Context:swapBuffers()
 	gdi.swapBuffers(self.display)
 end
 
+function Win32Context:setSwapInterval(interval)
+	if wgl.swapIntervalEXT then
+		wgl.swapIntervalEXT(interval)
+	end
+end
+
 function Win32Context:destroy()
 	wgl.deleteContext(self.ctx)
 end

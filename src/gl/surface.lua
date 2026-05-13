@@ -15,6 +15,15 @@ end
 ---@param config hood.SurfaceConfig
 function GLSurface:configure(device, config)
 	local context = GLContext.fromWindow(self.window, device.ctx)
+
+	context:makeCurrent()
+
+	if config.presentMode == "immediate" then
+		context:setSwapInterval(0)
+	else
+		context:setSwapInterval(1)
+	end
+
 	return GLSwapchain.new(context)
 end
 

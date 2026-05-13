@@ -70,6 +70,12 @@ function X11Context:swapBuffers()
 	end
 end
 
+function X11Context:setSwapInterval(interval)
+	if glx.swapIntervalEXT then
+		glx.swapIntervalEXT(self.display, self.window.id, interval)
+	end
+end
+
 function X11Context:destroy()
 	glx.destroyContext(self.display, self.ctx)
 end
