@@ -60,7 +60,7 @@ function Win32Context.fromHeadless(sharedCtx)
 
 	local hdc = user32.getDC(hwnd)
 
-	local pfDescriptor = gdi.newPFD()
+	local pfDescriptor = gdi.NewPFD()
 	local pf = gdi.choosePixelFormat(hdc, pfDescriptor)
 	if pf == 0 then
 		user32.destroyWindow(hwnd)
@@ -99,7 +99,7 @@ end
 function Win32Context.fromWindow(window, sharedCtx)
 	local hdc = user32.getDC(window.hwnd)
 
-	local pfDescriptor = gdi.newPFD()
+	local pfDescriptor = gdi.NewPFD()
 	local pf = gdi.choosePixelFormat(hdc, pfDescriptor)
 	if pf == 0 then
 		error("Failed to choose pixel format: " .. tostring(kernel32.getLastErrorMessage()))
