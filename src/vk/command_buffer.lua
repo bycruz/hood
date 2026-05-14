@@ -4,6 +4,7 @@ local vk = require("vkapi")
 ---@field device hood.vk.Device
 ---@field pool vk.ffi.CommandPool
 ---@field handle vk.ffi.CommandBuffer
+---@field swapchains table<hood.vk.Swapchain, boolean>
 local VKCommandBuffer = {}
 VKCommandBuffer.__index = VKCommandBuffer
 
@@ -25,6 +26,7 @@ function VKCommandBuffer.new(device)
 		pool = pool,
 		handle = handle,
 		stagingResources = nil,
+		swapchains = {},
 	}, VKCommandBuffer)
 end
 

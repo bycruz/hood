@@ -26,20 +26,24 @@ local waitStages = ffi.new("uint32_t[1]", vk.PipelineStageFlagBits.COLOR_ATTACHM
 local submitArray = vk.SubmitInfoArray(1)
 
 ---@param buffer hood.vk.CommandBuffer
----@param swapchain hood.vk.Swapchain?
-function VKQueue:submit(buffer, swapchain)
-	-- Track command buffer for deferred cleanup after GPU completes
-	if swapchain then
-		swapchain.pendingCommandBuffers[swapchain.currentFrame] = buffer
-	end
-
+function VKQueue:submit(buffer)
 	commandBuffers[0] = buffer.handle
 
 	local info = submitArray[0]
 	info.commandBufferCount = 1
 	info.pCommandBuffers = commandBuffers
 
+	-- Scan command buffer's tracked swapchains to set up synchronization
+	local swapchain = nil
+	for sc, _ in pairs(buffer.swapchains) do
+		swapchain = sc
+		break -- only one swapchain expected per submit in practice
+	end
+
 	if swapchain then
+		-- Track command buffer for deferred cleanup after GPU completes
+		swapchain.pendingCommandBuffers[swapchain.currentFrame] = buffer
+
 		-- Use currentFrame for imageAvailable (per frame-in-flight)
 		waitSemaphores[0] = swapchain.imageAvailableSemaphores[swapchain.currentFrame]
 		-- Use imageIndex for renderFinished (per swapchain image)

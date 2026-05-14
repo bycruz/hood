@@ -15,6 +15,7 @@ local VKCommandBuffer = require("hood.vk.command_buffer")
 ---@field computePipeline hood.vk.ComputePipeline?
 ---@field bindGroups table<number, hood.vk.BindGroup>
 ---@field renderPasses vk.ffi.RenderPass[]
+---@field swapchains table<hood.vk.Swapchain, boolean>
 local VKCommandEncoder = {}
 VKCommandEncoder.__index = VKCommandEncoder
 
@@ -34,6 +35,7 @@ function VKCommandEncoder.new(device)
 		framebuffers = {},
 		renderPasses = {},
 		bindGroups = {},
+		swapchains = {},
 	}, VKCommandEncoder)
 end
 
@@ -79,6 +81,9 @@ function VKCommandEncoder:_beginRenderPass(pipeline, descriptor)
 		imageViews[i - 1] = view.handle
 
 		local isSwapchain = view.texture and view.texture.isSwapchain
+		if isSwapchain and view.texture.swapchain then
+			self.swapchains[view.texture.swapchain] = true
+		end
 		attachmentDescs[#attachmentDescs + 1] = {
 			format = view.texture.format,
 			samples = vk.SampleCountFlagBits.COUNT_1,
@@ -600,6 +605,7 @@ function VKCommandEncoder:finish()
 	self.buffer.imageViews = self.imageViews
 	self.buffer.framebuffers = self.framebuffers
 	self.buffer.renderPasses = self.renderPasses
+	self.buffer.swapchains = self.swapchains
 
 	return self.buffer
 end

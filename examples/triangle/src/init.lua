@@ -132,7 +132,7 @@ eventLoop:run(function(event, handler)
 		encoder:endRendering()
 
 		local commandBuffer = encoder:finish()
-		device.queue:submit(commandBuffer, swapchain)
+		device.queue:submit(commandBuffer)
 		device.queue:present(swapchain)
 	elseif event.name == "resize" then
 		swapchain = surface:configure(device, { presentMode = "immediate" }, swapchain)
