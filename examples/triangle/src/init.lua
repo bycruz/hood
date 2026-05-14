@@ -100,9 +100,6 @@ local pipeline = device:createPipeline({
 	},
 })
 
--- Track swapchain health to avoid infinite redraw loops when out-of-date
-local swapchainValid = true
-
 -- Main render loop
 eventLoop:run(function(event, handler)
 	if event.name == "windowClose" then
@@ -110,13 +107,16 @@ eventLoop:run(function(event, handler)
 	elseif event.name == "redraw" then
 		local texture = swapchain:getCurrentTexture()
 
+		-- Resize handling
 		if not texture then
-			-- Swapchain out of date, do not attempt to redraw or you'll starve the event loop
-			swapchainValid = false
-			return
+			swapchain = surface:configure(device, { presentMode = "immediate" }, swapchain)
+			texture = swapchain:getCurrentTexture()
+
+			if not texture then
+				return
+			end
 		end
 
-		swapchainValid = true
 		local encoder = device:createCommandEncoder()
 
 		encoder:beginRendering({
@@ -132,7 +132,7 @@ eventLoop:run(function(event, handler)
 		})
 
 		encoder:setPipeline(pipeline)
-		encoder:setViewport(0, 0, window.width, window.height)
+		encoder:setViewport(0, 0, swapchain.width, swapchain.height)
 		encoder:setVertexBuffer(0, vertexBuffer)
 		encoder:setIndexBuffer(indexBuffer, "u32")
 		encoder:drawIndexed(3, 1)
@@ -141,11 +141,7 @@ eventLoop:run(function(event, handler)
 		local commandBuffer = encoder:finish()
 		device.queue:submit(commandBuffer)
 		device.queue:present(swapchain)
-	elseif event.name == "resize" then
-		swapchain = surface:configure(device, { presentMode = "immediate" }, swapchain)
-		swapchainValid = true
-		handler:requestRedraw(window)
-	elseif event.name == "aboutToWait" and swapchainValid then
+	elseif event.name == "aboutToWait" then
 		handler:requestRedraw(window)
 	end
 end)
