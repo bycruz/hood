@@ -100,17 +100,24 @@ local pipeline = device:createPipeline({
 	},
 })
 
+-- Track swapchain health to avoid infinite redraw loops when out-of-date
+local swapchainValid = true
+
 -- Main render loop
 eventLoop:run(function(event, handler)
 	if event.name == "windowClose" then
 		handler:exit()
 	elseif event.name == "redraw" then
-		local encoder = device:createCommandEncoder()
-
 		local texture = swapchain:getCurrentTexture()
+
 		if not texture then
+			-- Swapchain out of date, do not attempt to redraw or you'll starve the event loop
+			swapchainValid = false
 			return
 		end
+
+		swapchainValid = true
+		local encoder = device:createCommandEncoder()
 
 		encoder:beginRendering({
 			colorAttachments = {
@@ -136,7 +143,9 @@ eventLoop:run(function(event, handler)
 		device.queue:present(swapchain)
 	elseif event.name == "resize" then
 		swapchain = surface:configure(device, { presentMode = "immediate" }, swapchain)
-	elseif event.name == "aboutToWait" then
+		swapchainValid = true
+		handler:requestRedraw(window)
+	elseif event.name == "aboutToWait" and swapchainValid then
 		handler:requestRedraw(window)
 	end
 end)
