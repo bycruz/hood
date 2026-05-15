@@ -206,6 +206,8 @@ function GLCommandBuffer:execute(queueCtx)
 			gl.drawElements(gl.TRIANGLES, command.indexCount, indexType, nil)
 		elseif command.type == "beginComputePass" then
 			gl.bindVertexArray(0)
+		elseif command.type == "endComputePass" then
+			-- nothing
 		elseif command.type == "setComputePipeline" then
 			computePipeline = command.pipeline
 

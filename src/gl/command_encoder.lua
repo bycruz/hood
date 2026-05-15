@@ -15,6 +15,7 @@ local GLCommandBuffer = require("hood.gl.command_buffer")
 ---| { type: "copyTextureToBuffer", source: hood.ImageCopyTexture, destination: hood.ImageCopyBuffer, copySize: hood.Extent3D }
 --- # Compute
 ---| { type: "beginComputePass", descriptor: hood.ComputePassDescriptor }
+---| { type: "endComputePass" }
 ---| { type: "dispatchWorkgroups", x: number, y: number, z: number }
 ---| { type: "setComputePipeline", pipeline: hood.gl.ComputePipeline }
 
@@ -143,6 +144,10 @@ end
 ---@param descriptor hood.ComputePassDescriptor
 function GLCommandEncoder:beginComputePass(descriptor)
 	self.commands[#self.commands + 1] = { type = "beginComputePass", descriptor = descriptor }
+end
+
+function GLCommandEncoder:endComputePass()
+	self.commands[#self.commands + 1] = { type = "endComputePass" }
 end
 
 ---@param x number
