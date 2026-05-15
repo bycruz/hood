@@ -7,6 +7,7 @@ local GLProgram = require("hood.gl.program")
 ---@field fragment hood.FragmentState
 ---@field vertex hood.VertexState
 ---@field depthStencil? hood.DepthStencilState
+---@field primitive? hood.PrimitiveState
 local GLPipeline = {}
 GLPipeline.__index = GLPipeline
 
@@ -21,6 +22,7 @@ function GLPipeline.new(device, descriptor)
 		fragment = descriptor.fragment,
 		vertex = descriptor.vertex,
 		depthStencil = descriptor.depthStencil,
+		primitive = descriptor.primitive,
 	}, GLPipeline)
 end
 

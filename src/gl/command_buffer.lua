@@ -114,6 +114,22 @@ function GLCommandBuffer:execute(queueCtx)
 				gl.disable(gl.DEPTH_TEST)
 			end
 
+			if pipeline.primitive then
+				local cullMode = pipeline.primitive.cullMode
+				if cullMode and cullMode ~= "none" then
+					gl.enable(gl.CULL_FACE)
+					gl.cullFace(glConversions.cullMode[pipeline.primitive.cullMode])
+				else
+					gl.disable(gl.CULL_FACE)
+				end
+
+				if pipeline.primitive.frontFace then
+					gl.frontFace(glConversions.frontFace[pipeline.primitive.frontFace])
+				end
+			else
+				gl.disable(gl.CULL_FACE)
+			end
+
 			for _, target in ipairs(pipeline.fragment.targets) do
 				if target.blend == "alpha-blending" then
 					gl.enable(gl.BLEND)
