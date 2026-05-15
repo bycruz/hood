@@ -24,7 +24,7 @@ function GLSurface:configure(device, config)
 		context:setSwapInterval(1)
 	end
 
-	return GLSwapchain.new(context, self.window.width, self.window.height)
+	return GLSwapchain.new(context, self.window.width, self.window.height, self.window)
 end
 
 return GLSurface
