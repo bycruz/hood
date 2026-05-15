@@ -33,7 +33,7 @@ function GLComputePipeline:genForCurrentContext()
 	local pipeline = gl.genProgramPipelines(1)[1]
 
 	-- todo: destroy when pipeline is destroyed
-	local program = GLProgram.new(gl.ShaderType.COMPUTE, self.module.source)
+	local program = GLProgram.new(gl.ShaderType.Compute, self.module.source)
 	gl.useProgramStages(pipeline, gl.COMPUTE_SHADER_BIT, program.id)
 
 	return GLRawComputePipeline.new(pipeline)
