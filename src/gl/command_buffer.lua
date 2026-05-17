@@ -189,7 +189,7 @@ function GLCommandBuffer:execute(queueCtx)
 			gl.pixelStorei(gl.PACK_IMAGE_HEIGHT, 0)
 		elseif command.type == "setBindGroup" then
 			for _, entry in ipairs(command.bindGroup.entries) do
-				if entry.type == "buffer" then
+				if entry.type == "buffer" or entry.type == "uniform-buffer" or entry.type == "storage-buffer" then
 					local buffer = entry.buffer --[[@as hood.gl.Buffer]]
 					if buffer.isUniform then
 						gl.bindBufferBase(gl.UNIFORM_BUFFER, entry.binding, buffer.id)
