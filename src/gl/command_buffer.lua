@@ -214,7 +214,7 @@ function GLCommandBuffer:execute(queueCtx)
 						entry.layer and 0 or 1,
 						entry.layer or 0,
 						glConversions.storageAccess[entry.access],
-						glConversions.textureFormat[texture.format]
+						texture.format
 					)
 				end
 			end
