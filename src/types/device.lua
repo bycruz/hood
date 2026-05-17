@@ -3,7 +3,7 @@
 ---@field createPipeline fun(self: hood.Device, descriptor: hood.PipelineDescriptor): hood.Pipeline
 ---@field createBuffer fun(self: hood.Device, descriptor: hood.BufferDescriptor): hood.Buffer
 ---@field createCommandEncoder fun(self: hood.Device): hood.CommandEncoder
----@field createBindGroup fun(self: hood.Device, entries: hood.Binding[]): hood.BindGroup
+---@field createBindGroup fun(self: hood.Device, entries: hood.BindGroupDescriptor): hood.BindGroup
 ---@field createBindGroupLayout fun(self: hood.Device, entries: hood.BindingLayout[]): hood.BindGroupLayout
 ---@field createSampler fun(self: hood.Device, descriptor: hood.SamplerDescriptor): hood.Sampler
 ---@field createTexture fun(self: hood.Device, descriptor: hood.TextureDescriptor): hood.Texture

@@ -36,10 +36,10 @@ function GLDevice:createPipeline(descriptor)
 	return GLPipeline.new(self, descriptor)
 end
 
----@param entries hood.Binding[]
+---@param descriptor hood.BindGroupDescriptor
 ---@return hood.BindGroup
-function GLDevice:createBindGroup(entries)
-	return { entries = entries }
+function GLDevice:createBindGroup(descriptor)
+	return { entries = descriptor.entries }
 end
 
 ---@param entries hood.BindingLayout[]
