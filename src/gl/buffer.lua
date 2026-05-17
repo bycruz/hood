@@ -45,7 +45,34 @@ function GLBuffer:setSlice(size, data, offset)
 	gl.namedBufferSubData(self.id, offset or 0, size, data)
 end
 
+--- Signal that the buffer will be read back by the CPU.
+--- Caller must ensure GPU work is complete (e.g. queue:waitIdle) before this.
+function GLBuffer:mapAsync()
+	gl.finish()
+end
+
+---@param offset number?
+---@param size number?
+---@return ffi.cdata*
+function GLBuffer:getMappedRange(offset, size)
+	offset = offset or 0
+	local mapSize = size or (self.descriptor.size - offset)
+	self._mappedPtr = gl.mapNamedBufferRange(self.id, offset, mapSize, gl.MapBit.Read)
+	if self._mappedPtr == nil then
+		error("Failed to map buffer range")
+	end
+	return self._mappedPtr
+end
+
+function GLBuffer:unmap()
+	if self._mappedPtr then
+		gl.unmapNamedBuffer(self.id)
+		self._mappedPtr = nil
+	end
+end
+
 function GLBuffer:destroy()
+	self:unmap()
 	gl.deleteBuffers(1, ffi.new("GLuint[1]", self.id))
 end
 
