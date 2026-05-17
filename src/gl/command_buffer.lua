@@ -199,13 +199,13 @@ function GLCommandBuffer:execute(queueCtx)
 						error("Only uniform or storage buffers are supported in bind groups for now")
 					end
 				elseif entry.type == "texture" then
-					local texture = entry.texture --[[@as hood.gl.Texture]]
+					local texture = entry.texture --[[@as hood.gl.TextureView]]
 					gl.bindTextureUnit(entry.binding, texture.id)
 				elseif entry.type == "sampler" then
 					local sampler = entry.sampler --[[@as hood.gl.Sampler]]
 					gl.bindSampler(entry.binding, sampler.id)
 				elseif entry.type == "storageTexture" then
-					local texture = entry.texture --[[@as hood.gl.Texture]]
+					local texture = entry.texture --[[@as hood.gl.TextureView]]
 
 					gl.bindImageTexture(
 						entry.binding,
