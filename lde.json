@@ -4,7 +4,19 @@
 	"dependencies": {
 		"glapi": { "git": "https://github.com/bycruz/glapi" },
 		"vkapi": { "git": "https://github.com/bycruz/vkapi" },
+		"x11api": {
+			"git": "https://github.com/bycruz/x11api",
+			"optional": true
+		},
+		"winapi": {
+			"git": "https://github.com/bycruz/winapi",
+			"optional": true
+		},
 		"winit": { "git": "https://github.com/bycruz/winit" }
+	},
+	"features": {
+		"windows": ["winapi"],
+		"linux": ["x11api"]
 	},
 	"devDependencies": {
 		"lde-test": { "git": "https://github.com/lde-org/lde" },
