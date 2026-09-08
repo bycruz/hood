@@ -161,7 +161,7 @@ function VKTexture:destroy()
 	end
 end
 
----@param descriptor hood.TextureViewDescriptor
+---@param descriptor hood.TextureViewDescriptor?
 function VKTexture:createView(descriptor)
 	-- For swapchain textures, lazily create and cache a view per swapchain image.
 	-- The swapchain already has pre-created VkImageView handles, so we wrap one
@@ -173,12 +173,13 @@ function VKTexture:createView(descriptor)
 		local cached = self._viewCache[idx]
 		if not cached then
 			local rawHandle = self.swapchain.imageViews[idx + 1]
-			cached = VKTextureView.fromHandle(self.device, self, rawHandle, descriptor)
+			-- descriptor is ignored for swapchain views (uses pre-created config)
+			cached = VKTextureView.fromHandle(self.device, self, rawHandle, nil)
 			self._viewCache[idx] = cached
 		end
 		return cached
 	end
-	return VKTextureView.new(self.device, self, descriptor)
+	return VKTextureView.new(self.device, self, descriptor or {})
 end
 
 return VKTexture

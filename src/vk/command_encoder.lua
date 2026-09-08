@@ -8,14 +8,15 @@ local VKCommandBuffer = require("hood.vk.command_buffer")
 ---@class hood.vk.CommandEncoder
 ---@field buffer hood.vk.CommandBuffer
 ---@field device hood.vk.Device
----@field pendingDescriptor hood.RenderPassDescriptor?
+---@field pendingDescriptor any
 ---@field imageViews vk.ffi.ImageView[]
 ---@field framebuffers vk.ffi.Framebuffer[]
 ---@field pipeline hood.vk.Pipeline?
 ---@field computePipeline hood.vk.ComputePipeline?
 ---@field bindGroups table<number, hood.vk.BindGroup>
 ---@field renderPasses vk.ffi.RenderPass[]
----@field swapchains table<hood.vk.Swapchain, boolean>
+---@field _swapchain hood.vk.Swapchain?
+---@field _reusableRpDesc table?
 local VKCommandEncoder = {}
 VKCommandEncoder.__index = VKCommandEncoder
 
@@ -39,7 +40,28 @@ function VKCommandEncoder.new(device, reuseBuffer)
 		buffer = VKCommandBuffer.new(device)
 	end
 	device.handle:beginCommandBuffer(buffer.handle, beginInfo)
-	return setmetatable({
+
+	-- Reuse the encoder owned by this command buffer. Command buffers are
+	-- pre-allocated per swapchain image, so the encoder and its tracking tables
+	-- live as long as the swapchain instead of being allocated every frame.
+	local encoder = buffer._encoder
+	if encoder then
+		encoder.pendingDescriptor = nil
+		encoder.pipeline = nil
+		encoder.computePipeline = nil
+		encoder._swapchain = nil
+
+		-- Bind groups are only consulted by compute passes; drop stale entries
+		-- so a later frame never sees groups from an earlier one. This costs
+		-- nothing on the render-only path.
+		if next(encoder.bindGroups) ~= nil then
+			encoder.bindGroups = {}
+		end
+
+		return encoder
+	end
+
+	encoder = setmetatable({
 		device = device,
 		buffer = buffer,
 		imageViews = {},
@@ -48,11 +70,47 @@ function VKCommandEncoder.new(device, reuseBuffer)
 		bindGroups = {},
 		_swapchain = nil,
 	}, VKCommandEncoder)
+	buffer._encoder = encoder
+	return encoder
 end
 
----@param descriptor hood.RenderPassDescriptor
-function VKCommandEncoder:beginRendering(descriptor)
-	self.pendingDescriptor = descriptor
+--- Begin a render pass.
+--- Two calling conventions:
+---   1. Full descriptor table: encoder:beginRendering({ colorAttachments = {...} })
+---   2. Simple single-attachment: encoder:beginRendering(textureView, clearColor?)
+---       where textureView is a hood.vk.TextureView. The descriptor tables are
+---       allocated once and reused internally, avoiding per-frame table churn.
+---@overload fun(self, textureView: hood.vk.TextureView, clearColor?: { r: number, g: number, b: number, a: number })
+---@overload fun(self, descriptor: hood.RenderPassDescriptor)
+function VKCommandEncoder:beginRendering(descriptor, clearColor)
+	if descriptor and descriptor.colorAttachments then
+		-- Full descriptor table (backward compatible)
+		self.pendingDescriptor = descriptor
+	else
+		-- Simple path: descriptor is a TextureView, clearColor is optional.
+		-- Use a reusable descriptor stored on the encoder to avoid allocation.
+		local d = self._reusableRpDesc
+		if not d then
+			local clear = { r = 0, g = 0, b = 0, a = 1 }
+			local op = { type = "clear", color = clear }
+			d = {
+				colorAttachments = { {
+					op = op,
+					texture = nil,
+				} },
+			}
+			self._reusableRpDesc = d
+		end
+		d.colorAttachments[1].texture = descriptor
+		if clearColor then
+			local c = d.colorAttachments[1].op.color
+			c.r = clearColor.r
+			c.g = clearColor.g
+			c.b = clearColor.b
+			c.a = clearColor.a
+		end
+		self.pendingDescriptor = d
+	end
 end
 
 ---@param pipeline hood.vk.Pipeline
@@ -90,6 +148,41 @@ function VKCommandEncoder:_beginRenderPass(pipeline, descriptor)
 		if view.texture and view.texture.isSwapchain and view.texture.swapchain then
 			swapchainForFB = view.texture.swapchain
 		end
+	end
+
+	-- Fast path: a single color attachment rendering into the swapchain with the
+	-- render pass already cached. Everything below only exists to *create* the
+	-- render pass, so on a cache hit we skip all of it (no tables, no loops) and
+	-- go straight to vkCmdBeginRenderPass.
+	if swapchainForFB and totalAttachments == 1 and swapchainForFB._cachedRenderPass then
+		self._swapchain = swapchainForFB
+
+		local att = colorAttachments[1]
+		local clearValues = _reusableClearValues
+		if att.op.type == "clear" then
+			local c = att.op.color
+			local v = clearValues[0].color.float32
+			v[0] = c.r
+			v[1] = c.g
+			v[2] = c.b
+			v[3] = c.a
+		end
+
+		local renderPass = swapchainForFB._cachedRenderPass
+		local framebuffer = swapchainForFB:getFramebuffer(renderPass, width, height)
+
+		local beginInfo = _reusableBeginInfo
+		beginInfo.renderPass = renderPass
+		beginInfo.framebuffer = framebuffer
+		beginInfo.renderArea.offset.x = 0
+		beginInfo.renderArea.offset.y = 0
+		beginInfo.renderArea.extent.width = width
+		beginInfo.renderArea.extent.height = height
+		beginInfo.clearValueCount = 1
+		beginInfo.pClearValues = clearValues
+
+		self.device.handle:cmdBeginRenderPass(self.buffer.handle, beginInfo, vk.SubpassContents.INLINE)
+		return
 	end
 
 	local imageViews
@@ -689,13 +782,29 @@ end
 function VKCommandEncoder:finish()
 	self.device.handle:endCommandBuffer(self.buffer.handle)
 
-	-- Transfer ownership of transient resources to the command buffer for deferred cleanup
-	self.buffer.imageViews = self.imageViews
-	self.buffer.framebuffers = self.framebuffers
-	self.buffer.renderPasses = self.renderPasses
-	self.buffer._swapchain = self._swapchain
+	local buffer = self.buffer
+	local imageViews, framebuffers, renderPasses = self.imageViews, self.framebuffers, self.renderPasses
 
-	return self.buffer
+	-- Hand the tracking tables over to the command buffer only when something
+	-- transient was recorded. The common swapchain path tracks nothing (views,
+	-- framebuffers and render passes are all cached on the swapchain), so the
+	-- encoder keeps its tables and nothing is allocated per frame.
+	if #imageViews ~= 0 or #framebuffers ~= 0 or #renderPasses ~= 0 then
+		buffer.imageViews = imageViews
+		buffer.framebuffers = framebuffers
+		buffer.renderPasses = renderPasses
+		self.imageViews = {}
+		self.framebuffers = {}
+		self.renderPasses = {}
+	else
+		buffer.imageViews = nil
+		buffer.framebuffers = nil
+		buffer.renderPasses = nil
+	end
+
+	buffer._swapchain = self._swapchain
+
+	return buffer
 end
 
 return VKCommandEncoder

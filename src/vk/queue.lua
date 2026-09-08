@@ -25,6 +25,12 @@ local signalSemaphores = ffi.new("VkSemaphore[1]")
 local waitStages = ffi.new("uint32_t[1]", vk.PipelineStageFlagBits.COLOR_ATTACHMENT_OUTPUT)
 local submitArray = vk.SubmitInfoArray(1)
 
+-- Cold path: keep the message formatting out of the hot function so the trace
+-- recorded for submit() stays small enough to compile.
+local function submitFailed(result)
+	error("Failed to submit to Vulkan queue, error code: " .. tostring(result))
+end
+
 ---@param buffer hood.vk.CommandBuffer
 function VKQueue:submit(buffer)
 	commandBuffers[0] = buffer.handle
@@ -35,30 +41,33 @@ function VKQueue:submit(buffer)
 
 	-- Use the swapchain directly (stored as a single ref, not a table)
 	local swapchain = buffer._swapchain
+	local fence
 
 	if swapchain then
 		-- Both semaphores are indexed by currentFrame (per frame-in-flight).
 		-- This ensures each frame slot has a dedicated pair of semaphores,
 		-- avoiding index desync between currentFrame and currentVkImageIdx.
-		waitSemaphores[0] = swapchain.imageAvailableSemaphores[swapchain.currentFrame]
-		signalSemaphores[0] = swapchain.renderFinishedSemaphores[swapchain.currentFrame]
+		local frame = swapchain.currentFrame
+		waitSemaphores[0] = swapchain.imageAvailableSemaphores[frame]
+		signalSemaphores[0] = swapchain.renderFinishedSemaphores[frame]
 		info.waitSemaphoreCount = 1
 		info.pWaitSemaphores = waitSemaphores
 		info.pWaitDstStageMask = waitStages
 		info.signalSemaphoreCount = 1
 		info.pSignalSemaphores = signalSemaphores
+		fence = swapchain.inFlightFences[frame]
 	else
 		info.waitSemaphoreCount = 0
 		info.pWaitSemaphores = nil
 		info.pWaitDstStageMask = nil
 		info.signalSemaphoreCount = 0
 		info.pSignalSemaphores = nil
+		fence = 0
 	end
 
-	local fence = swapchain and swapchain.inFlightFences[swapchain.currentFrame] or 0
 	local result = self.device.handle.v1_0.vkQueueSubmit(self.handle, 1, submitArray, fence)
 	if result ~= 0 then
-		error("Failed to submit to Vulkan queue, error code: " .. tostring(result))
+		submitFailed(result)
 	end
 end
 
@@ -103,7 +112,7 @@ function VKQueue:present(swapchain)
 	local sem = swapchain.renderFinishedSemaphores[swapchain.currentFrame]
 	swapchain.device.handle:queuePresentKHR(self.handle, swapchain.handle, swapchain.currentVkImageIdx, sem)
 
-	swapchain.currentFrame = (swapchain.currentFrame % #swapchain.images) + 1
+	swapchain.currentFrame = (swapchain.currentFrame % swapchain.imageCount) + 1
 end
 
 return VKQueue

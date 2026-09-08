@@ -3,6 +3,7 @@ local vk = require("vkapi")
 
 local VKTexture = require("hood.vk.texture")
 local VKCommandBuffer = require("hood.vk.command_buffer")
+local VKCommandEncoder = require("hood.vk.command_encoder")
 
 
 ---@class hood.vk.Swapchain
@@ -19,8 +20,9 @@ local VKCommandBuffer = require("hood.vk.command_buffer")
 ---@field width number
 ---@field height number
 ---@field commandBuffers hood.vk.CommandBuffer[] Pre-allocated command buffers, one per swapchain image
+---@field imageCount integer Number of swapchain images (cached to avoid #images per frame)
 ---@field imageViews vk.ffi.ImageView[] # 1 indexed array of pre-created VkImageViews
----@field _framebufferCache table<userdata, table<string, table<integer, vk.ffi.Framebuffer>>>
+---@field _framebufferCache table<userdata, table<integer, { framebuffer: vk.ffi.Framebuffer, width: number, height: number }>>
 ---@field _cachedRenderPass vk.ffi.RenderPass?
 local VKSwapchain = {}
 VKSwapchain.__index = VKSwapchain
@@ -73,6 +75,7 @@ function VKSwapchain.new(device, format, info)
 
 	return setmetatable({
 		images = images,
+		imageCount = #images,
 		imageViews = imageViews,
 		device = device,
 		handle = handle,
@@ -126,47 +129,43 @@ end
 --- for the current frame slot. This avoids pool allocation/destruction per frame.
 ---@return hood.vk.CommandEncoder
 function VKSwapchain:createCommandEncoder()
-	return require("hood.vk.command_encoder").new(self.device, self.commandBuffers[self.currentFrame])
+	return VKCommandEncoder.new(self.device, self.commandBuffers[self.currentFrame])
 end
 
 --- Look up or create a framebuffer for the given render pass and current swapchain image.
 --- The framebuffer uses the pre-created image view for this swapchain image index.
---- Cached per (renderPass, imageIdx, dimensions) so subsequent frames are a table lookup.
+--- Cached per (renderPass, imageIdx) with numeric dimensions, so the per-frame
+--- lookup is a table read plus two number comparisons (no string keys).
 ---@param renderPass vk.ffi.RenderPass
 ---@param width number
 ---@param height number
 function VKSwapchain:getFramebuffer(renderPass, width, height)
 	local imgIdx = self.currentVkImageIdx -- 0-based
 
-	local rpCache = self._framebufferCache[renderPass]
-	if not rpCache then
-		rpCache = {}
-		self._framebufferCache[renderPass] = rpCache
+	local cache = self._framebufferCache[renderPass]
+	if not cache then
+		cache = {}
+		self._framebufferCache[renderPass] = cache
 	end
 
-	local dimKey = width .. "x" .. height
-	local dimCache = rpCache[dimKey]
-	if not dimCache then
-		dimCache = {}
-		rpCache[dimKey] = dimCache
+	local entry = cache[imgIdx]
+	if entry and entry.width == width and entry.height == height then
+		return entry.framebuffer
 	end
 
-	local fb = dimCache[imgIdx]
-	if not fb then
-		local fbViews = ffi.new("VkImageView[1]")
-		fbViews[0] = self.imageViews[imgIdx + 1]
-		fb = self.device.handle:createFramebuffer({
-			renderPass = renderPass,
-			attachmentCount = 1,
-			pAttachments = fbViews,
-			width = width,
-			height = height,
-			layers = 1,
-		})
-		dimCache[imgIdx] = fb
-	end
+	local fbViews = ffi.new("VkImageView[1]")
+	fbViews[0] = self.imageViews[imgIdx + 1]
+	local framebuffer = self.device.handle:createFramebuffer({
+		renderPass = renderPass,
+		attachmentCount = 1,
+		pAttachments = fbViews,
+		width = width,
+		height = height,
+		layers = 1,
+	})
+	cache[imgIdx] = { framebuffer = framebuffer, width = width, height = height }
 
-	return fb
+	return framebuffer
 end
 
 function VKSwapchain:_destroySyncObjects()
@@ -187,11 +186,9 @@ function VKSwapchain:destroy()
 	end
 
 	-- Destroy cached framebuffers
-	for _, rpCache in pairs(self._framebufferCache) do
-		for _, dimCache in pairs(rpCache) do
-			for _, fb in pairs(dimCache) do
-				self.device.handle:destroyFramebuffer(fb)
-			end
+	for _, cache in pairs(self._framebufferCache) do
+		for _, entry in pairs(cache) do
+			self.device.handle:destroyFramebuffer(entry.framebuffer)
 		end
 	end
 
