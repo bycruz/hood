@@ -432,6 +432,15 @@ function VKCommandEncoder:drawIndexed(indexCount, instanceCount, firstIndex, bas
 		baseVertex or 0, firstInstance or 0)
 end
 
+---@param vertexCount number
+---@param instanceCount number
+---@param firstVertex number?
+---@param firstInstance number?
+function VKCommandEncoder:draw(vertexCount, instanceCount, firstVertex, firstInstance)
+	self.device.handle:cmdDraw(self.buffer.handle, vertexCount, instanceCount or 1, firstVertex or 0,
+		firstInstance or 0)
+end
+
 local descriptorSetArray = vk.DescriptorSetArray(1)
 
 ---@param index number
