@@ -207,15 +207,8 @@ function VKPipeline.new(device, descriptor)
 
 	local frontFace, cullMode = vk.FrontFace.COUNTER_CLOCKWISE, vk.CullModeFlagBits.NONE
 	if descriptor.primitive then
-		--- Flip it since we invert Y viewport
-		---@type table<vk.FrontFace, vk.FrontFace>
-		local inverse = {
-			[vk.FrontFace.CLOCKWISE] = vk.FrontFace.COUNTER_CLOCKWISE,
-			[vk.FrontFace.COUNTER_CLOCKWISE] = vk.FrontFace.CLOCKWISE
-		}
-
 		if descriptor.primitive.frontFace then
-			frontFace = inverse[vkConversions.frontFace[descriptor.primitive.frontFace]]
+			frontFace = vkConversions.frontFace[descriptor.primitive.frontFace]
 		end
 
 		if descriptor.primitive.cullMode then
