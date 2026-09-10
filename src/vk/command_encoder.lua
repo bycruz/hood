@@ -200,12 +200,10 @@ function VKCommandEncoder:_beginRenderPass(pipeline, descriptor)
 		local view = att.texture --[[@as hood.vk.TextureView]]
 		local isSwapchain = view.texture and view.texture.isSwapchain
 
-		-- Track the view handle for cleanup only if it's not a swapchain-owned view.
-		-- Swapchain views are pre-created and live for the swapchain's lifetime.
+		-- Image views are owned by their textures and must outlive this command
+		-- buffer, so they are never tracked here for cleanup.
 		if isSwapchain and view.texture.swapchain then
 			self._swapchain = view.texture.swapchain
-		else
-			self.imageViews[#self.imageViews + 1] = view.handle
 		end
 		imageViews[i - 1] = view.handle
 
@@ -230,7 +228,6 @@ function VKCommandEncoder:_beginRenderPass(pipeline, descriptor)
 	if depthAttachment then
 		local view = depthAttachment.texture --[[@as hood.vk.TextureView]]
 		imageViews[totalAttachments - 1] = view.handle
-		self.imageViews[#self.imageViews + 1] = view.handle -- track for deferred cleanup
 
 		attachmentDescs[#attachmentDescs + 1] = {
 			format = view.texture.format,
