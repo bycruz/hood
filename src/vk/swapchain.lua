@@ -101,15 +101,26 @@ function VKSwapchain:getCurrentTexture()
 
 	-- Wait for this frame's previous work to complete before reusing its semaphores
 	self.device.handle:waitForFences(1, fenceArray, true, math.huge)
-	self.device.handle:resetFences(1, fenceArray)
 
 	local sem = self.imageAvailableSemaphores[self.currentFrame]
 	local result, currentVkImageIdx = self.device.handle:acquireNextImageKHR(self.handle, math.huge, sem)
-	if result == vk.Result.ERROR_OUT_OF_DATE_KHR or result == vk.Result.SUBOPTIMAL_KHR then
+
+	if result == vk.Result.ERROR_OUT_OF_DATE_KHR then
+		-- The swapchain no longer matches the surface; the caller has to
+		-- recreate it. Deliberately do NOT reset the fence here: this frame
+		-- will never be submitted, so clearing it would leave it unsignaled
+		-- and the next call's infinite wait would deadlock the process.
 		return nil
-	elseif result ~= vk.Result.SUCCESS then
-		error("Failed to acquire next image: " .. result)
+	elseif result ~= vk.Result.SUCCESS and result ~= vk.Result.SUBOPTIMAL_KHR then
+		error("Failed to acquire next image: " .. tostring(result))
 	end
+
+	-- SUBOPTIMAL_KHR still hands back a usable image, so it is a success: the
+	-- swapchain just no longer matches the surface exactly. Treating it as a
+	-- failure freezes apps on compositors that report it routinely.
+
+	-- An image is held now, so this frame is committed to being submitted.
+	self.device.handle:resetFences(1, fenceArray)
 
 	local imageHandle = self.images[currentVkImageIdx + 1]
 

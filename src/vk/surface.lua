@@ -38,13 +38,9 @@ end
 ---@param oldSwapchain hood.vk.Swapchain?
 ---@return hood.vk.Swapchain
 function VKSurface:configure(device, config, oldSwapchain)
-	if oldSwapchain then
-		oldSwapchain:_destroySyncObjects()
-		-- Destroy pre-allocated command buffers (they aren't cleaned up by _destroySyncObjects)
-		for _, buf in ipairs(oldSwapchain.commandBuffers) do
-			buf:destroy()
-		end
-	end
+	-- The old swapchain is deliberately not torn down here: it is still needed
+	-- as the `oldSwapchain` argument below so the new one can take over its
+	-- images. It is destroyed in full once the replacement exists.
 
 	local caps = vk.getPhysicalDeviceSurfaceCapabilitiesKHR(device.pd, self.handle)
 	local formats = vk.getPhysicalDeviceSurfaceFormatsKHR(device.pd, self.handle)
@@ -102,9 +98,16 @@ function VKSurface:configure(device, config, oldSwapchain)
     })
 
 	local newSwapchain = VKSwapchain.new(device, hoodFormat, swapchainInfo)
+
 	if oldSwapchain then
-		device.handle:destroySwapchainKHR(oldSwapchain.handle)
+		-- Full teardown, not just the sync objects and command buffers: the
+		-- old swapchain's framebuffers and image views reference images that
+		-- destroySwapchainKHR is about to invalidate, so they have to go first.
+		-- This waits for the queue to go idle, which also makes it safe for the
+		-- caller to drop anything the old swapchain was rendering into.
+		oldSwapchain:destroy()
 	end
+
 	return newSwapchain
 end
 
