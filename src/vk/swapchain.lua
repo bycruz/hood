@@ -85,6 +85,7 @@ function VKSwapchain.new(device, format, info)
 		commandBuffers = commandBuffers,
 		currentFrame = 1,
 		_framebufferCache = framebufferCache,
+		_retiredFramebuffers = {},
 		imageFormat = info.imageFormat,
 		format = format,
 		width = info.imageExtent.width,
@@ -136,10 +137,16 @@ end
 --- The framebuffer uses the pre-created image view for this swapchain image index.
 --- Cached per (renderPass, imageIdx) with numeric dimensions, so the per-frame
 --- lookup is a table read plus two number comparisons (no string keys).
+---
+--- When `depthView` is given the framebuffer also holds that depth attachment.
+--- The view is part of the cache identity, so a depth-attached pass is cached
+--- exactly like a colour-only one instead of creating and destroying a
+--- VkFramebuffer every frame.
 ---@param renderPass vk.ffi.RenderPass
 ---@param width number
 ---@param height number
-function VKSwapchain:getFramebuffer(renderPass, width, height)
+---@param depthView vk.ffi.ImageView?
+function VKSwapchain:getFramebuffer(renderPass, width, height, depthView)
 	local imgIdx = self.currentVkImageIdx -- 0-based
 
 	local cache = self._framebufferCache[renderPass]
@@ -149,21 +156,37 @@ function VKSwapchain:getFramebuffer(renderPass, width, height)
 	end
 
 	local entry = cache[imgIdx]
-	if entry and entry.width == width and entry.height == height then
+	if entry and entry.width == width and entry.height == height and entry.depthView == depthView then
 		return entry.framebuffer
 	end
 
-	local fbViews = ffi.new("VkImageView[1]")
+	local attachmentCount = depthView and 2 or 1
+	local fbViews = ffi.new("VkImageView[?]", attachmentCount)
 	fbViews[0] = self.imageViews[imgIdx + 1]
+	if depthView then
+		fbViews[1] = depthView
+	end
 	local framebuffer = self.device.handle:createFramebuffer({
 		renderPass = renderPass,
-		attachmentCount = 1,
+		attachmentCount = attachmentCount,
 		pAttachments = fbViews,
 		width = width,
 		height = height,
 		layers = 1,
 	})
-	cache[imgIdx] = { framebuffer = framebuffer, width = width, height = height }
+
+	-- Retire (rather than destroy) a replaced framebuffer: it may still be
+	-- referenced by a command buffer the GPU has not finished executing.
+	if entry and entry.framebuffer then
+		self._retiredFramebuffers[#self._retiredFramebuffers + 1] = entry.framebuffer
+	end
+
+	cache[imgIdx] = {
+		framebuffer = framebuffer,
+		width = width,
+		height = height,
+		depthView = depthView,
+	}
 
 	return framebuffer
 end
@@ -191,6 +214,12 @@ function VKSwapchain:destroy()
 			self.device.handle:destroyFramebuffer(entry.framebuffer)
 		end
 	end
+
+	-- Destroy framebuffers that were replaced in the cache
+	for _, fb in ipairs(self._retiredFramebuffers) do
+		self.device.handle:destroyFramebuffer(fb)
+	end
+	self._retiredFramebuffers = {}
 
 	-- Destroy pre-created image views
 	for _, iv in ipairs(self.imageViews) do

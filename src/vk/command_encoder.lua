@@ -28,6 +28,10 @@ local _reusableClearValues = vk.ClearValueArray(1)
 local _reusableBeginInfo = vk.RenderPassBeginInfo()
 local _reusableImageViews = ffi.new("VkImageView[1]")
 
+-- Same idea for the two-attachment case (colour + depth), which is what a
+-- depth-tested 2D/3D pass uses.
+local _reusableClearValues2 = vk.ClearValueArray(2)
+
 ---@param device hood.vk.Device
 ---@param reuseBuffer hood.vk.CommandBuffer? If provided, the buffer is reset and reused instead of allocating a new one.
 ---@return hood.vk.CommandEncoder
@@ -150,26 +154,52 @@ function VKCommandEncoder:_beginRenderPass(pipeline, descriptor)
 		end
 	end
 
-	-- Fast path: a single color attachment rendering into the swapchain with the
-	-- render pass already cached. Everything below only exists to *create* the
-	-- render pass, so on a cache hit we skip all of it (no tables, no loops) and
-	-- go straight to vkCmdBeginRenderPass.
-	if swapchainForFB and totalAttachments == 1 and swapchainForFB._cachedRenderPass then
+	-- Fast path: rendering into the swapchain with the render pass already
+	-- cached. Everything below only exists to *create* the render pass and its
+	-- framebuffer, so on a cache hit we skip all of it (no tables, no loops,
+	-- no per-frame allocation) and go straight to vkCmdBeginRenderPass.
+	--
+	-- This covers any attachment count, including the colour + depth pass lupa
+	-- uses; previously it was limited to a single colour attachment, which made
+	-- every depth-attached frame rebuild two attachment tables and create and
+	-- destroy a VkFramebuffer.
+	if swapchainForFB and swapchainForFB._cachedRenderPass then
 		self._swapchain = swapchainForFB
 
-		local att = colorAttachments[1]
-		local clearValues = _reusableClearValues
-		if att.op.type == "clear" then
-			local c = att.op.color
-			local v = clearValues[0].color.float32
-			v[0] = c.r
-			v[1] = c.g
-			v[2] = c.b
-			v[3] = c.a
+		local renderPass = swapchainForFB._cachedRenderPass
+
+		local depthView = nil
+		if depthAttachment then
+			depthView = depthAttachment.texture.handle
+		end
+		local framebuffer = swapchainForFB:getFramebuffer(renderPass, width, height, depthView)
+
+		local clearValues
+		if totalAttachments == 1 then
+			clearValues = _reusableClearValues
+		elseif totalAttachments == 2 then
+			clearValues = _reusableClearValues2
+		else
+			clearValues = vk.ClearValueArray(totalAttachments)
 		end
 
-		local renderPass = swapchainForFB._cachedRenderPass
-		local framebuffer = swapchainForFB:getFramebuffer(renderPass, width, height)
+		for i = 1, #colorAttachments do
+			local att = colorAttachments[i]
+			if att.op.type == "clear" then
+				local c = att.op.color
+				local v = clearValues[i - 1].color.float32
+				v[0] = c.r
+				v[1] = c.g
+				v[2] = c.b
+				v[3] = c.a
+			end
+		end
+
+		if depthAttachment and depthAttachment.op.type == "clear" then
+			local ds = clearValues[totalAttachments - 1].depthStencil
+			ds.depth = depthAttachment.op.depth
+			ds.stencil = 0
+		end
 
 		local beginInfo = _reusableBeginInfo
 		beginInfo.renderPass = renderPass
@@ -178,7 +208,7 @@ function VKCommandEncoder:_beginRenderPass(pipeline, descriptor)
 		beginInfo.renderArea.offset.y = 0
 		beginInfo.renderArea.extent.width = width
 		beginInfo.renderArea.extent.height = height
-		beginInfo.clearValueCount = 1
+		beginInfo.clearValueCount = totalAttachments
 		beginInfo.pClearValues = clearValues
 
 		self.device.handle:cmdBeginRenderPass(self.buffer.handle, beginInfo, vk.SubpassContents.INLINE)
@@ -318,11 +348,18 @@ function VKCommandEncoder:_beginRenderPass(pipeline, descriptor)
 	end
 
 	-- Use a cached framebuffer when rendering to a swapchain (the common case).
-	-- Swapchain framebuffers are lazily created and cached per (renderPass, imageIdx, dimensions).
+	-- Swapchain framebuffers are lazily created and cached per
+	-- (renderPass, imageIdx, dimensions) -- and per depth view when one is
+	-- attached, so a depth-attached pass is cached too rather than building and
+	-- destroying a VkFramebuffer every frame.
 	-- For non-swapchain rendering, create a transient framebuffer tracked per-frame.
 	local framebuffer
-	if swapchainForFB and not depthAttachment then
-		framebuffer = swapchainForFB:getFramebuffer(renderPass, width, height)
+	if swapchainForFB then
+		local depthView = nil
+		if depthAttachment then
+			depthView = depthAttachment.texture.handle
+		end
+		framebuffer = swapchainForFB:getFramebuffer(renderPass, width, height, depthView)
 	else
 		framebuffer = self.device.handle:createFramebuffer({
 			renderPass = renderPass,
