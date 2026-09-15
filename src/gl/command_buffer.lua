@@ -133,6 +133,7 @@ function GLCommandBuffer:execute(queueCtx, renderCtx)
 	local vao
 
 	local indexType = gl.UNSIGNED_INT
+	local indexSize = 4
 
 	for _, command in ipairs(self.commands) do
 		if command.type == "beginRendering" then
@@ -241,10 +242,19 @@ function GLCommandBuffer:execute(queueCtx, renderCtx)
 			end
 
 			local descriptor = pipeline.vertex.buffers[command.slot + 1]
-			vao:setVertexBuffer(command.buffer, descriptor, command.slot)
+
+			-- Locations run across all of the pipeline's layouts in order, so
+			-- this layout starts where the previous ones left off.
+			local locationBase = 0
+			for i = 1, command.slot do
+				locationBase = locationBase + #pipeline.vertex.buffers[i].attributes
+			end
+
+			vao:setVertexBuffer(command.buffer, descriptor, command.slot, command.offset, locationBase)
 		elseif command.type == "setIndexBuffer" then
 			vao:setIndexBuffer(command.buffer)
 			indexType = glConversions.indexFormat[command.format]
+			indexSize = command.format == "u16" and 2 or 4
 		elseif command.type == "writeBuffer" then
 			command.buffer:setSlice(command.size, command.data, command.offset)
 		elseif command.type == "writeTexture" then
@@ -312,7 +322,25 @@ function GLCommandBuffer:execute(queueCtx, renderCtx)
 				end
 			end
 		elseif command.type == "drawIndexed" then
-			gl.drawElements(gl.TRIANGLES, command.indexCount, indexType, nil)
+			-- Indices are addressed as a byte offset into the bound element
+			-- buffer, so firstIndex is scaled by the index size here.
+			local indices = ffi.cast("const void*", command.firstIndex * indexSize)
+
+			if command.firstInstance and command.firstInstance ~= 0 then
+				error("hood: the OpenGL backend has no firstInstance; offset the instance buffer instead")
+			end
+
+			-- One entry point covers both cases: an instance count of 1 is an
+			-- ordinary indexed draw.
+			gl.drawElementsInstancedBaseVertex(gl.TRIANGLES, command.indexCount,
+				indexType, indices, command.instanceCount or 1, command.baseVertex)
+		elseif command.type == "draw" then
+			if command.firstInstance and command.firstInstance ~= 0 then
+				error("hood: the OpenGL backend has no firstInstance; offset the instance buffer instead")
+			end
+
+			gl.drawArraysInstanced(gl.TRIANGLES, command.firstVertex, command.vertexCount,
+				command.instanceCount or 1)
 		elseif command.type == "beginComputePass" then
 			gl.bindVertexArray(0)
 		elseif command.type == "endComputePass" then

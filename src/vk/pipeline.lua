@@ -63,7 +63,9 @@ function VKPipeline.new(device, descriptor)
 		bindings[#bindings + 1] = {
 			binding = i - 1,
 			stride = layout:getStride(),
-			inputRate = vk.VertexInputRate.VERTEX,
+			inputRate = layout:isInstanceRate()
+				and vk.VertexInputRate.INSTANCE
+				or vk.VertexInputRate.VERTEX,
 		}
 
 		for _, attr in ipairs(layout.attributes) do

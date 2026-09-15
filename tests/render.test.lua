@@ -284,3 +284,126 @@ test.it("render: writeMask Color suppresses the alpha channel", function()
 	test.greater(r, 150)
 	test.equal(a, 0)
 end)
+
+-- ─── Instancing ──────────────────────────────────────────────────────────────
+
+-- One triangle per instance, with the instance data supplying both an offset
+-- and a colour. A per-instance layout is the only way the second instance can
+-- land somewhere else without the vertices being rewritten.
+local instVertSpv = glslc.compile([[
+#version 430 core
+layout(location = 0) in vec3 aPos;
+layout(location = 1) in vec2 aOffset;
+layout(location = 2) in vec4 aColor;
+layout(location = 0) out vec4 vColor;
+void main() {
+    gl_Position = vec4(aPos.xy + aOffset, aPos.z, 1.0);
+    vColor = aColor;
+}
+]], "vert")
+
+local instFragSpv = glslc.compile([[
+#version 430 core
+layout(location = 0) in vec4 vColor;
+layout(location = 0) out vec4 fragColor;
+void main() {
+    fragColor = vColor;
+}
+]], "frag")
+
+-- Per-vertex data: one triangle, positions only.
+local instVertexLayout = hood.VertexLayout.new()
+	:withAttribute({ type = "f32", size = 3, offset = 0 })
+
+-- Per-instance data: vec2 offset + vec4 colour, 24 bytes.
+local instanceLayout = hood.VertexLayout.new()
+	:withAttribute({ type = "f32", size = 2, offset = 0 })
+	:withAttribute({ type = "f32", size = 4, offset = 8 })
+	:withInstanceRate()
+
+test.it("vertex layout: instance rate is reported", function()
+	test.equal(instanceLayout:isInstanceRate(), true)
+	test.equal(instVertexLayout:isInstanceRate(), false)
+end)
+
+local INSTANCE_STRIDE = 24
+
+local instPipeline = ctx.device:createPipeline({
+	layout = ctx.device:createBindGroupLayout({}),
+	vertex = {
+		module = { type = "spirv", source = instVertSpv },
+		buffers = { instVertexLayout, instanceLayout },
+	},
+	fragment = {
+		module = { type = "spirv", source = instFragSpv },
+		targets = { { format = "rgba8unorm", writeMask = hood.ColorWrites.All } },
+	},
+})
+
+-- A small triangle around the origin, so the instance offset decides where it
+-- ends up on screen.
+local instVerts = ffi.new("float[9]", {
+	-0.2, -0.2, 0.0,
+	 0.2, -0.2, 0.0,
+	 0.0,  0.2, 0.0,
+})
+local instVbuf = ctx.device:createBuffer({
+	size = ffi.sizeof(instVerts),
+	usages = { "VERTEX", "COPY_DST" },
+})
+ctx.device.queue:writeBuffer(instVbuf, ffi.sizeof(instVerts), instVerts)
+
+-- Instance 0 sits left and is red, instance 1 sits right and is green.
+local instances = ffi.new("float[12]", {
+	-0.5, 0.0,  1.0, 0.0, 0.0, 1.0,
+	 0.5, 0.0,  0.0, 1.0, 0.0, 1.0,
+})
+local instBuf = ctx.device:createBuffer({
+	size = ffi.sizeof(instances),
+	usages = { "VERTEX", "COPY_DST" },
+})
+ctx.device.queue:writeBuffer(instBuf, ffi.sizeof(instances), instances)
+
+test.it("render: one draw call places two instances from per-instance data", function()
+	local px = ctx:frame({
+		pipeline = instPipeline,
+		draw = function(enc)
+			enc:setVertexBuffer(0, instVbuf)
+			enc:setVertexBuffer(1, instBuf)
+			enc:draw(3, 2)
+		end,
+	})
+
+	-- The instance offsets are in NDC, so +/-0.5 lands at screen x 16 and 48,
+	-- and y = 32 is the vertical middle of the triangle.
+	local lr, lg = px.at(16, 32)
+	test.greater(lr, 150)
+	test.less(lg, 100)
+
+	local rr, rg = px.at(48, 32)
+	test.less(rr, 100)
+	test.greater(rg, 150)
+end)
+
+test.it("render: instance buffer offset selects which instance is drawn", function()
+	-- Only the second instance, addressed by offsetting the instance buffer.
+	-- This is how a run starting partway through a packed instance array is
+	-- drawn, since a nonzero firstInstance needs a device feature.
+	local px = ctx:frame({
+		pipeline = instPipeline,
+		draw = function(enc)
+			enc:setVertexBuffer(0, instVbuf)
+			enc:setVertexBuffer(1, instBuf, INSTANCE_STRIDE)
+			enc:draw(3, 1)
+		end,
+	})
+
+	local rr, rg = px.at(48, 32)
+	test.less(rr, 100)
+	test.greater(rg, 150)
+
+	-- Nothing was drawn on the left this time.
+	local lr, lg = px.at(16, 32)
+	test.less(lr, 50)
+	test.less(lg, 50)
+end)

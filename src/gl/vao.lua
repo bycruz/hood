@@ -23,14 +23,21 @@ end
 ---@param buffer hood.gl.Buffer
 ---@param descriptor hood.VertexLayout
 ---@param bindingIndex number?
-function GLVAO:setVertexBuffer(buffer, descriptor, bindingIndex)
+---@param offset number? byte offset into the buffer
+---@param locationBase number? first attribute location this layout owns
+function GLVAO:setVertexBuffer(buffer, descriptor, bindingIndex, offset, locationBase)
 	bindingIndex = bindingIndex or 0
+	offset = offset or 0
 
-	gl.vertexArrayVertexBuffer(self.id, bindingIndex, buffer.id, 0, descriptor:getStride())
+	gl.vertexArrayVertexBuffer(self.id, bindingIndex, buffer.id, offset, descriptor:getStride())
 
-	for i, attr in ipairs(descriptor.attributes) do
-		local location = i - 1
+	-- Attribute locations are assigned across every layout in the pipeline, in
+	-- order, so a second layout does not start at location 0. Deriving them from
+	-- the index within this layout alone made a two-buffer pipeline bind both
+	-- buffers to the same locations.
+	local location = locationBase or 0
 
+	for _, attr in ipairs(descriptor.attributes) do
 		local glType
 		local normalized = attr.normalized and 1 or 0
 
@@ -45,7 +52,12 @@ function GLVAO:setVertexBuffer(buffer, descriptor, bindingIndex)
 		gl.enableVertexArrayAttrib(self.id, location)
 		gl.vertexArrayAttribFormat(self.id, location, attr.size, glType, normalized, attr.offset)
 		gl.vertexArrayAttribBinding(self.id, location, bindingIndex)
+
+		location = location + 1
 	end
+
+	-- Divisor 0 advances this binding once per vertex, 1 once per instance.
+	gl.vertexArrayBindingDivisor(self.id, bindingIndex, descriptor:isInstanceRate() and 1 or 0)
 end
 
 ---@param buffer hood.gl.Buffer
