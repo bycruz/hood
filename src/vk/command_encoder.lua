@@ -647,6 +647,26 @@ function VKCommandEncoder:writeBuffer(buffer, size, data, offset)
 	self.stagedWrites = true
 end
 
+--- Issue `drawCount` indexed draws recorded in `buffer`, reading one command
+--- every `stride` bytes from `offset`.
+---
+--- Every draw shares the bound vertex buffers and index buffer, so each command
+--- selects its geometry through firstIndex and vertexOffset rather than by
+--- rebinding. That is what lets a whole frame's instanced draws go out as one
+--- call, and it costs one 20 byte record per draw instead of a draw command in
+--- the command stream.
+---
+--- The buffer needs the INDIRECT usage, and its commands need the
+--- drawIndirectFirstInstance feature when firstInstance is nonzero.
+---@param buffer hood.vk.Buffer
+---@param offset number
+---@param drawCount number
+---@param stride number
+function VKCommandEncoder:drawIndexedIndirect(buffer, offset, drawCount, stride)
+	self.device.handle:cmdDrawIndexedIndirect(self.buffer.handle, buffer.handle,
+		offset or 0, drawCount, stride)
+end
+
 --- Copy bytes between two buffers on the GPU. The source needs COPY_SRC and
 --- the destination COPY_DST.
 ---

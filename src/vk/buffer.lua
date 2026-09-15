@@ -31,6 +31,8 @@ function VKBuffer.new(device, descriptor)
 			vkUsage = bit.bor(vkUsage, vk.BufferUsageFlagBits.TRANSFER_SRC)
 		elseif usage == "STORAGE" then
 			vkUsage = bit.bor(vkUsage, vk.BufferUsageFlagBits.STORAGE_BUFFER)
+		elseif usage == "INDIRECT" then
+			vkUsage = bit.bor(vkUsage, vk.BufferUsageFlagBits.INDIRECT_BUFFER)
 		elseif usage == "MAP_READ" then
 			needsHostVisible = true
 			vkUsage = bit.bor(vkUsage, vk.BufferUsageFlagBits.TRANSFER_DST)

@@ -169,3 +169,120 @@ end)
 test.it("opengl: indexed draw at an instance offset draws only that instance", function()
 	assertSecondInstanceOnly(render(INSTANCE_STRIDE, 1, true))
 end)
+
+-- ─── Indirect draws on OpenGL ────────────────────────────────────────────────
+
+-- Two quads of different widths in one vertex buffer, so which mesh a command
+-- fetches is visible in the result: mesh A spans x +/-0.1, mesh B x +/-0.4.
+-- Both are full height, which keeps the checks independent of framebuffer row
+-- order (glReadPixels starts at the bottom, Vulkan at the top).
+local QUAD_Z = 0.0
+local function quadVertices(halfWidth)
+	return {
+		-halfWidth, -0.5, QUAD_Z,
+		 halfWidth, -0.5, QUAD_Z,
+		 halfWidth,  0.5, QUAD_Z,
+		-halfWidth,  0.5, QUAD_Z,
+	}
+end
+
+local abVerts = ffi.new("float[24]")
+local function writeQuad(vertexIndex, halfWidth)
+	for i, v in ipairs(quadVertices(halfWidth)) do
+		abVerts[(vertexIndex - 1) * 3 + i - 1] = v
+	end
+end
+writeQuad(1, 0.1)  -- mesh A: vertices 0..3
+writeQuad(5, 0.4)  -- mesh B: vertices 4..7
+
+local abVbuf = device:createBuffer({ size = ffi.sizeof(abVerts), usages = { "VERTEX", "COPY_DST" } })
+device.queue:writeBuffer(abVbuf, ffi.sizeof(abVerts), abVerts)
+
+-- Two triangles per quad: mesh A at index 0..5, mesh B at 6..11.
+local abIndices = ffi.new("uint32_t[12]", {
+	0, 1, 2, 0, 2, 3,
+	0, 1, 2, 0, 2, 3,
+})
+local abIbuf = device:createBuffer({ size = ffi.sizeof(abIndices), usages = { "INDEX", "COPY_DST" } })
+device.queue:writeBuffer(abIbuf, ffi.sizeof(abIndices), abIndices)
+
+-- Instance 0 red and shifted left, instance 1 green and shifted right.
+local abInstances = ffi.new("float[12]", {
+	-0.5, 0.0,  1.0, 0.0, 0.0, 1.0,
+	 0.5, 0.0,  0.0, 1.0, 0.0, 1.0,
+})
+local abInstanceBuf = device:createBuffer({ size = ffi.sizeof(abInstances), usages = { "VERTEX", "COPY_DST" } })
+device.queue:writeBuffer(abInstanceBuf, ffi.sizeof(abInstances), abInstances)
+
+-- GL and Vulkan share the five-uint32 indirect command layout.
+local indirectBuffer = device:createBuffer({ size = 2 * 20, usages = { "INDIRECT", "COPY_DST" } })
+local indirectCommands = ffi.new("uint32_t[10]", {
+	6, 1, 0, 0, 0,  -- mesh A, instance 0
+	6, 1, 6, 4, 1,  -- mesh B, instance 1
+})
+
+local function renderIndirect(drawCount)
+	device.queue:writeBuffer(indirectBuffer, 2 * 20, indirectCommands)
+
+	local encoder = device:createCommandEncoder()
+	encoder:beginRendering({
+		colorAttachments = { {
+			op = { type = "clear", color = { r = 0, g = 0, b = 0, a = 1 } },
+			texture = tex:createView({}),
+		} },
+	})
+	encoder:setPipeline(pipeline)
+	encoder:setViewport(0, 0, W, H)
+	encoder:setVertexBuffer(0, abVbuf)
+	encoder:setVertexBuffer(1, abInstanceBuf)
+	encoder:setIndexBuffer(abIbuf, "u32")
+	encoder:drawIndexedIndirect(indirectBuffer, 0, drawCount, 20)
+	encoder:endRendering()
+	encoder:copyTextureToBuffer({ texture = tex }, { buffer = readback, bytesPerRow = W * 4 },
+		{ width = W, height = H })
+
+	local cmd = encoder:finish()
+	device.queue:submit(cmd)
+	device.queue:waitIdle()
+
+	readback:mapAsync()
+	local raw = ffi.cast("uint8_t*", readback:getMappedRange())
+	local bytes = ffi.string(raw, W * H * 4)
+	readback:unmap()
+
+	return function(x, y)
+		local i = (y * W + x) * 4 + 1
+		return string.byte(bytes, i), string.byte(bytes, i + 1)
+	end
+end
+
+test.it("opengl: one indirect call draws two meshes", function()
+	local px = renderIndirect(2)
+
+	-- Mesh A (x <= 0.1) shifted left covers screen x 12.8..19.2: red.
+	local ar, ag = px(16, 32)
+	test.greater(ar, 150) test.less(ag, 100)
+
+	-- Mesh B (x <= 0.4) shifted right covers screen x 35.2..60.8: green.
+	local br, bg = px(48, 32)
+	test.less(br, 100) test.greater(bg, 150)
+
+	-- x 57 is inside mesh B's wide quad but outside mesh A's narrow one, so if
+	-- the command fetched the wrong vertex range this would be the clear colour.
+	local wr, wg = px(57, 32)
+	test.less(wr, 100) test.greater(wg, 150)
+
+	-- x 8 is the mirror of that: inside mesh B's range, outside mesh A's.
+	local or_, og = px(8, 32)
+	test.less(or_, 50) test.less(og, 50)
+end)
+
+test.it("opengl: indirect draw count controls how many are issued", function()
+	local px = renderIndirect(1)
+
+	local ar, ag = px(16, 32)
+	test.greater(ar, 150) test.less(ag, 100)
+
+	local br, bg = px(48, 32)
+	test.less(br, 50) test.less(bg, 50)
+end)

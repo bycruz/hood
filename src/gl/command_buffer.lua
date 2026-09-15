@@ -334,6 +334,15 @@ function GLCommandBuffer:execute(queueCtx, renderCtx)
 			-- ordinary indexed draw.
 			gl.drawElementsInstancedBaseVertex(gl.TRIANGLES, command.indexCount,
 				indexType, indices, command.instanceCount or 1, command.baseVertex)
+		elseif command.type == "drawIndexedIndirect" then
+			-- The commands live in a buffer, bound with the byte offset applied
+			-- here, and each one carries its own firstIndex and base vertex.
+			-- glDrawElementsIndirect issues exactly one draw and ignores the
+			-- count entirely, so the multi form is what actually issues them all.
+			gl.bindBuffer(gl.DRAW_INDIRECT_BUFFER, command.buffer.id)
+			gl.multiDrawElementsIndirect(gl.TRIANGLES, indexType,
+				ffi.cast("const void*", command.offset), command.drawCount, command.stride)
+			gl.bindBuffer(gl.DRAW_INDIRECT_BUFFER, 0)
 		elseif command.type == "draw" then
 			if command.firstInstance and command.firstInstance ~= 0 then
 				error("hood: the OpenGL backend has no firstInstance; offset the instance buffer instead")

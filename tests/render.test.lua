@@ -407,3 +407,134 @@ test.it("render: instance buffer offset selects which instance is drawn", functi
 	test.less(lr, 50)
 	test.less(lg, 50)
 end)
+
+-- ─── Indirect draws ──────────────────────────────────────────────────────────
+
+-- One vkCmdDrawIndexedIndirect issuing two draws of different geometry. Both
+-- draws share the bound buffers, so they select their mesh through firstIndex
+-- and vertexOffset and their copies through firstInstance.
+local indirectVertexLayout = hood.VertexLayout.new()
+	:withAttribute({ type = "f32", size = 3, offset = 0 })
+
+local indirectInstanceLayout = hood.VertexLayout.new()
+	:withAttribute({ type = "f32", size = 2, offset = 0 })
+	:withAttribute({ type = "f32", size = 4, offset = 8 })
+	:withInstanceRate()
+
+local indirectPipeline = ctx.device:createPipeline({
+	layout = ctx.device:createBindGroupLayout({}),
+	vertex = {
+		module = { type = "spirv", source = instVertSpv },
+		buffers = { indirectVertexLayout, indirectInstanceLayout },
+	},
+	fragment = {
+		module = { type = "spirv", source = instFragSpv },
+		targets = { { format = "rgba8unorm", writeMask = hood.ColorWrites.All } },
+	},
+})
+
+-- Two triangles in one vertex buffer, at different heights so the rendered
+-- result depends on which vertex range each command fetches. Mesh A sits in the
+-- lower half, mesh B in the upper half.
+local AB_VERTICES = ffi.new("float[18]", {
+	-- mesh A: vertices 0..2, around y = -0.3
+	-0.2, -0.45, 0.0,   0.2, -0.45, 0.0,   0.0, -0.15, 0.0,
+	-- mesh B: vertices 3..5, around y = +0.3
+	-0.2,  0.15, 0.0,   0.2,  0.15, 0.0,   0.0,  0.45, 0.0,
+})
+local abVbuf = ctx.device:createBuffer({
+	size = ffi.sizeof(AB_VERTICES),
+	usages = { "VERTEX", "COPY_DST" },
+})
+ctx.device.queue:writeBuffer(abVbuf, ffi.sizeof(AB_VERTICES), AB_VERTICES)
+
+-- Index values are per-mesh and 0-based: mesh A occupies index slots 0..2,
+-- mesh B 3..5, and vertexOffset shifts the values into the shared vertex buffer.
+local AB_INDICES = ffi.new("uint32_t[6]", { 0, 1, 2, 0, 1, 2 })
+local abIbuf = ctx.device:createBuffer({
+	size = ffi.sizeof(AB_INDICES),
+	usages = { "INDEX", "COPY_DST" },
+})
+ctx.device.queue:writeBuffer(abIbuf, ffi.sizeof(AB_INDICES), AB_INDICES)
+
+-- One instance each: instance 0 is red and shifted left, instance 1 green and
+-- shifted right.
+local AB_INSTANCES = ffi.new("float[12]", {
+	-0.5, 0.0,  1.0, 0.0, 0.0, 1.0,
+	 0.5, 0.0,  0.0, 1.0, 0.0, 1.0,
+})
+local abInstanceBuf = ctx.device:createBuffer({
+	size = ffi.sizeof(AB_INSTANCES),
+	usages = { "VERTEX", "COPY_DST" },
+})
+ctx.device.queue:writeBuffer(abInstanceBuf, ffi.sizeof(AB_INSTANCES), AB_INSTANCES)
+
+local indirectBuffer = ctx.device:createBuffer({
+	size = 2 * 20,
+	usages = { "INDIRECT", "COPY_DST" },
+})
+
+local vk = require("vkapi")
+local indirectCommands = vk.DrawIndexedIndirectCommandArray(2)
+
+-- Draw 1: mesh A, instance 0. Draw 2: mesh B, instance 1.
+indirectCommands[0].indexCount = 3
+indirectCommands[0].instanceCount = 1
+indirectCommands[0].firstIndex = 0
+indirectCommands[0].vertexOffset = 0
+indirectCommands[0].firstInstance = 0
+indirectCommands[1].indexCount = 3
+indirectCommands[1].instanceCount = 1
+indirectCommands[1].firstIndex = 3
+indirectCommands[1].vertexOffset = 3
+indirectCommands[1].firstInstance = 1
+
+-- Screen positions: instance centres are NDC x = +/-0.5 -> screen x 16 / 48, and
+-- the mesh centres are NDC y = -0.3 / +0.3 -> screen y 42 / 22.
+local function drawIndirect(enc, drawCount)
+	enc:setVertexBuffer(0, abVbuf)
+	enc:setVertexBuffer(1, abInstanceBuf)
+	enc:setIndexBuffer(abIbuf, "u32")
+	enc:drawIndexedIndirect(indirectBuffer, 0, drawCount, 20)
+end
+
+test.it("render: one indirect call draws two meshes", function()
+	ctx.device.queue:writeBuffer(indirectBuffer, 2 * 20, indirectCommands)
+
+	local px = ctx:frame({
+		pipeline = indirectPipeline,
+		draw = function(enc) drawIndirect(enc, 2) end,
+	})
+
+	-- Mesh A with instance 0: red, lower left.
+	local ar, ag = px.at(16, 42)
+	test.greater(ar, 150) test.less(ag, 100)
+
+	-- Mesh B with instance 1: green, upper right. If firstIndex/vertexOffset
+	-- were ignored both draws would fetch mesh A and land at the same height.
+	local br, bg = px.at(48, 22)
+	test.less(br, 100) test.greater(bg, 150)
+
+	-- Nothing drew mesh B's range in the lower right, or mesh A's in the upper
+	-- left, so the ranges really are distinct.
+	local lr, lg = px.at(48, 42)
+	test.less(lr, 50) test.less(lg, 50)
+	local ur, ug = px.at(16, 22)
+	test.less(ur, 50) test.less(ug, 50)
+end)
+
+test.it("render: indirect draw count controls how many are issued", function()
+	ctx.device.queue:writeBuffer(indirectBuffer, 2 * 20, indirectCommands)
+
+	-- Only the first command: mesh A appears and mesh B does not.
+	local px = ctx:frame({
+		pipeline = indirectPipeline,
+		draw = function(enc) drawIndirect(enc, 1) end,
+	})
+
+	local ar, ag = px.at(16, 42)
+	test.greater(ar, 150) test.less(ag, 100)
+
+	local br, bg = px.at(48, 22)
+	test.less(br, 50) test.less(bg, 50)
+end)

@@ -7,6 +7,7 @@
 --- | "INDEX"
 --- | "UNIFORM"
 --- | "STORAGE"
+--- | "INDIRECT"
 --- | "MAP_READ"
 
 ---@class hood.BufferDescriptor
