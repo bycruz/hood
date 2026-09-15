@@ -124,6 +124,98 @@ test.it("buffer: exact-fit write still succeeds", function()
 	buf:unmap()
 end)
 
+test.it("buffer: mapped buffer is writable directly by the CPU", function()
+	local N = 32
+	local size = N * ffi.sizeof("uint32_t")
+	local buf = device:createBuffer({ size = size, usages = { "VERTEX", "COPY_DST" }, mapped = true })
+
+	test.equal(buf.isMapped, true)
+
+	local src = ffi.new("uint32_t[?]", N)
+	for i = 0, N - 1 do src[i] = i * 7 + 3 end
+	device.queue:writeBuffer(buf, size, src)
+
+	-- No submission and no staging: the bytes are in the buffer's own memory.
+	local dst = ffi.cast("uint32_t*", buf:getMappedRange())
+	test.equal(tonumber(dst[0]), 3)
+	test.equal(tonumber(dst[N - 1]), tonumber(src[N - 1]))
+end)
+
+test.it("buffer: mapped write is visible to the GPU", function()
+	-- A direct CPU write only matters if a later GPU operation sees it, so copy
+	-- it with the GPU into a readback buffer instead of trusting the mapping.
+	local N = 16
+	local size = N * ffi.sizeof("uint32_t")
+	local src = ffi.new("uint32_t[?]", N)
+	for i = 0, N - 1 do src[i] = 100 + i end
+
+	local mapped = device:createBuffer({ size = size, usages = { "COPY_SRC", "COPY_DST" }, mapped = true })
+	device.queue:writeBuffer(mapped, size, src)
+
+	local readback = device:createBuffer({ size = size, usages = { "MAP_READ", "COPY_DST" } })
+	local encoder = device:createCommandEncoder()
+	encoder:copyBuffer(mapped, readback, size)
+	local cmd = encoder:finish()
+	device.queue:submit(cmd)
+	device.queue:waitIdle()
+
+	readback:mapAsync()
+	local dst = ffi.cast("uint32_t*", readback:getMappedRange())
+	test.equal(tonumber(dst[0]), 100)
+	test.equal(tonumber(dst[N - 1]), 100 + N - 1)
+	readback:unmap()
+end)
+
+test.it("buffer: two staged writes in one frame do not clobber each other", function()
+	-- Both writes land in the same shared staging buffer, so the second one must
+	-- not overwrite the first one's bytes before the GPU has copied them out.
+	local N = 8
+	local size = N * ffi.sizeof("uint32_t")
+	local first = device:createBuffer({ size = size, usages = { "MAP_READ", "COPY_DST" } })
+	local second = device:createBuffer({ size = size, usages = { "MAP_READ", "COPY_DST" } })
+
+	local a = ffi.new("uint32_t[?]", N)
+	local b = ffi.new("uint32_t[?]", N)
+	for i = 0, N - 1 do a[i] = 1000 + i; b[i] = 2000 + i end
+
+	local encoder = device:createCommandEncoder()
+	encoder:writeBuffer(first, size, a)
+	encoder:writeBuffer(second, size, b)
+	local cmd = encoder:finish()
+	device.queue:submit(cmd)
+	device.queue:waitIdle()
+
+	first:mapAsync()
+	local da = ffi.cast("uint32_t*", first:getMappedRange())
+	second:mapAsync()
+	local db = ffi.cast("uint32_t*", second:getMappedRange())
+	test.equal(tonumber(da[0]), 1000)
+	test.equal(tonumber(da[N - 1]), 1000 + N - 1)
+	test.equal(tonumber(db[0]), 2000)
+	test.equal(tonumber(db[N - 1]), 2000 + N - 1)
+	first:unmap()
+	second:unmap()
+end)
+
+test.it("buffer: upload bigger than the staging buffer still round-trips", function()
+	-- Larger than the starting staging size, so staging has to grow, and the
+	-- bytes written before the growth must not be lost.
+	local BYTES = 1024 * 1024
+	local N = BYTES / ffi.sizeof("uint32_t")
+	local src = ffi.new("uint32_t[?]", N)
+	for i = 0, N - 1 do src[i] = i % 65521 end
+
+	local dst = device:createBuffer({ size = BYTES, usages = { "MAP_READ", "COPY_DST" } })
+	device.queue:writeBuffer(dst, BYTES, src)
+
+	dst:mapAsync()
+	local got = ffi.cast("uint32_t*", dst:getMappedRange())
+	test.equal(tonumber(got[0]), 0)
+	test.equal(tonumber(got[1]), 1)
+	test.equal(tonumber(got[N - 1]), tonumber(src[N - 1]))
+	dst:unmap()
+end)
+
 test.it("buffer: destroy does not error", function()
 	local buf = device:createBuffer({ size = 64, usages = { "VERTEX", "COPY_DST" } })
 	buf:destroy()

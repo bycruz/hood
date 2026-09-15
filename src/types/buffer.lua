@@ -12,11 +12,20 @@
 ---@class hood.BufferDescriptor
 ---@field size number
 ---@field usages hood.BufferUsage[]
+--- Ask for host-visible memory that stays mapped for the buffer's lifetime, so
+--- CPU writes are a plain memcpy instead of a staged upload. Only worth it for
+--- data rewritten often: the Vulkan backend prefers device-local host-visible
+--- memory (resizable BAR) when the machine offers it, and the OpenGL backend
+--- ignores the flag because namedBufferSubData is already a direct upload there.
+---@field mapped boolean?
 
 ---@class hood.Buffer
 ---@field descriptor hood.BufferDescriptor
+--- True when the CPU can write straight into the buffer's memory.
+---@field isMapped boolean
 ---@field destroy fun(self: hood.Buffer)
 ---@field mapAsync fun(self: hood.Buffer)
 ---@field getMappedRange fun(self: hood.Buffer, offset: number?, size: number?): ffi.cdata*
 ---@field unmap fun(self: hood.Buffer)
+---@field mappedPointer fun(self: hood.Buffer, offset: number?): ffi.cdata*
 ---@field assertWriteFits fun(self: hood.Buffer, size: number, offset: number?, data: ffi.cdata*?)

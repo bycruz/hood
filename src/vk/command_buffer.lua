@@ -6,6 +6,8 @@ local vk = require("vkapi")
 ---@field handle vk.ffi.CommandBuffer
 ---@field _swapchain hood.vk.Swapchain?
 ---@field _encoder hood.vk.CommandEncoder? Encoder reused for this buffer across frames
+---@field staging table? Host-visible upload memory, kept across frames that reuse this buffer
+---@field stagingResources { buffer: vk.ffi.Buffer, memory: vk.ffi.DeviceMemory }[]?
 local VKCommandBuffer = {}
 VKCommandBuffer.__index = VKCommandBuffer
 
@@ -36,6 +38,16 @@ end
 --- was created with RESET_COMMAND_BUFFER, and vkBeginCommandBuffer
 --- (called in VKCommandEncoder.new) implicitly resets the buffer.
 function VKCommandBuffer:reset()
+	-- The staging buffer is deliberately kept: it is reused by the next frame
+	-- that reclaims this command buffer, and swapping it out every frame would
+	-- mean allocating host-visible memory per frame. It is safe because the
+	-- copies recorded from it are finished by the time the buffer is re-recorded
+	-- (swapchain slots wait their fence in getCurrentTexture). Only the bump
+	-- offset has to go back to the start.
+	if self.staging then
+		self.staging.offset = 0
+	end
+
 	-- Fast path: nothing transient was recorded, so skip the cleanup loops
 	-- entirely. They abort JIT traces and are never entered in the common case
 	-- (a swapchain frame tracks nothing: views, framebuffers and render passes
@@ -85,6 +97,14 @@ end
 function VKCommandBuffer:destroy()
 	-- Free all transient resources first
 	self:reset()
+
+	-- The persistent staging buffer outlives reset() by design, so it is freed
+	-- here instead.
+	if self.staging then
+		self.device.handle:destroyBuffer(self.staging.buffer)
+		self.device.handle:freeMemory(self.staging.memory)
+		self.staging = nil
+	end
 
 	-- Destroying the pool implicitly frees all command buffers allocated from it
 	self.device.handle:destroyCommandPool(self.pool)

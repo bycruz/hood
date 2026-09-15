@@ -42,6 +42,8 @@
 ---@field draw fun(self: hood.CommandEncoder, vertexCount: number, instanceCount: number, firstVertex: number?, firstInstance: number?)
 ---@field drawIndexed fun(self: hood.CommandEncoder, indexCount: number, instanceCount: number, firstIndex: number?, baseVertex: number?, firstInstance: number?)
 ---@field writeBuffer fun(self: hood.CommandEncoder, buffer: hood.Buffer, size: number, data: ffi.cdata*, offset: number?)
+--- Vulkan only: the OpenGL backend has no glCopyNamedBufferSubData in glapi yet.
+---@field copyBuffer fun(self: hood.CommandEncoder, source: hood.Buffer, destination: hood.Buffer, size: number, sourceOffset: number?, destinationOffset: number?)
 ---@field writeTexture fun(self: hood.CommandEncoder, texture: hood.Texture, descriptor: hood.TextureWriteDescriptor, data: ffi.cdata*)
 ---@field copyTextureToBuffer fun(self: hood.CommandEncoder, source: hood.ImageCopyTexture, destination: hood.ImageCopyBuffer, copySize: hood.Extent3D)
 --- Compute

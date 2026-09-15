@@ -75,11 +75,24 @@ end
 -- Should eventually use a form of garbage collection managed by the VKQueue
 
 --- Helper method to write data to a buffer
----@param buffer hood.gl.Buffer
+---@param buffer hood.vk.Buffer
 ---@param size number
 ---@param data ffi.cdata*
 ---@param offset number?
 function VKQueue:writeBuffer(buffer, size, data, offset)
+	offset = offset or 0
+	if size == 0 then
+		return
+	end
+	buffer:assertWriteFits(size, offset, data)
+
+	-- A mapped buffer is written by the CPU directly, so there is nothing to
+	-- record, submit and wait for.
+	if buffer.isMapped then
+		ffi.copy(buffer:mappedPointer(offset), data, size)
+		return
+	end
+
 	local cmd = VKCommandEncoder.new(self.device)
 	cmd:writeBuffer(buffer, size, data, offset)
 	local buf = cmd:finish()
