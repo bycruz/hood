@@ -516,6 +516,7 @@ end
 function VKCommandEncoder:writeBuffer(buffer, size, data, offset)
 	-- TODO: Use a staging buffer instead of this slop
 	offset = offset or 0
+	buffer:assertWriteFits(size, offset, data)
 
 	-- vkCmdUpdateBuffer is limited to 65536 bytes per call; chunk if needed
 	local chunkSize = 65536

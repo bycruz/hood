@@ -14,7 +14,9 @@
 ---@field usages hood.BufferUsage[]
 
 ---@class hood.Buffer
+---@field descriptor hood.BufferDescriptor
 ---@field destroy fun(self: hood.Buffer)
 ---@field mapAsync fun(self: hood.Buffer)
 ---@field getMappedRange fun(self: hood.Buffer, offset: number?, size: number?): ffi.cdata*
 ---@field unmap fun(self: hood.Buffer)
+---@field assertWriteFits fun(self: hood.Buffer, size: number, offset: number?, data: ffi.cdata*?)

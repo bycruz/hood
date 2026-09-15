@@ -1,3 +1,4 @@
+local ffi = require("ffi")
 local vk = require("vkapi")
 
 ---@class hood.vk.Buffer: hood.Buffer
@@ -82,6 +83,45 @@ end
 
 function VKBuffer:destroy()
 	self.device.handle:destroyBuffer(self.handle)
+end
+
+--- Reject a write that does not fit the allocation, before it reaches the
+--- driver. vkCmdUpdateBuffer does not bounds check its destination: an
+--- oversized write lands in whatever the driver placed after the buffer and
+--- only surfaces later as corrupted rendering or VK_ERROR_DEVICE_LOST, with
+--- nothing pointing back at the offending call. Checking here keeps the error
+--- attached to the write that caused it.
+---
+--- `data` is optional. When its size can be determined the source is checked
+--- too, which catches a size computed from a count that disagrees with the
+--- array it was derived from.
+---@param size number bytes to write
+---@param offset number? byte offset into the buffer, defaults to 0
+---@param data ffi.cdata*? source data, checked when its size is knowable
+function VKBuffer:assertWriteFits(size, offset, data)
+	offset = offset or 0
+
+	if size < 0 or offset < 0 then
+		error(string.format(
+			"hood: buffer write has a negative size (%s) or offset (%s)",
+			tostring(size), tostring(offset)))
+	end
+
+	if offset + size > self.descriptor.size then
+		error(string.format(
+			"hood: buffer write of %d bytes at offset %d exceeds the %d byte buffer [%s]",
+			size, offset, self.descriptor.size,
+			table.concat(self.descriptor.usages, ", ")))
+	end
+
+	if data ~= nil then
+		local ok, sourceSize = pcall(ffi.sizeof, data)
+		if ok and type(sourceSize) == "number" and sourceSize < size then
+			error(string.format(
+				"hood: buffer write of %d bytes reads past the end of its %d byte source",
+				size, sourceSize))
+		end
+	end
 end
 
 function VKBuffer:mapAsync()

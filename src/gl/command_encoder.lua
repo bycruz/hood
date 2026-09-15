@@ -104,12 +104,15 @@ end
 ---@param data ffi.cdata*
 ---@param offset number?
 function GLCommandEncoder:writeBuffer(buffer, size, data, offset)
+	offset = offset or 0
+	buffer:assertWriteFits(size, offset, data)
+
 	self.commands[#self.commands + 1] = {
 		type = "writeBuffer",
 		buffer = buffer,
 		size = size,
 		data = data,
-		offset = offset or 0,
+		offset = offset,
 	}
 end
 

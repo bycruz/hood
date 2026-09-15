@@ -81,6 +81,49 @@ test.it("buffer: large write (>65536 bytes) is chunked correctly", function()
 	buf:unmap()
 end)
 
+test.it("buffer: write past the end is rejected", function()
+	local buf = device:createBuffer({ size = 256, usages = { "VERTEX", "COPY_DST" } })
+	local src = ffi.new("char[512]")
+
+	test.errors(function()
+		device.queue:writeBuffer(buf, 512, src)
+	end, "hood: buffer write of 512 bytes at offset 0 exceeds the 256 byte buffer [VERTEX, COPY_DST]")
+end)
+
+test.it("buffer: write that overruns through its offset is rejected", function()
+	local buf = device:createBuffer({ size = 256, usages = { "VERTEX", "COPY_DST" } })
+	local src = ffi.new("char[256]")
+
+	test.errors(function()
+		device.queue:writeBuffer(buf, 128, src, 192)
+	end, "hood: buffer write of 128 bytes at offset 192 exceeds the 256 byte buffer [VERTEX, COPY_DST]")
+end)
+
+test.it("buffer: write larger than its source reads is rejected", function()
+	local buf = device:createBuffer({ size = 256, usages = { "VERTEX", "COPY_DST" } })
+	local src = ffi.new("char[64]")
+
+	test.errors(function()
+		device.queue:writeBuffer(buf, 128, src)
+	end, "hood: buffer write of 128 bytes reads past the end of its 64 byte source")
+end)
+
+test.it("buffer: exact-fit write still succeeds", function()
+	local N = 64
+	local src = ffi.new("uint32_t[?]", N)
+	for i = 0, N - 1 do src[i] = i * 2 + 1 end
+
+	local size = N * ffi.sizeof("uint32_t")
+	local buf = device:createBuffer({ size = size, usages = { "MAP_READ" } })
+	device.queue:writeBuffer(buf, size, src)
+
+	buf:mapAsync()
+	local dst = ffi.cast("uint32_t*", buf:getMappedRange())
+	test.equal(tonumber(dst[0]), 1)
+	test.equal(tonumber(dst[N - 1]), tonumber(src[N - 1]))
+	buf:unmap()
+end)
+
 test.it("buffer: destroy does not error", function()
 	local buf = device:createBuffer({ size = 64, usages = { "VERTEX", "COPY_DST" } })
 	buf:destroy()
