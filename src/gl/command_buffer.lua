@@ -135,8 +135,17 @@ function GLCommandBuffer:execute(queueCtx, renderCtx)
 	local indexType = gl.UNSIGNED_INT
 	local indexSize = 4
 
+	-- Tracks whether a render pass is open, so a mismatched end is reported
+	-- rather than silently unbinding someone else's framebuffer.
+	local inRenderPass = false
+
 	for _, command in ipairs(self.commands) do
 		if command.type == "beginRendering" then
+			if inRenderPass then
+				error("hood: beginRendering was called while a render pass is already open")
+			end
+			inRenderPass = true
+
 			local attachments = command.descriptor.colorAttachments
 			local depthStencilAttachment = command.descriptor.depthStencilAttachment
 
@@ -235,6 +244,13 @@ function GLCommandBuffer:execute(queueCtx, renderCtx)
 		elseif command.type == "setViewport" then
 			gl.viewport(command.x, command.y, command.width, command.height)
 		elseif command.type == "endRendering" then
+			if not inRenderPass then
+				error("hood: endRendering was called with no open render pass; a pass is "
+					.. "started by setPipeline, so bind the pipeline before drawing, even "
+					.. "for a frame with nothing in it")
+			end
+			inRenderPass = false
+
 			gl.bindFramebuffer(gl.FRAMEBUFFER, 0)
 		elseif command.type == "setVertexBuffer" then
 			if not pipeline then

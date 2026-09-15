@@ -538,3 +538,68 @@ test.it("render: indirect draw count controls how many are issued", function()
 	local br, bg = px.at(48, 22)
 	test.less(br, 50) test.less(bg, 50)
 end)
+
+-- ─── Render pass state ───────────────────────────────────────────────────────
+
+-- A pass is only started when a pipeline is bound, because that is when the
+-- render pass and framebuffer are known. Ending one that never started produced a
+-- command buffer the driver executed into a segfault, so the mismatch is caught
+-- here instead.
+
+test.it("render pass: endRendering with no pass open is reported", function()
+	local enc = ctx.device:createCommandEncoder()
+	enc:beginRendering({
+		colorAttachments = { {
+			op = { type = "clear", color = { r = 0, g = 0, b = 0, a = 1 } },
+			texture = ctx._tex:createView({}),
+		} },
+	})
+
+	test.errors(function() enc:endRendering() end,
+		"hood: endRendering was called with no open render pass; a pass is started by "
+			.. "setPipeline, so bind the pipeline before drawing, even for a frame with nothing in it")
+end)
+
+test.it("render pass: finish with a pass still open is reported", function()
+	local enc = ctx.device:createCommandEncoder()
+	enc:beginRendering({
+		colorAttachments = { {
+			op = { type = "clear", color = { r = 0, g = 0, b = 0, a = 1 } },
+			texture = ctx._tex:createView({}),
+		} },
+	})
+	enc:setPipeline(pipeline)
+
+	test.errors(function() enc:finish() end,
+		"hood: finish() was called with a render pass still open; endRendering() first")
+end)
+
+test.it("render pass: a second beginRendering without ending is reported", function()
+	local enc = ctx.device:createCommandEncoder()
+	local desc = {
+		colorAttachments = { {
+			op = { type = "clear", color = { r = 0, g = 0, b = 0, a = 1 } },
+			texture = ctx._tex:createView({}),
+		} },
+	}
+
+	enc:beginRendering(desc)
+	enc:setPipeline(pipeline)
+	enc:beginRendering(desc)
+
+	test.errors(function() enc:setPipeline(pipeline) end,
+		"hood: beginRendering was called while a render pass is already open")
+end)
+
+test.it("render pass: an empty frame clears and presents", function()
+	-- The case that used to crash: nothing drawn, so no pipeline was ever bound.
+	-- Binding it is what starts the pass, and this is the shape lupa now uses.
+	local px = ctx:frame({
+		pipeline = pipeline,
+		clearColor = { r = 0, g = 0, b = 1, a = 1 },
+		draw = function() end,
+	})
+
+	local r, g, b = px.at(32, 32)
+	test.less(r, 50) test.less(g, 50) test.greater(b, 200)
+end)

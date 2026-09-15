@@ -23,6 +23,7 @@ local STAGING_MIN_SIZE = 256 * 1024
 ---@field bufferCopy vk.ffi.BufferCopy[] scratch for vkCmdCopyBuffer regions
 ---@field memoryBarrier vk.ffi.MemoryBarrier[] scratch for _flushStagedWrites
 ---@field stagedWrites boolean true while a staged copy is waiting to be made visible
+---@field inRenderPass boolean true between beginRendering and endRendering
 ---@field _swapchain hood.vk.Swapchain?
 ---@field _reusableRpDesc table?
 local VKCommandEncoder = {}
@@ -60,6 +61,7 @@ function VKCommandEncoder.new(device, reuseBuffer)
 	if encoder then
 		encoder.pendingDescriptor = nil
 		encoder.pipeline = nil
+		encoder.inRenderPass = false
 		encoder.computePipeline = nil
 		encoder._swapchain = nil
 
@@ -82,6 +84,7 @@ function VKCommandEncoder.new(device, reuseBuffer)
 		bindGroups = {},
 		bufferCopy = vk.BufferCopyArray(1),
 		memoryBarrier = vk.MemoryBarrierArray(1),
+		inRenderPass = false,
 		stagedWrites = false,
 		_swapchain = nil,
 	}, VKCommandEncoder)
@@ -225,7 +228,7 @@ function VKCommandEncoder:_beginRenderPass(pipeline, descriptor)
 		beginInfo.clearValueCount = totalAttachments
 		beginInfo.pClearValues = clearValues
 
-		self.device.handle:cmdBeginRenderPass(self.buffer.handle, beginInfo, vk.SubpassContents.INLINE)
+		self:_beginRenderPassRaw(beginInfo)
 		return
 	end
 
@@ -419,7 +422,7 @@ function VKCommandEncoder:_beginRenderPass(pipeline, descriptor)
 	beginInfo.clearValueCount = totalAttachments
 	beginInfo.pClearValues = clearValues
 
-	self.device.handle:cmdBeginRenderPass(self.buffer.handle, beginInfo, vk.SubpassContents.INLINE)
+	self:_beginRenderPassRaw(beginInfo)
 end
 
 do
@@ -519,8 +522,37 @@ function VKCommandEncoder:setBindGroup(index, bindGroup)
 	)
 end
 
+--- End the open render pass.
+---
+--- A pass is only started when a pipeline is bound, so calling this without one
+--- means the frame recorded an end with no matching begin. The driver does not
+--- validate that: it executes a command buffer whose render pass never started,
+--- which on at least one desktop driver is a segfault rather than an error.
 function VKCommandEncoder:endRendering()
+	if not self.inRenderPass then
+		error("hood: endRendering was called with no open render pass; a pass is "
+			.. "started by setPipeline, so bind the pipeline before drawing, even "
+			.. "for a frame with nothing in it")
+	end
+
+	self.inRenderPass = false
 	self.device.handle:cmdEndRenderPass(self.buffer.handle)
+end
+
+--- Begin the pass, refusing to nest one inside another.
+---
+--- Vulkan rejects a second vkCmdBeginRenderPass before the matching end, and the
+--- driver's response to the resulting command stream is a crash rather than an
+--- error, so this is checked here where the offending call is identifiable.
+---@param beginInfo vk.ffi.RenderPassBeginInfo
+---@private
+function VKCommandEncoder:_beginRenderPassRaw(beginInfo)
+	if self.inRenderPass then
+		error("hood: beginRendering was called while a render pass is already open")
+	end
+
+	self.inRenderPass = true
+	self.device.handle:cmdBeginRenderPass(self.buffer.handle, beginInfo, vk.SubpassContents.INLINE)
 end
 
 --- Make staged uploads visible to the commands that read them.
@@ -971,6 +1003,10 @@ function VKCommandEncoder:endComputePass()
 end
 
 function VKCommandEncoder:finish()
+	if self.inRenderPass then
+		error("hood: finish() was called with a render pass still open; endRendering() first")
+	end
+
 	self.device.handle:endCommandBuffer(self.buffer.handle)
 
 	local buffer = self.buffer
