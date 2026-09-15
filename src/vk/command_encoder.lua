@@ -496,6 +496,62 @@ local descriptorSetArray = vk.DescriptorSetArray(1)
 
 ---@param index number
 ---@param bindGroup hood.vk.BindGroup
+--- Put every subresource of a freshly created texture into one layout.
+---
+--- A texture is sampled through a view, and a descriptor covers the whole view,
+--- so every layer of a sampled texture has to be in the layout the descriptor is
+--- written with -- even the ones nothing was ever written to. A layer left in
+--- UNDEFINED fails VUID-vkCmdDraw-None-09600 and reads as nothing, so writing
+--- layer 0 of an array would otherwise make every later layer sample as empty.
+---
+--- This belongs at creation, which is the only point with a command buffer of
+--- its own outside a render pass: hood's render passes do not allow barriers
+--- within them (VUID-vkCmdPipelineBarrier-None-07889).
+---
+--- Only correct before the image has been written to, since a layer with its own
+--- tracked layout has already been moved somewhere deliberately. Texture
+--- creators call it once; `texture.layoutDefault` records the result.
+---@param texture hood.vk.Texture
+---@return boolean claimed
+function VKCommandEncoder:claimTexture(texture)
+	if texture.layoutDefault then
+		return false
+	end
+
+	-- Only a texture that can be sampled is moved into a shader read layout:
+	-- VUID-VkImageMemoryBarrier-oldLayout-01211 requires the SAMPLED usage for
+	-- it, and render attachment layouts are the render pass's business.
+	local canSample = texture.usage
+		and bit.band(texture.usage, vk.ImageUsageFlagBits.SAMPLED) ~= 0
+	if not canSample then
+		return false
+	end
+
+	local whole = vk.ImageMemoryBarrierArray(1)
+	whole[0].srcAccessMask = 0
+	whole[0].dstAccessMask = vk.AccessFlags.SHADER_READ
+	whole[0].oldLayout = vk.ImageLayout.UNDEFINED
+	whole[0].newLayout = vk.ImageLayout.SHADER_READ_ONLY_OPTIMAL
+	whole[0].srcQueueFamilyIndex = 0xFFFFFFFF -- VK_QUEUE_FAMILY_IGNORED
+	whole[0].dstQueueFamilyIndex = 0xFFFFFFFF
+	whole[0].image = texture.handle
+	whole[0].subresourceRange.aspectMask = vk.ImageAspectFlagBits.COLOR
+	whole[0].subresourceRange.baseMipLevel = 0
+	whole[0].subresourceRange.levelCount = vk.REMAINING_MIP_LEVELS
+	whole[0].subresourceRange.baseArrayLayer = 0
+	whole[0].subresourceRange.layerCount = vk.REMAINING_ARRAY_LAYERS
+
+	self.device.handle:cmdPipelineBarrier(
+		self.buffer.handle,
+		vk.PipelineStageFlagBits.TOP_OF_PIPE,
+		vk.PipelineStageFlagBits.FRAGMENT_SHADER,
+		1, whole)
+
+	texture.layerLayouts = {}
+	texture.layoutDefault = vk.ImageLayout.SHADER_READ_ONLY_OPTIMAL
+	return true
+end
+
 function VKCommandEncoder:setBindGroup(index, bindGroup)
 	local bindPoint, layout
 	if self.pipeline then
@@ -766,9 +822,10 @@ function VKCommandEncoder:writeTexture(texture, descriptor, data)
 	local mip = descriptor.mip or 0
 	local layer = descriptor.layer or 0
 
-	-- Use tracked layout if available, otherwise UNDEFINED for first use
+	-- Use tracked layout if available, then whatever the image was claimed with
+	-- at creation, and only then UNDEFINED for a texture nothing has touched.
 	texture.layerLayouts = texture.layerLayouts or {}
-	local oldLayout = texture.layerLayouts[layer] or vk.ImageLayout.UNDEFINED
+	local oldLayout = texture.layerLayouts[layer] or texture.layoutDefault or vk.ImageLayout.UNDEFINED
 	local srcAccessMask = 0
 	local srcStage = vk.PipelineStageFlagBits.TOP_OF_PIPE
 	if oldLayout == vk.ImageLayout.SHADER_READ_ONLY_OPTIMAL then
@@ -921,7 +978,7 @@ function VKCommandEncoder:beginComputePass(descriptor)
 				local tex = view.texture
 				local layer = view.baseArrayLayer
 				tex.layerLayouts = tex.layerLayouts or {}
-				local currentLayout = tex.layerLayouts[layer] or vk.ImageLayout.UNDEFINED
+				local currentLayout = tex.layerLayouts[layer] or tex.layoutDefault or vk.ImageLayout.UNDEFINED
 				if currentLayout ~= vk.ImageLayout.GENERAL then
 					local srcAccess = 0
 					local srcStage = vk.PipelineStageFlagBits.TOP_OF_PIPE
@@ -976,7 +1033,7 @@ function VKCommandEncoder:endComputePass()
 				local tex = view.texture
 				local layer = view.baseArrayLayer
 				tex.layerLayouts = tex.layerLayouts or {}
-				local currentLayout = tex.layerLayouts[layer] or vk.ImageLayout.UNDEFINED
+				local currentLayout = tex.layerLayouts[layer] or tex.layoutDefault or vk.ImageLayout.UNDEFINED
 				if currentLayout ~= vk.ImageLayout.SHADER_READ_ONLY_OPTIMAL then
 					storageBarrier[0].srcAccessMask = vk.AccessFlags.SHADER_WRITE
 					storageBarrier[0].dstAccessMask = vk.AccessFlags.SHADER_READ

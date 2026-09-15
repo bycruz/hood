@@ -1,7 +1,9 @@
 local ffi = require("ffi")
 
----@alias hood.VertexLayout.AttributeType "f32" | "i32"
----@alias hood.VertexLayout.Attribute { type: "f32" | "i32", size: number, offset: number, normalized: boolean }
+---@alias hood.VertexLayout.AttributeType "f32" | "f16" | "i32" | "u32" | "i16" | "u16" | "i8" | "u8"
+--- The shader location is the attribute's position in the layout unless it
+--- names one, so a layout can be written in whatever order reads best.
+---@alias hood.VertexLayout.Attribute { type: hood.VertexLayout.AttributeType, size: number, offset: number, normalized: boolean, location: number? }
 
 --- "vertex" advances one element per vertex, "instance" one element per
 --- instance, which is what lets one draw reuse the same vertices for many
@@ -44,6 +46,18 @@ function VertexLayout:isInstanceRate()
 	return self.stepMode == "instance"
 end
 
+--- Bytes one component of each attribute type takes.
+local componentSize = {
+	f32 = ffi.sizeof("float"),
+	i32 = ffi.sizeof("int32_t"),
+	u32 = ffi.sizeof("uint32_t"),
+	f16 = 2,
+	i16 = 2,
+	u16 = 2,
+	i8 = 1,
+	u8 = 1,
+}
+
 function VertexLayout:getStride()
 	if self.stride and self.stride > 0 then
 		return self.stride
@@ -51,12 +65,8 @@ function VertexLayout:getStride()
 
 	local maxEnd = 0
 	for _, attr in ipairs(self.attributes) do
-		local typeSize
-		if attr.type == "f32" then
-			typeSize = ffi.sizeof("float")
-		elseif attr.type == "i32" then
-			typeSize = ffi.sizeof("int32_t")
-		else
+		local typeSize = componentSize[attr.type]
+		if not typeSize then
 			error("Unknown attribute type: " .. tostring(attr.type))
 		end
 

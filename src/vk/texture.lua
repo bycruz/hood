@@ -12,6 +12,7 @@ local VKTextureView = require("hood.vk.texture_view")
 ---@field height number?
 ---@field viewType vk.ImageViewType
 ---@field isDepth boolean?
+---@field usage vk.ImageUsageFlagBits
 ---@field isSwapchain boolean?
 ---@field swapchain hood.vk.Swapchain?
 ---@field swapchainImageIdx integer? 0-based index into the swapchain images, set when isSwapchain is true
@@ -129,6 +130,7 @@ function VKTexture.new(device, descriptor)
 		height = descriptor.extents.height,
 		isDepth = isDepth,
 		viewType = viewTypeFromExtents(descriptor.extents),
+		usage = vkUsage,
 	}, VKTexture)
 end
 

@@ -1,6 +1,20 @@
 local gl = require("glapi")
 local ffi = require("ffi")
 
+--- The GL type each attribute type is read as. The integer and half float types
+--- let a vertex be packed; `normalized` on the attribute is what asks the
+--- hardware to scale them into floats for the shader.
+local glAttributeType = {
+	f32 = gl.FLOAT,
+	i32 = gl.INT,
+	u32 = gl.UNSIGNED_INT,
+	f16 = gl.HALF_FLOAT,
+	i16 = gl.SHORT,
+	u16 = gl.UNSIGNED_SHORT,
+	i8 = gl.BYTE,
+	u8 = gl.UNSIGNED_BYTE,
+}
+
 ---@class hood.gl.VAO
 ---@field id number
 local GLVAO = {}
@@ -38,14 +52,10 @@ function GLVAO:setVertexBuffer(buffer, descriptor, bindingIndex, offset, locatio
 	local location = locationBase or 0
 
 	for _, attr in ipairs(descriptor.attributes) do
-		local glType
+		local glType = glAttributeType[attr.type]
 		local normalized = attr.normalized and 1 or 0
 
-		if attr.type == "f32" then
-			glType = gl.FLOAT
-		elseif attr.type == "i32" then
-			glType = gl.INT
-		else
+		if not glType then
 			error("Unsupported attribute type: " .. tostring(attr.type))
 		end
 

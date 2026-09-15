@@ -111,7 +111,15 @@ end
 
 ---@param descriptor hood.TextureDescriptor
 function VKDevice:createTexture(descriptor)
-	return VKTexture.new(self, descriptor)
+	local texture = VKTexture.new(self, descriptor)
+
+	-- A texture that can be sampled is put into the layout descriptors name for
+	-- it straight away, so binding it before anything has been written to it is
+	-- still valid. Textures that cannot be sampled are left alone: their layouts
+	-- belong to the passes and copies that use them.
+	self.queue:claimTexture(texture)
+
+	return texture
 end
 
 ---@param descriptor hood.SamplerDescriptor

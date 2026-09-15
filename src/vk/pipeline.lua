@@ -3,6 +3,13 @@ local ffi = require("ffi")
 local vk = require("vkapi")
 local vkConversions = require("hood.convert.vk")
 
+--- Vertex attribute formats, keyed by the layout's attribute type and size.
+---
+--- The narrow types exist so a vertex can be packed: a normal costs four bytes
+--- as 8 bit signed normalized components rather than twelve as floats, and a
+--- colour costs four as unsigned normalized rather than sixteen. Sizes without
+--- a format -- three components of anything smaller than 32 bits, since there is
+--- no 24 bit RGB vertex format -- are rejected by the lookup below.
 ---@type table<string, vk.Format[]>
 local attributeFormatMap = {
 	f32 = {
@@ -11,13 +18,84 @@ local attributeFormatMap = {
 		[3] = vk.Format.R32G32B32_SFLOAT,
 		[4] = vk.Format.R32G32B32A32_SFLOAT,
 	},
+	f16 = {
+		[1] = vk.Format.R16_SFLOAT,
+		[2] = vk.Format.R16G16_SFLOAT,
+		[3] = vk.Format.R16G16B16_SFLOAT,
+		[4] = vk.Format.R16G16B16A16_SFLOAT,
+	},
 	i32 = {
 		[1] = vk.Format.R32_SINT,
 		[2] = vk.Format.R32G32_SINT,
 		[3] = vk.Format.R32G32B32_SINT,
 		[4] = vk.Format.R32G32B32A32_SINT,
 	},
+	u32 = {
+		[1] = vk.Format.R32_UINT,
+		[2] = vk.Format.R32G32_UINT,
+		[3] = vk.Format.R32G32B32_UINT,
+		[4] = vk.Format.R32G32B32A32_UINT,
+	},
+	i16 = {
+		[1] = vk.Format.R16_SINT,
+		[2] = vk.Format.R16G16_SINT,
+		[3] = vk.Format.R16G16B16_SINT,
+		[4] = vk.Format.R16G16B16A16_SINT,
+	},
+	u16 = {
+		[1] = vk.Format.R16_UINT,
+		[2] = vk.Format.R16G16_UINT,
+		[3] = vk.Format.R16G16B16_UINT,
+		[4] = vk.Format.R16G16B16A16_UINT,
+	},
+	i8 = {
+		[1] = vk.Format.R8_SINT,
+		[2] = vk.Format.R8G8_SINT,
+		[4] = vk.Format.R8G8B8A8_SINT,
+	},
+	u8 = {
+		[1] = vk.Format.R8_UINT,
+		[2] = vk.Format.R8G8_UINT,
+		[4] = vk.Format.R8G8B8A8_UINT,
+	},
 }
+
+--- The same formats with `normalized = true`, where the hardware scales each
+--- component into a float for the shader. Only integer types have anything to
+--- normalize: a float attribute is already a float.
+---@type table<string, vk.Format[]>
+local normalizedFormatMap = {
+	i16 = {
+		[1] = vk.Format.R16_SNORM,
+		[2] = vk.Format.R16G16_SNORM,
+		[3] = vk.Format.R16G16B16_SNORM,
+		[4] = vk.Format.R16G16B16A16_SNORM,
+	},
+	u16 = {
+		[1] = vk.Format.R16_UNORM,
+		[2] = vk.Format.R16G16_UNORM,
+		[3] = vk.Format.R16G16B16_UNORM,
+		[4] = vk.Format.R16G16B16A16_UNORM,
+	},
+	i8 = {
+		[1] = vk.Format.R8_SNORM,
+		[2] = vk.Format.R8G8_SNORM,
+		[4] = vk.Format.R8G8B8A8_SNORM,
+	},
+	u8 = {
+		[1] = vk.Format.R8_UNORM,
+		[2] = vk.Format.R8G8_UNORM,
+		[4] = vk.Format.R8G8B8A8_UNORM,
+	},
+}
+
+--- The format one attribute's bytes are read as, or nil when nothing matches.
+---@param attr hood.VertexLayout.Attribute
+---@return vk.Format? format
+local function attributeFormat(attr)
+	local map = attr.normalized and normalizedFormatMap[attr.type] or attributeFormatMap[attr.type]
+	return map and map[attr.size] or nil
+end
 
 ---@param format hood.TextureFormat
 local function isDepthFormat(format)
@@ -69,12 +147,18 @@ function VKPipeline.new(device, descriptor)
 		}
 
 		for _, attr in ipairs(layout.attributes) do
-			local fmt = attributeFormatMap[attr.type] and attributeFormatMap[attr.type][attr.size]
+			local fmt = attributeFormat(attr)
 			if not fmt then
-				error("Unsupported vertex attribute: type=" .. attr.type .. " size=" .. attr.size)
+				error(string.format(
+					"Unsupported vertex attribute: type=%s size=%d normalized=%s",
+					attr.type, attr.size, tostring(attr.normalized or false)))
 			end
+			-- Locations run on across every layout in the pipeline, so a second
+			-- layout does not start at location 0. An attribute may state its
+			-- own location instead, which is what keeps a declaration's order
+			-- from having to match the shader's.
 			attributes[#attributes + 1] = {
-				location = #attributes,
+				location = attr.location or #attributes,
 				binding = i - 1,
 				format = fmt,
 				offset = attr.offset,
