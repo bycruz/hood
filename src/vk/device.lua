@@ -27,8 +27,23 @@ function VKDevice.new(adapter)
 		extensions[#extensions + 1] = "VK_KHR_swapchain"
 	end
 
+	-- Features the renderer relies on rather than merely tolerates. Supporting a
+	-- feature is not the same as enabling it: leaving multiDrawIndirect off makes
+	-- a drawCount above 1 invalid, and leaving drawIndirectFirstInstance off makes
+	-- a nonzero firstInstance invalid, which is exactly what batched instanced
+	-- draws use to address a run partway into a shared instance buffer.
+	local supported = vk.getPhysicalDeviceFeatures(adapter.pd)
+	local enabledFeatures = {}
+	if supported.multiDrawIndirect ~= 0 then
+		enabledFeatures.multiDrawIndirect = true
+	end
+	if supported.drawIndirectFirstInstance ~= 0 then
+		enabledFeatures.drawIndirectFirstInstance = true
+	end
+
 	local handle = adapter.instance.handle:createDevice(adapter.pd, {
 		enabledExtensionNames = extensions,
+		enabledFeatures = enabledFeatures,
 		queueCreateInfos = {
 			{
 				queueFamilyIndex = adapter.gfxQueueFamilyIdx,
