@@ -40,6 +40,9 @@ function VKDevice.new(adapter)
 	if supported.drawIndirectFirstInstance ~= 0 then
 		enabledFeatures.drawIndirectFirstInstance = true
 	end
+	if supported.samplerAnisotropy ~= 0 then
+		enabledFeatures.samplerAnisotropy = true
+	end
 
 	local handle = adapter.instance.handle:createDevice(adapter.pd, {
 		enabledExtensionNames = extensions,
