@@ -1,26 +1,21 @@
 {
 	"name": "hood",
-	"version": "0.1.0",
+	"description": "Cross platform graphics API for LuaJIT",
+	"authors": ["David Cruz <david@bycruz.dev>"],
+	"version": "0.1.1",
 	"dependencies": {
-		"glapi": { "git": "https://github.com/bycruz/glapi" },
-		"vkapi": { "git": "https://github.com/bycruz/vkapi" },
-		"x11api": {
-			"git": "https://github.com/bycruz/x11api",
-			"optional": true
-		},
-		"winapi": {
-			"git": "https://github.com/bycruz/winapi",
-			"optional": true
-		},
-		"winit": { "git": "https://github.com/bycruz/winit" }
+		"glapi": { "version": "0.1.0" },
+		"vkapi": { "version": "0.1.0" },
+		"x11api": { "version": "0.1.0", "optional": true },
+		"winapi": { "version": "0.1.0", "optional": true },
+		"winit": { "version": "0.1.0" }
 	},
 	"features": {
 		"windows": ["winapi"],
 		"linux": ["x11api"]
 	},
 	"devDependencies": {
-		"lde-test": { "git": "https://github.com/lde-org/lde" },
-		"fs": { "git": "https://github.com/lde-org/fs" },
-		"path": { "git": "https://github.com/lde-org/path" }
+		"fs": { "version": "0.2.0" },
+		"path": { "version": "0.1.0" }
 	}
 }
