@@ -2,7 +2,7 @@
 	"name": "hood",
 	"description": "Cross platform graphics API for LuaJIT",
 	"authors": ["David Cruz <david@bycruz.dev>"],
-	"version": "0.1.1",
+	"version": "0.1.2",
 	"dependencies": {
 		"glapi": { "version": "0.1.0" },
 		"vkapi": { "version": "0.1.0" },
