@@ -64,6 +64,8 @@ function VKCommandEncoder.new(device, reuseBuffer)
 		encoder.inRenderPass = false
 		encoder.computePipeline = nil
 		encoder._swapchain = nil
+		encoder.sampleableDepth = nil
+		encoder.sampleableDepthLayers = nil
 
 		-- Bind groups are only consulted by compute passes; drop stale entries
 		-- so a later frame never sees groups from an earlier one. This costs
@@ -84,8 +86,11 @@ function VKCommandEncoder.new(device, reuseBuffer)
 		bindGroups = {},
 		bufferCopy = vk.BufferCopyArray(1),
 		memoryBarrier = vk.MemoryBarrierArray(1),
+		depthBarrier = vk.ImageMemoryBarrierArray(1),
 		inRenderPass = false,
 		stagedWrites = false,
+		sampleableDepth = nil,
+		sampleableDepthLayers = nil,
 		_swapchain = nil,
 	}, VKCommandEncoder)
 	buffer._encoder = encoder
@@ -276,6 +281,22 @@ function VKCommandEncoder:_beginRenderPass(pipeline, descriptor)
 		local view = depthAttachment.texture --[[@as hood.vk.TextureView]]
 		imageViews[totalAttachments - 1] = view.handle
 
+		-- A depth texture made with TEXTURE_BINDING is one that is going to be sampled,
+		-- the way WebGPU and D3D12 both read usages, so the pass leaves it in the layout
+		-- a shader reads rather than the one a pass ends in. A pass that loads therefore
+		-- finds it in the read layout and says so, rather than calling it UNDEFINED and
+		-- inviting the driver to discard what it is about to load.
+		local sampled = view.texture.usage
+			and bit.band(view.texture.usage, vk.ImageUsageFlagBits.SAMPLED) ~= 0
+		local finalLayout = sampled
+			and vk.ImageLayout.SHADER_READ_ONLY_OPTIMAL
+			or vk.ImageLayout.DEPTH_STENCIL_ATTACHMENT_OPTIMAL
+
+		local initialLayout = vk.ImageLayout.UNDEFINED
+		if depthAttachment.op.type ~= "clear" and sampled then
+			initialLayout = vk.ImageLayout.SHADER_READ_ONLY_OPTIMAL
+		end
+
 		attachmentDescs[#attachmentDescs + 1] = {
 			format = view.texture.format,
 			samples = vk.SampleCountFlagBits.COUNT_1,
@@ -283,9 +304,14 @@ function VKCommandEncoder:_beginRenderPass(pipeline, descriptor)
 			storeOp = vk.AttachmentStoreOp.STORE,
 			stencilLoadOp = vk.AttachmentLoadOp.DONT_CARE,
 			stencilStoreOp = vk.AttachmentStoreOp.DONT_CARE,
-			initialLayout = vk.ImageLayout.UNDEFINED,
-			finalLayout = vk.ImageLayout.DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+			initialLayout = initialLayout,
+			finalLayout = finalLayout,
 		}
+
+		if sampled then
+			self.sampleableDepth = view.texture
+			self.sampleableDepthLayers = view.layerCount
+		end
 
 		depthRef = {
 			attachment = #attachmentDescs - 1,
@@ -518,6 +544,13 @@ function VKCommandEncoder:claimTexture(texture)
 		return false
 	end
 
+	-- A depth texture is left alone: the barrier below is a colour one, and a depth
+	-- image is moved into the layout a shader reads by the pass that writes it, which
+	-- is the only place that can put it there before anything samples it.
+	if texture.isDepth then
+		return false
+	end
+
 	-- Only a texture that can be sampled is moved into a shader read layout:
 	-- VUID-VkImageMemoryBarrier-oldLayout-01211 requires the SAMPLED usage for
 	-- it, and render attachment layouts are the render pass's business.
@@ -593,6 +626,37 @@ function VKCommandEncoder:endRendering()
 
 	self.inRenderPass = false
 	self.device.handle:cmdEndRenderPass(self.buffer.handle)
+
+	-- A depth attachment the frame goes on to sample was left by the pass in the layout
+	-- a shader reads, so what is left is to make its writes visible to those reads. A
+	-- barrier cannot be recorded inside a render pass, which is why it is here rather
+	-- than with the pass that wrote it
+	local depth = self.sampleableDepth
+	if depth then
+		local layers = self.sampleableDepthLayers or 1
+		self.sampleableDepth = nil
+		self.sampleableDepthLayers = nil
+
+		local barrier = self.depthBarrier[0]
+		barrier.srcAccessMask = vk.AccessFlags.DEPTH_STENCIL_ATTACHMENT_WRITE
+		barrier.dstAccessMask = vk.AccessFlags.SHADER_READ
+		barrier.oldLayout = vk.ImageLayout.SHADER_READ_ONLY_OPTIMAL
+		barrier.newLayout = vk.ImageLayout.SHADER_READ_ONLY_OPTIMAL
+		barrier.srcQueueFamilyIndex = 0xFFFFFFFF -- VK_QUEUE_FAMILY_IGNORED
+		barrier.dstQueueFamilyIndex = 0xFFFFFFFF
+		barrier.image = depth.handle
+		barrier.subresourceRange.aspectMask = vk.ImageAspectFlagBits.DEPTH
+		barrier.subresourceRange.baseMipLevel = 0
+		barrier.subresourceRange.levelCount = 1
+		barrier.subresourceRange.baseArrayLayer = 0
+		barrier.subresourceRange.layerCount = layers
+
+		self.device.handle:cmdPipelineBarrier(
+			self.buffer.handle,
+			vk.PipelineStageFlagBits.LATE_FRAGMENT_TESTS,
+			vk.PipelineStageFlagBits.FRAGMENT_SHADER,
+			1, self.depthBarrier)
+	end
 end
 
 --- Begin the pass, refusing to nest one inside another.
