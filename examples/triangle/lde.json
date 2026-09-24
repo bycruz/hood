@@ -2,7 +2,7 @@
 	"name": "triangle",
 	"version": "0.1.0",
 	"dependencies": {
-		"hood": { "path": "../.." },
+		"hood": { "path": "../../packages/hood", "features": ["vk", "gl"] },
 		"winit": { "git": "https://github.com/bycruz/winit" }
 	}
 }

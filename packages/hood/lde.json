@@ -1,0 +1,15 @@
+{
+	"name": "hood",
+	"description": "Cross platform graphics API for LuaJIT",
+	"authors": ["David Cruz <david@bycruz.dev>"],
+	"version": "0.2.0",
+	"dependencies": {
+		"hood-core": { "path": "../hood-core" },
+		"hood-vk": { "path": "../hood-vk", "optional": true },
+		"hood-gl": { "path": "../hood-gl", "optional": true }
+	},
+	"features": {
+		"vk": ["hood-vk"],
+		"gl": ["hood-gl"]
+	}
+}

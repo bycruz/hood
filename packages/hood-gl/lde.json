@@ -1,0 +1,16 @@
+{
+	"name": "hood-gl",
+	"description": "The opengl backend of hood",
+	"authors": ["David Cruz <david@bycruz.dev>"],
+	"version": "0.1.0",
+	"dependencies": {
+		"hood-core": { "path": "../hood-core" },
+		"glapi": { "version": "0.1.0" },
+		"x11api": { "version": "0.1.0", "optional": true },
+		"winapi": { "version": "0.1.0", "optional": true }
+	},
+	"features": {
+		"windows": ["winapi"],
+		"linux": ["x11api"]
+	}
+}
