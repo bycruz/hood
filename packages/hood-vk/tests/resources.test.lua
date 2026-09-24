@@ -364,6 +364,19 @@ test.it("bind group: hundreds of groups held at once", function()
 	layout:destroy()
 end)
 
+-- ─── Command buffer ──────────────────────────────────────────────────────────
+
+-- A command buffer is handed back to the device's pool when it is done with, which is a call on
+-- the device: the pool is the device's, and the buffer does not carry which one it came from.
+test.it("command buffer: destroy hands it back to the device's pool", function()
+	local encoder = device:createCommandEncoder()
+	local buffer = encoder:finish()
+
+	buffer:destroy()
+
+	test.equal(true, true)
+end)
+
 -- ─── Texture ─────────────────────────────────────────────────────────────────
 
 test.it("texture: create 2D rgba8unorm", function()

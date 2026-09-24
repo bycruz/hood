@@ -200,6 +200,18 @@ function VKDevice:commandPool()
 	return self._commandPool
 end
 
+--- Hands a command buffer back to the pool it came from, to be handed out again by the next
+--- `commandPool` allocation rather than sitting in the pool doing nothing until the device goes.
+---
+--- It is the device that frees it because the pool is the device's: a buffer does not carry the
+--- pool it was allocated from, and one that reached past itself for it would be reaching for a
+--- pool it has no business knowing about.
+---@param pool vk.ffi.CommandPool
+---@param buffer vk.ffi.CommandBuffer
+function VKDevice:freeCommandBuffers(pool, buffer)
+	self.handle:freeCommandBuffers(pool, buffer)
+end
+
 ---@param descriptor hood.BindGroupDescriptor
 ---@return hood-vk.BindGroup
 function VKDevice:createBindGroup(descriptor)
