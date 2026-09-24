@@ -28,11 +28,14 @@ function X11Context.new(display, sharedCtx, window)
 		error("Failed to choose FBConfig")
 	end
 
+	-- 4.5, because that is where clip control and the texture readback the renderer uses came in:
+	-- a driver that hands back an earlier context takes neither, and on a context that is too old
+	-- for it the drawing into a texture comes out in the wrong rows rather than not at all.
 	local ctx = glx.createContextAttribsARB(display, fbConfig, sharedCtx and sharedCtx.ctx, 1, {
 		glx.CONTEXT_MAJOR_VERSION_ARB,
 		4,
 		glx.CONTEXT_MINOR_VERSION_ARB,
-		3,
+		5,
 		glx.CONTEXT_PROFILE_MASK_ARB,
 		glx.CONTEXT_CORE_PROFILE_BIT_ARB,
 	})

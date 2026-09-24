@@ -4,6 +4,11 @@ local ffi = require("ffi")
 
 local GLVAO = require("hood.gl.vao")
 
+-- Clip control's own tokens, which glapi's enum tables do not carry: which corner of the
+-- framebuffer window coordinates are counted from, and which depth range z is measured in.
+local LOWER_LEFT, UPPER_LEFT = 0x8CA1, 0x8CA2
+local NEGATIVE_ONE_TO_ONE = 0x935E
+
 ---@class hood.gl.CommandBuffer
 ---@field private commands hood.gl.Command[]
 ---@field private svbCache table # tbd
@@ -154,8 +159,7 @@ function GLCommandBuffer:execute(queueCtx, renderCtx)
 			-- Swapchain textures have no id and carry their own context;
 			-- offscreen textures use the queue's shared headless context.
 			local ctx
-			local isBackbuffer = false
-			-- Offscreen rendering must use renderCtx (the window context) rather than
+			local isBackbuffer = false			-- Offscreen rendering must use renderCtx (the window context) rather than
 			-- queueCtx (the headless context) when a surface has been configured.
 			-- Both contexts share the same GL objects, but creating FBOs in the
 			-- headless context causes NVIDIA to crash on the next window→headless
@@ -186,6 +190,22 @@ function GLCommandBuffer:execute(queueCtx, renderCtx)
 			else
 				local fbo = getOrCreateFBO(ctx, command.descriptor)
 				gl.bindFramebuffer(gl.FRAMEBUFFER, fbo)
+			end
+
+			-- OpenGL counts the rows of a framebuffer up from its bottom and Vulkan counts them
+			-- down from its top, so the same drawing ends up in opposite rows on the two: a
+			-- texture drawn into here and read back came out upside down against what Vulkan
+			-- read back, and a texture drawn into and then sampled by another pass was sampled
+			-- mirrored. This is the state OpenGL has for exactly that: with the origin at the
+			-- upper left the geometry is turned over inside the viewport, and a texture comes out
+			-- in the row order Vulkan leaves it in.
+			--
+			-- The window is left as it is. What is displayed from it is its bottom row, and the
+			-- image it shows is the one it has always shown.
+			if isBackbuffer then
+				gl.clipControl(LOWER_LEFT, NEGATIVE_ONE_TO_ONE)
+			else
+				gl.clipControl(UPPER_LEFT, NEGATIVE_ONE_TO_ONE)
 			end
 
 			for _, attachment in ipairs(attachments) do
