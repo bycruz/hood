@@ -17,6 +17,7 @@ local VKTextureView = require("hood-vk.texture_view")
 ---@field pd vk.ffi.PhysicalDevice
 ---@field descriptorPool vk.ffi.DescriptorPool
 ---@field _renderPassCache table<string, vk.ffi.RenderPass>
+---@field _commandPool vk.ffi.CommandPool? # Made when the first command buffer is, one per device
 local VKDevice = {}
 VKDevice.__index = VKDevice
 
@@ -98,6 +99,24 @@ end
 
 function VKDevice:createCommandEncoder()
 	return VKCommandEncoder.new(self)
+end
+
+--- The pool command buffers are allocated from, which belongs to the device rather
+--- than to each of them. A command buffer is small; a pool is the driver's to size and
+--- is hundreds of kilobytes, so an app that records a frame into a fresh buffer every
+--- frame -- which is the obvious way to write one -- would grow by a pool a frame if
+--- each buffer carried its own. Buffers are handed back to the pool instead: see
+--- `VKCommandBuffer:destroy`.
+---@return vk.ffi.CommandPool
+function VKDevice:commandPool()
+	if not self._commandPool then
+		self._commandPool = self.handle:createCommandPool({
+			flags = vk.CommandPoolCreateFlagBits.RESET_COMMAND_BUFFER,
+			queueFamilyIndex = self.queue.familyIdx,
+		})
+	end
+
+	return self._commandPool
 end
 
 ---@param descriptor hood.BindGroupDescriptor

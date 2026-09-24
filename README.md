@@ -23,7 +23,16 @@ Based upon the WebGPU and Vulkan specifications.
 Use this package with the [lde](https://lde.sh/) package manager.
 
 ```bash
-lde add --git https://github.com/bycruz/hood
+lde add hood
+```
+
+Edit the `"features"` in `lde.json` to enable the desired backend.  
+Accepted options are `"gl"` and `"vk"`
+
+```jsonc
+"dependencies": {
+	"hood": { "version": "0.2", "features": ["vk"] }
+}
 ```
 
 ## Example

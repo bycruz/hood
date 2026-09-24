@@ -11,12 +11,13 @@ local vk = require("vkapi")
 local VKCommandBuffer = {}
 VKCommandBuffer.__index = VKCommandBuffer
 
+--- A command buffer, allocated from the pool the device keeps. One pool per command
+--- buffer is a pool per frame for an app that records a frame into a fresh buffer every
+--- frame, and a pool is the driver's to size: what is allocated here is the buffer, and
+--- what `destroy` does is hand it back.
 ---@param device hood-vk.Device
 function VKCommandBuffer.new(device)
-	local pool = device.handle:createCommandPool({
-		flags = vk.CommandPoolCreateFlagBits.RESET_COMMAND_BUFFER,
-		queueFamilyIndex = device.queue.familyIdx,
-	})
+	local pool = device:commandPool()
 
 	local handle = device.handle:allocateCommandBuffers({
 		commandPool = pool,
@@ -106,8 +107,12 @@ function VKCommandBuffer:destroy()
 		self.staging = nil
 	end
 
-	-- Destroying the pool implicitly frees all command buffers allocated from it
-	self.device.handle:destroyCommandPool(self.pool)
+	-- The buffer goes back to the pool it came from, which is the device's and outlives
+	-- it: the pool is what the driver sizes, and keeping the buffer would be a leak of one
+	-- per frame for anything that makes one per frame. The command buffer has to be
+	-- finished with -- submitted and not in flight -- which is what every caller that
+	-- destroys one waits for first.
+	self.device:freeCommandBuffers(self.pool, self.handle)
 end
 
 return VKCommandBuffer

@@ -3,4 +3,5 @@
 ---@field height number
 ---@field present fun(self: hood.Swapchain)
 ---@field getCurrentTexture fun(self: hood.Swapchain): hood.Texture?
+---@field createCommandEncoder fun(self: hood.Swapchain): hood.CommandEncoder # one per image, free to record into
 ---@field destroy fun(self: hood.Swapchain)

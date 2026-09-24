@@ -1,6 +1,7 @@
 local vk = require("vkapi")
 local ffi = require("ffi")
 
+local VKCommandBuffer = require("hood-vk.command_buffer")
 local VKCommandEncoder = require("hood-vk.command_encoder")
 
 ---@class hood-vk.Queue
@@ -8,6 +9,7 @@ local VKCommandEncoder = require("hood-vk.command_encoder")
 ---@field handle vk.ffi.Queue
 ---@field familyIdx number
 ---@field idx number
+---@field _transient hood-vk.CommandBuffer? # The buffer this queue's own uploads are recorded into
 local VKQueue = {}
 VKQueue.__index = VKQueue
 
@@ -79,6 +81,24 @@ end
 ---@param size number
 ---@param data ffi.cdata*
 ---@param offset number?
+--- The command buffer the queue's own uploads are recorded into: one per queue, recorded
+--- again for each of them. Every caller waits for the queue to be idle before it is done,
+--- so the recording that follows is free to be the same buffer -- which is what keeps an
+--- upload from costing a command buffer, and the pool one would be allocated from, every
+--- time it happens.
+---@return hood-vk.CommandBuffer
+function VKQueue:transientBuffer()
+	if not self._transient then
+		self._transient = VKCommandBuffer.new(self.device)
+	end
+
+	return self._transient
+end
+
+---@param buffer hood-vk.Buffer
+---@param size number
+---@param data ffi.cdata*
+---@param offset number?
 function VKQueue:writeBuffer(buffer, size, data, offset)
 	offset = offset or 0
 	if size == 0 then
@@ -93,12 +113,10 @@ function VKQueue:writeBuffer(buffer, size, data, offset)
 		return
 	end
 
-	local cmd = VKCommandEncoder.new(self.device)
+	local cmd = VKCommandEncoder.new(self.device, self:transientBuffer())
 	cmd:writeBuffer(buffer, size, data, offset)
-	local buf = cmd:finish()
-	self:submit(buf)
+	self:submit(cmd:finish())
 	self.device.handle:queueWaitIdle(self.handle)
-	buf:destroy()
 end
 
 --- Helper method to write data to a texture
@@ -106,12 +124,10 @@ end
 ---@param descriptor hood.TextureWriteDescriptor
 ---@param data ffi.cdata*
 function VKQueue:writeTexture(texture, descriptor, data)
-	local cmd = VKCommandEncoder.new(self.device)
+	local cmd = VKCommandEncoder.new(self.device, self:transientBuffer())
 	cmd:writeTexture(texture, descriptor, data)
-	local buf = cmd:finish()
-	self:submit(buf)
+	self:submit(cmd:finish())
 	self.device.handle:queueWaitIdle(self.handle)
-	buf:destroy()
 end
 
 --- Claim a freshly created texture's subresources so it can be drawn with.
@@ -123,15 +139,13 @@ end
 --- any render pass, which is where hood's passes require barriers to be.
 ---@param texture hood-vk.Texture
 function VKQueue:claimTexture(texture)
-	local cmd = VKCommandEncoder.new(self.device)
+	local cmd = VKCommandEncoder.new(self.device, self:transientBuffer())
 	if not cmd:claimTexture(texture) then
 		return
 	end
 
-	local buf = cmd:finish()
-	self:submit(buf)
+	self:submit(cmd:finish())
 	self.device.handle:queueWaitIdle(self.handle)
-	buf:destroy()
 end
 
 function VKQueue:waitIdle()

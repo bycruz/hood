@@ -3,6 +3,6 @@
 	"version": "0.1.0",
 	"dependencies": {
 		"hood": { "path": "../../packages/hood", "features": ["vk", "gl"] },
-		"winit": { "git": "https://github.com/bycruz/winit" }
+		"winit": { "version": "0.1" }
 	}
 }
