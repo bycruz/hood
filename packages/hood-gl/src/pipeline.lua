@@ -62,6 +62,14 @@ function GLRawPipeline:destroy()
 	gl.deleteProgramPipelines(1, ffi.new("GLuint[1]", self.id))
 end
 
+--- A pipeline here is the descriptor it was made from: what GL has is a program pipeline per
+--- context, made when the pipeline is first drawn with and freed with the context that made it --
+--- which is what a caller that destroys a pipeline is asking for either way, and what a method
+--- that was simply missing left it guessing about.
+function GLPipeline:destroy()
+	self.vertex, self.fragment, self.depthStencil, self.primitive = nil, nil, nil, nil
+end
+
 function GLRawPipeline:__tostring()
 	return "GLRawPipeline(" .. tostring(self.id) .. ")"
 end

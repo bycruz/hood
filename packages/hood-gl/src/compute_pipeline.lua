@@ -43,6 +43,12 @@ function GLRawComputePipeline:bind()
 	gl.bindProgramPipeline(self.id)
 end
 
+--- A compute pipeline here is the descriptor it was made from: what GL has is a program per
+--- context, made when it is first dispatched and freed with the context that made it.
+function GLComputePipeline:destroy()
+	self.compute = nil
+end
+
 function GLRawComputePipeline:destroy()
 	gl.deleteProgramPipelines(1, ffi.new("GLuint[1]", self.id))
 end
