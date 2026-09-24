@@ -39,13 +39,29 @@ end
 ---@param descriptor hood.BindGroupDescriptor
 ---@return hood.BindGroup
 function GLDevice:createBindGroup(descriptor)
-	return { entries = descriptor.entries }
+	-- A group here is the entries a draw call binds and nothing else: what it names is bound when
+	-- it is set, so there is no object of the driver's to free and `destroy` says so rather than
+	-- being missing -- a caller that frees its groups should not have to ask whether this backend
+	-- has any.
+	return {
+		entries = descriptor.entries,
+
+		destroy = function(self)
+			self.entries = {}
+		end,
+	}
 end
 
 ---@param entries hood.BindingLayout[]
 ---@return hood.BindGroupLayout
 function GLDevice:createBindGroupLayout(entries)
-	return { entries = entries }
+	return {
+		entries = entries,
+
+		destroy = function(self)
+			self.entries = {}
+		end,
+	}
 end
 
 ---@param descriptor hood.SamplerDescriptor

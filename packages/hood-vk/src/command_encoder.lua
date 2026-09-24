@@ -725,6 +725,11 @@ end
 --- A staging buffer that is outgrown mid-frame is still referenced by copies
 --- already recorded into it, so it is handed to the transient resource list and
 --- freed when the command buffer is recycled instead of immediately.
+---
+--- It is made the size it has to be rather than the next power of two past it: an
+--- upload of a picture is one of these, and doubling a four megabyte one to eight
+--- is memory asked of a driver that may not have it to spare -- the window host
+--- visible memory comes out of is a small one on most machines.
 ---@param size number
 ---@return { buffer: vk.ffi.Buffer, memory: vk.ffi.DeviceMemory, pointer: ffi.cdata*, size: number, offset: number }
 ---@private
@@ -739,11 +744,8 @@ function VKCommandEncoder:_staging(size)
 		self:_trackStagingResource(staging.buffer, staging.memory)
 	end
 
-	local capacity = staging and staging.size or STAGING_MIN_SIZE
 	local needed = (staging and staging.offset or 0) + size
-	while capacity < needed do
-		capacity = capacity * 2
-	end
+	local capacity = math.max(STAGING_MIN_SIZE, needed)
 
 	staging = memory.createMapped(self.device, capacity,
 		vk.BufferUsageFlagBits.TRANSFER_SRC)

@@ -1,6 +1,7 @@
 local vk = require("vkapi")
 
 local vkConvert = require("hood-vk.convert")
+local memory = require("hood-vk.memory")
 
 local VKTextureView = require("hood-vk.texture_view")
 
@@ -87,44 +88,18 @@ function VKTexture.new(device, descriptor)
 		initialLayout = vk.ImageLayout.UNDEFINED,
 	})
 
-	-- TODO: Rewrite and reuse this logic
-	-- Allocate and bind memory (prefer DEVICE_LOCAL, fall back to any compatible type)
+	-- A texture is device-local memory, and the types beside that one are the same memory asked
+	-- for without it: an image the first heap has no room for lands in the next one rather than
+	-- nowhere.
 	local requirements = device.handle:getImageMemoryRequirements(handle)
-	local memProps = vk.getPhysicalDeviceMemoryProperties(device.pd)
-	local memTypeIndex = nil
-	local fallbackIndex = nil
+	local imageMemory = memory.allocate(device, requirements, vk.MemoryPropertyFlagBits.DEVICE_LOCAL, 0, "image")
 
-	local typeBits = tonumber(requirements.memoryTypeBits)
-	local count = tonumber(memProps.memoryTypeCount)
-	for i = 0, count - 1 do
-		-- If memoryTypeBits is 0 (driver doesn't constrain), consider all types
-		if typeBits == 0 or bit.band(typeBits, bit.lshift(1, i)) ~= 0 then
-			if not fallbackIndex then
-				fallbackIndex = i
-			end
-
-			if bit.band(memProps.memoryTypes[i].propertyFlags, vk.MemoryPropertyFlagBits.DEVICE_LOCAL) ~= 0 then
-				memTypeIndex = i
-				break
-			end
-		end
-	end
-
-	memTypeIndex = memTypeIndex or fallbackIndex
-	if not memTypeIndex then
-		error("Failed to find compatible memory type for image")
-	end
-
-	local memory = device.handle:allocateMemory({
-		allocationSize = requirements.size,
-		memoryTypeIndex = memTypeIndex,
-	})
-	device.handle:bindImageMemory(handle, memory, 0)
+	device.handle:bindImageMemory(handle, imageMemory, 0)
 
 	return setmetatable({
 		device = device,
 		handle = handle,
-		memory = memory,
+		memory = imageMemory,
 		format = format,
 		width = descriptor.extents.width,
 		height = descriptor.extents.height,

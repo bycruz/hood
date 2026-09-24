@@ -117,6 +117,10 @@ function VKQueue:writeBuffer(buffer, size, data, offset)
 	cmd:writeBuffer(buffer, size, data, offset)
 	self:submit(cmd:finish())
 	self.device.handle:queueWaitIdle(self.handle)
+
+	-- The upload is done and waited for, so what staged it is not held: a buffer the size of
+	-- whatever was written, kept until the next command buffer of a frame that may never come.
+	self:transientBuffer():releaseStaging()
 end
 
 --- Helper method to write data to a texture
@@ -128,6 +132,11 @@ function VKQueue:writeTexture(texture, descriptor, data)
 	cmd:writeTexture(texture, descriptor, data)
 	self:submit(cmd:finish())
 	self.device.handle:queueWaitIdle(self.handle)
+
+	-- An upload is copied out of staging before this returns, so the staging it went through is
+	-- let go of here rather than kept: a texture of a photograph is a staging buffer of a
+	-- photograph, and holding it for the life of the process is holding it for nothing.
+	self:transientBuffer():releaseStaging()
 end
 
 --- Claim a freshly created texture's subresources so it can be drawn with.

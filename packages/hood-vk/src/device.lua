@@ -15,7 +15,9 @@ local VKTextureView = require("hood-vk.texture_view")
 ---@field public queue hood-vk.Queue
 ---@field handle vk.Device
 ---@field pd vk.ffi.PhysicalDevice
----@field descriptorPool vk.ffi.DescriptorPool
+---@field descriptorPool vk.ffi.DescriptorPool # The pool descriptor sets are handed out of
+---@field descriptorPools vk.ffi.DescriptorPool[] # And the ones before it, once it filled up
+---@field descriptorSetPools table<vk.ffi.DescriptorSet, vk.ffi.DescriptorPool> # Which pool a set came from
 ---@field _renderPassCache table<string, vk.ffi.RenderPass>
 ---@field _commandPool vk.ffi.CommandPool? # Made when the first command buffer is, one per device
 local VKDevice = {}
@@ -60,31 +62,110 @@ function VKDevice.new(adapter)
 	local device = setmetatable({ pd = adapter.pd, handle = handle }, VKDevice)
 	device.queue = VKQueue.new(device, adapter.gfxQueueFamilyIdx, 0)
 
-	local sizes = vk.DescriptorPoolSizeArray(5)
-	sizes[0].type = vk.DescriptorType.STORAGE_BUFFER
-	sizes[0].descriptorCount = 256
-	sizes[1].type = vk.DescriptorType.SAMPLED_IMAGE
-	sizes[1].descriptorCount = 256
-	sizes[2].type = vk.DescriptorType.STORAGE_IMAGE
-	sizes[2].descriptorCount = 256
-	sizes[3].type = vk.DescriptorType.SAMPLER
-	sizes[3].descriptorCount = 256
-	sizes[4].type = vk.DescriptorType.UNIFORM_BUFFER
-	sizes[4].descriptorCount = 256
-
-	-- TODO: Replace with a growing array of descriptor pools later
-	device.descriptorPool = handle:createDescriptorPool({
-		flags = vk.DescriptorPoolCreateFlagBits.FREE_DESCRIPTOR_SET,
-		maxSets = 512,
-		poolSizeCount = 5,
-		pPoolSizes = sizes,
-	})
+	device.descriptorPools = {}
+	device.descriptorSetPools = {}
+	device.descriptorPool = device:createDescriptorPool()
 
 	-- Cache for render passes keyed by attachment configuration, so we don't
 	-- create VkRenderPass objects every frame (they're usually reused).
 	device._renderPassCache = {}
 
 	return device
+end
+
+-- How many descriptor sets a pool holds, and how many of each kind of descriptor they may name.
+-- A pool cannot hand out more than this, and one that has handed out all of them is joined by
+-- another: a screen with a bind group per picture is a screen that outgrows one pool long before
+-- it runs out of anything else.
+local POOL_SETS = 512
+local POOL_DESCRIPTORS = 256
+
+--- A pool for descriptor sets to be handed out of. A set goes back to the pool it came from when
+--- it is freed, so a program that makes and drops them over and over reuses the room it has.
+---@return vk.ffi.DescriptorPool
+function VKDevice:createDescriptorPool()
+	local types = {
+		vk.DescriptorType.STORAGE_BUFFER,
+		vk.DescriptorType.SAMPLED_IMAGE,
+		vk.DescriptorType.STORAGE_IMAGE,
+		vk.DescriptorType.SAMPLER,
+		vk.DescriptorType.UNIFORM_BUFFER,
+	}
+
+	local sizes = vk.DescriptorPoolSizeArray(#types)
+	for index, kind in ipairs(types) do
+		sizes[index - 1].type = kind
+		sizes[index - 1].descriptorCount = POOL_DESCRIPTORS
+	end
+
+	local pool = self.handle:createDescriptorPool({
+		flags = vk.DescriptorPoolCreateFlagBits.FREE_DESCRIPTOR_SET,
+		maxSets = POOL_SETS,
+		poolSizeCount = #types,
+		pPoolSizes = sizes,
+	})
+
+	self.descriptorPools[#self.descriptorPools + 1] = pool
+
+	return pool
+end
+
+--- Allocates a descriptor set from the layout, out of the pool that is open, and out of a new pool
+--- when that one is full: what a pool has room for is fixed when it is made, so an app that makes
+--- a bind group per picture would otherwise stop being able to draw one.
+---@param layout vk.ffi.DescriptorSetLayout
+---@return vk.ffi.DescriptorSet
+function VKDevice:createDescriptorSet(layout)
+	local set = self:tryDescriptorSet(self.descriptorPool, layout)
+
+	if not set then
+		self.descriptorPool = self:createDescriptorPool()
+		set = self:tryDescriptorSet(self.descriptorPool, layout)
+	end
+
+	if not set then
+		error("hood: a descriptor set could not be allocated from a pool of " .. POOL_SETS .. " sets")
+	end
+
+	self.descriptorSetPools[set] = self.descriptorPool
+
+	return set
+end
+
+---@param pool vk.ffi.DescriptorPool
+---@param layout vk.ffi.DescriptorSetLayout
+---@return vk.ffi.DescriptorSet? set # Nothing when the pool has no room for one
+function VKDevice:tryDescriptorSet(pool, layout)
+	local layouts = vk.DescriptorSetLayoutArray(1)
+	layouts[0] = layout
+
+	local ok, sets = pcall(self.handle.allocateDescriptorSets, self.handle, {
+		descriptorPool = pool,
+		descriptorSetCount = 1,
+		pSetLayouts = layouts,
+	})
+
+	if not ok then
+		-- The pool is out of sets or out of descriptors: an empty one is made for this one to
+		-- come out of, which is the caller's to do.
+		return nil
+	end
+
+	return sets[1]
+end
+
+--- Hands a descriptor set back to the pool it came from. The set is not to be used again after
+--- this, and what it named -- a texture, a buffer, a sampler -- is not this call's to free.
+---@param set vk.ffi.DescriptorSet
+function VKDevice:freeDescriptorSet(set)
+	local pool = self.descriptorSetPools[set]
+
+	if pool == nil then
+		return
+	end
+
+	self.descriptorSetPools[set] = nil
+	self.handle:freeDescriptorSets(pool, { set })
 end
 
 ---@param descriptor hood.BufferDescriptor

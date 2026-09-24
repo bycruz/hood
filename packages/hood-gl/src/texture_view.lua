@@ -17,6 +17,8 @@ GLTextureView.__index = GLTextureView
 function GLTextureView.new(texture, descriptor)
 	descriptor = descriptor or {}
 	local mipLevelCount = texture.descriptor and texture.descriptor.mipLevelCount or 1
+	-- A view of a texture is the texture: what a bind group names is the id of the one object, and
+	-- what a backend that has views of their own would free separately is not a thing here.
 	return setmetatable({
 		texture = texture,
 		id = texture.id,
@@ -29,6 +31,12 @@ function GLTextureView.new(texture, descriptor)
 		baseArrayLayer = descriptor.baseArrayLayer or 0,
 		layerCount = descriptor.layerCount,
 	}, GLTextureView)
+end
+
+--- A view is not an object of the driver's here: the texture is what was created, and its own
+--- destroy is what deletes it.
+function GLTextureView:destroy()
+	self.texture = nil
 end
 
 return GLTextureView

@@ -16,15 +16,9 @@ function BindGroup.new(device, descriptor)
 	local entries = descriptor.entries
 	local layout = descriptor.layout --[[@as hood-vk.BindGroupLayout]]
 
-	-- SAFETY: Vulkan only needs to read it for the lifetime of the call
-	local layoutArray = vk.DescriptorSetLayoutArray(1)
-	layoutArray[0] = layout.handle
-
-	local set = device.handle:allocateDescriptorSets({
-		descriptorPool = device.descriptorPool,
-		descriptorSetCount = 1,
-		pSetLayouts = layoutArray
-	})[1]
+	-- The set comes out of the device's open pool, and out of a new one when that is full: a
+	-- bind group per texture is an app that makes hundreds of them.
+	local set = device:createDescriptorSet(layout.handle)
 
 	local writes = vk.WriteDescriptorSetArray(#entries)
 	for i, entry in ipairs(entries) do
@@ -75,8 +69,14 @@ function BindGroup.new(device, descriptor)
 	return setmetatable({ device = device, layout = layout, set = set, entries = entries }, BindGroup)
 end
 
+--- Hands the set back to the pool it came from, which is what it is to be dropped with.
+---
+--- The layout is not this group's to free: several groups are made with one layout, and a destroy
+--- that freed it would leave every other group holding nothing. A layout is freed by the caller
+--- that made it, once the groups that were made with it are gone.
 function BindGroup:destroy()
-	self.device.handle:destroyDescriptorSetLayout(self.layout.handle)
+	self.device:freeDescriptorSet(self.set)
+	self.set = nil
 end
 
 return BindGroup

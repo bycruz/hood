@@ -61,16 +61,10 @@ function VKBuffer.new(device, descriptor)
 	-- reads it over the bus instead of from system memory.
 	local preferredFlags = hostVisible and vk.MemoryPropertyFlagBits.DEVICE_LOCAL or 0
 
-	local memTypeIndex = memory.findType(device, tonumber(requirements.memoryTypeBits),
-		requiredFlags, preferredFlags)
-	if not memTypeIndex then
-		error("Failed to find compatible memory type for buffer")
-	end
-
-	local deviceMemory = device.handle:allocateMemory({
-		allocationSize = requirements.size,
-		memoryTypeIndex = memTypeIndex,
-	})
+	-- The type the machine would rather use, and then the ones it can: a buffer that asks for
+	-- device-local memory and only ever tried one type is a buffer that fails on a machine whose
+	-- heaps are full of other programs.
+	local deviceMemory = memory.allocate(device, requirements, requiredFlags, preferredFlags, "buffer")
 	device.handle:bindBufferMemory(handle, deviceMemory, 0)
 
 	local buffer = setmetatable({

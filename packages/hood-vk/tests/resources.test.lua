@@ -217,6 +217,29 @@ test.it("buffer: upload bigger than the staging buffer still round-trips", funct
 	dst:unmap()
 end)
 
+-- Host visible memory is a window on most machines -- a resizable BAR is what a large one is --
+-- and it can be full of what the window manager and every other program are holding, so a buffer
+-- of a size the window has no room for is asked of the memory beside it rather than failing.
+test.it("buffer: a mapped buffer larger than the window host memory is allocated", function()
+	local megabytes = 64
+	local buffer = device:createBuffer({
+		size = megabytes * 1024 * 1024,
+		usages = { "COPY_SRC" },
+		mapped = true,
+	})
+
+	test.truthy(buffer.isMapped, "a mapped buffer is one the CPU can write into")
+
+	local pointer = buffer:mappedPointer()
+	pointer[0] = 7
+	pointer[megabytes * 1024 * 1024 - 1] = 9
+
+	test.equal(tonumber(pointer[0]), 7, "and the whole of it is there to write into")
+	test.equal(tonumber(pointer[megabytes * 1024 * 1024 - 1]), 9)
+
+	buffer:destroy()
+end)
+
 test.it("buffer: destroy does not error", function()
 	local buf = device:createBuffer({ size = 64, usages = { "VERTEX", "COPY_DST" } })
 	buf:destroy()
@@ -254,6 +277,89 @@ test.it("bind group: uniform-buffer binding round-trip", function()
 	})
 	test.equal(type(group), "table")
 	group:destroy()
+	buf:destroy()
+	layout:destroy()
+end)
+
+-- A layout is not the first group's to free: several groups are made with one, and a
+-- destroy that freed it left every other group holding nothing.
+test.it("bind group: a layout outlives the groups made with it", function()
+	local layout = device:createBindGroupLayout({
+		{ binding = 0, visibility = { "VERTEX", "FRAGMENT" }, type = "uniform-buffer" },
+	})
+	local buf = device:createBuffer({ size = 64, usages = { "UNIFORM", "COPY_DST" } })
+
+	local first = device:createBindGroup({
+		layout = layout,
+		entries = { { binding = 0, visibility = { "VERTEX", "FRAGMENT" }, type = "uniform-buffer", buffer = buf } },
+	})
+	local second = device:createBindGroup({
+		layout = layout,
+		entries = { { binding = 0, visibility = { "VERTEX", "FRAGMENT" }, type = "uniform-buffer", buffer = buf } },
+	})
+
+	first:destroy()
+
+	-- Still usable: the second group is made with the layout the first was, and a group
+	-- made after both are freed is made with it as well.
+	local third = device:createBindGroup({
+		layout = layout,
+		entries = { { binding = 0, visibility = { "VERTEX", "FRAGMENT" }, type = "uniform-buffer", buffer = buf } },
+	})
+
+	test.equal(type(third), "table")
+
+	second:destroy()
+	third:destroy()
+	buf:destroy()
+	layout:destroy()
+end)
+
+-- What a pool holds is fixed when it is made, so groups that are dropped have to give their
+-- sets back: a screen with a bind group per picture makes hundreds of them.
+test.it("bind group: sets are reused once their groups are dropped", function()
+	local layout = device:createBindGroupLayout({
+		{ binding = 0, visibility = { "VERTEX", "FRAGMENT" }, type = "uniform-buffer" },
+	})
+	local buf = device:createBuffer({ size = 64, usages = { "UNIFORM", "COPY_DST" } })
+
+	for _ = 1, 2000 do
+		local group = device:createBindGroup({
+			layout = layout,
+			entries = { { binding = 0, visibility = { "VERTEX", "FRAGMENT" }, type = "uniform-buffer", buffer = buf } },
+		})
+
+		group:destroy()
+	end
+
+	buf:destroy()
+	layout:destroy()
+end)
+
+-- A screen with a bind group per picture is hundreds of them held at once. How many a pool
+-- holds is the driver's to enforce -- this one hands out more than its own maxSets says it has,
+-- and a driver that does refuse gets another pool made for it -- so what is checked here is that
+-- the sets are handed out and given back without anything falling over.
+test.it("bind group: hundreds of groups held at once", function()
+	local layout = device:createBindGroupLayout({
+		{ binding = 0, visibility = { "VERTEX", "FRAGMENT" }, type = "uniform-buffer" },
+	})
+	local buf = device:createBuffer({ size = 64, usages = { "UNIFORM", "COPY_DST" } })
+	local groups = {}
+
+	for index = 1, 900 do
+		groups[index] = device:createBindGroup({
+			layout = layout,
+			entries = { { binding = 0, visibility = { "VERTEX", "FRAGMENT" }, type = "uniform-buffer", buffer = buf } },
+		})
+	end
+
+	test.equal(#groups, 900, "nine hundred groups are held at once")
+
+	for _, group in ipairs(groups) do
+		group:destroy()
+	end
+
 	buf:destroy()
 	layout:destroy()
 end)

@@ -95,17 +95,27 @@ function VKCommandBuffer:reset()
 	self._swapchain = nil
 end
 
+--- Let go of the staging buffer a frame writes through.
+---
+--- It is kept between frames because a frame usually writes through it again, which is what makes
+--- it worth having; the one thing that does not is an upload that has already been submitted and
+--- waited for, where what is being held is a buffer the size of whatever was uploaded -- a
+--- photograph's worth of memory kept for the rest of the process, for nothing.
+function VKCommandBuffer:releaseStaging()
+	if self.staging then
+		self.device.handle:destroyBuffer(self.staging.buffer)
+		self.device.handle:freeMemory(self.staging.memory)
+		self.staging = nil
+	end
+end
+
 function VKCommandBuffer:destroy()
 	-- Free all transient resources first
 	self:reset()
 
 	-- The persistent staging buffer outlives reset() by design, so it is freed
 	-- here instead.
-	if self.staging then
-		self.device.handle:destroyBuffer(self.staging.buffer)
-		self.device.handle:freeMemory(self.staging.memory)
-		self.staging = nil
-	end
+	self:releaseStaging()
 
 	-- The buffer goes back to the pool it came from, which is the device's and outlives
 	-- it: the pool is what the driver sizes, and keeping the buffer would be a leak of one
