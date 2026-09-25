@@ -36,7 +36,7 @@ end
 ---@param device hood-vk.Device
 ---@param config hood.SurfaceConfig
 ---@param oldSwapchain hood-vk.Swapchain?
----@return hood-vk.Swapchain
+---@return hood-vk.Swapchain? swapchain # Nothing where the surface has no size to make one for
 function VKSurface:configure(device, config, oldSwapchain)
 	-- The old swapchain is deliberately not torn down here: it is still needed
 	-- as the `oldSwapchain` argument below so the new one can take over its
@@ -57,6 +57,19 @@ function VKSurface:configure(device, config, oldSwapchain)
 	if extent.width == 0xFFFFFFFF then
 		extent.width = self.window.width
 		extent.height = self.window.height
+	end
+
+	-- A surface with no size has no swapchain to make, and what is answered is nothing: the
+	-- caller keeps the swapchain it has and drops the frame.
+	--
+	-- A window that is minimized, or one being dragged, comes to nought by nought -- windows
+	-- answers an iconized window with an extent of 120x0 -- and a swapchain made for an extent
+	-- like that is one the presentation engine never gives an image back from, which an acquire
+	-- can only report as VK_TIMEOUT. There is nothing a frame can do about that, so it is not
+	-- made in the first place: the swapchain the window already had is a better thing to hold
+	-- on to, and the window has a size again the moment it is restored.
+	if extent.width == 0 or extent.height == 0 then
+		return nil
 	end
 
 	local hoodFormat = vkConversions.from.textureFormat[format.format]
