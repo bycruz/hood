@@ -54,7 +54,9 @@ function VKTexture.new(device, descriptor)
 		error("Unsupported sample count: " .. tostring(descriptor.sampleCount))
 	end
 
-	local layers = descriptor.extents.dim ~= "3d" and descriptor.extents.count or 1
+	-- An extents that names no count is one layer, which is what most textures are: reading the
+	-- count straight off it makes an image with no layers at all
+	local layers = descriptor.extents.dim ~= "3d" and (descriptor.extents.count or 1) or 1
 	local isDepth = isDepthFormat(descriptor.format)
 
 	---@type vk.ImageUsageFlagBits
