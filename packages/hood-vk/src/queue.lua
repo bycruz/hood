@@ -166,7 +166,11 @@ function VKQueue:present(swapchain)
 	assert(swapchain.currentVkImageIdx ~= nil, "present() called without a successful getCurrentTexture()")
 	-- Use the same per-frame renderFinished semaphore as submit
 	local sem = swapchain.renderFinishedSemaphores[swapchain.currentFrame]
-	swapchain.device.handle:queuePresentKHR(self.handle, swapchain.handle, swapchain.currentVkImageIdx, sem)
+
+	local result = swapchain.device.handle:queuePresentKHR(self.handle, swapchain.handle, swapchain.currentVkImageIdx, sem)
+	if (result == vk.Result.ERROR_OUT_OF_DATE_KHR or result == vk.Result.SUBOPTIMAL_KHR) and swapchain:leftBehind() then
+		swapchain.stale = true
+	end
 
 	swapchain.currentFrame = (swapchain.currentFrame % swapchain.imageCount) + 1
 end

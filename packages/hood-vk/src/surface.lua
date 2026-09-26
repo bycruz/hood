@@ -111,6 +111,7 @@ function VKSurface:configure(device, config, oldSwapchain)
     })
 
 	local newSwapchain = VKSwapchain.new(device, hoodFormat, swapchainInfo)
+	newSwapchain.surface = self
 
 	if oldSwapchain then
 		-- Full teardown, not just the sync objects and command buffers: the

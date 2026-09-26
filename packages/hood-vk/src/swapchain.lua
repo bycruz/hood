@@ -9,6 +9,8 @@ local VKCommandEncoder = require("hood-vk.command_encoder")
 ---@class hood-vk.Swapchain
 ---@field handle vk.ffi.SwapchainKHR
 ---@field device hood-vk.Device
+---@field surface hood-vk.Surface? # What it was made for, which is what says whether it still fits
+---@field stale boolean? # What the last present said: the surface has left this swapchain behind
 ---@field images vk.ffi.Image[] # 1 indexed array of VkImage handles
 ---@field currentVkImageIdx integer
 ---@field imageAvailableSemaphores vk.ffi.Semaphore[]
@@ -107,7 +109,27 @@ local fenceArray = vk.FenceArray(1)
 -- image over at all.
 local ACQUIRE_TIMEOUT = 1000000000
 
+---@return boolean
+function VKSwapchain:leftBehind()
+	local surface = self.surface
+	if surface == nil then
+		return false
+	end
+
+	local window = surface.window
+	if window == nil then
+		return false
+	end
+
+	return window.width ~= self.width or window.height ~= self.height
+end
+
 function VKSwapchain:getCurrentTexture()
+	if self.stale then
+		self.stale = false
+		return nil
+	end
+
 	local fence = self.inFlightFences[self.currentFrame]
 	fenceArray[0] = fence
 
@@ -117,18 +139,7 @@ function VKSwapchain:getCurrentTexture()
 	local sem = self.imageAvailableSemaphores[self.currentFrame]
 	local result, currentVkImageIdx = self.device.handle:acquireNextImageKHR(self.handle, ACQUIRE_TIMEOUT, sem)
 
-	if result == vk.Result.ERROR_OUT_OF_DATE_KHR or result == vk.Result.TIMEOUT
-		or result == vk.Result.NOT_READY then
-		-- Nothing to draw into this frame, and nothing the app did wrong either: the
-		-- swapchain no longer matches the surface, or every image it has is still held
-		-- by the presentation engine and none of them came back in time. What the
-		-- caller does about it is the same either way -- drop the frame, and ask the
-		-- window for another one -- and a frame is a frame: the app is not ended over
-		-- one, which is what erroring here used to do.
-		--
-		-- Deliberately do NOT reset the fence here: this frame will never be
-		-- submitted, so clearing it would leave it unsignaled and the next call's
-		-- infinite wait would deadlock the process.
+	if result == vk.Result.ERROR_OUT_OF_DATE_KHR or result == vk.Result.TIMEOUT or result == vk.Result.NOT_READY then
 		return nil
 	elseif result ~= vk.Result.SUCCESS and result ~= vk.Result.SUBOPTIMAL_KHR then
 		error("Failed to acquire next image: " .. tostring(result))
