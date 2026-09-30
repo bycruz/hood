@@ -104,10 +104,11 @@ function VKQueue:writeBuffer(buffer, size, data, offset)
 	if size == 0 then
 		return
 	end
+
 	buffer:assertWriteFits(size, offset, data)
 
-	-- A mapped buffer is written by the CPU directly, so there is nothing to
-	-- record, submit and wait for.
+	-- A mapped buffer is written by the CPU directly, so there is nothing to record, submit
+	-- and wait for.
 	if buffer.isMapped then
 		ffi.copy(buffer:mappedPointer(offset), data, size)
 		return

@@ -2,28 +2,28 @@ local ffi = require("ffi")
 
 local vk = require("vkapi")
 local vkConversions = require("hood-vk.convert")
-local memory = require("hood-vk.memory")
 
+local VKBuffer = require("hood-vk.buffer")
 local VKCommandBuffer = require("hood-vk.command_buffer")
 
---- Staging allocations start at this much memory and grow by doubling, so a
---- frame that uploads a few small uniform blocks does not allocate per write.
+--- Staging allocations start at this size and grow to fit what is written, so a frame
+--- that uploads a few small uniform blocks does not allocate per write.
 local STAGING_MIN_SIZE = 256 * 1024
 
 ---@class hood-vk.CommandEncoder
 ---@field buffer hood-vk.CommandBuffer
 ---@field device hood-vk.Device
 ---@field pendingDescriptor any
----@field imageViews vk.ffi.ImageView[]
----@field framebuffers vk.ffi.Framebuffer[]
 ---@field pipeline hood-vk.Pipeline?
 ---@field computePipeline hood-vk.ComputePipeline?
 ---@field bindGroups table<number, hood-vk.BindGroup>
----@field renderPasses vk.ffi.RenderPass[]
 ---@field bufferCopy vk.ffi.BufferCopy[] scratch for vkCmdCopyBuffer regions
 ---@field memoryBarrier vk.ffi.MemoryBarrier[] scratch for _flushStagedWrites
+---@field depthBarrier vk.ffi.ImageMemoryBarrier[] scratch for endRendering
 ---@field stagedWrites boolean true while a staged copy is waiting to be made visible
 ---@field inRenderPass boolean true between beginRendering and endRendering
+---@field sampleableDepth hood-vk.Texture?
+---@field sampleableDepthLayers number?
 ---@field _swapchain hood-vk.Swapchain?
 ---@field _reusableRpDesc table?
 local VKCommandEncoder = {}
@@ -80,9 +80,6 @@ function VKCommandEncoder.new(device, reuseBuffer)
 	encoder = setmetatable({
 		device = device,
 		buffer = buffer,
-		imageViews = {},
-		framebuffers = {},
-		renderPasses = {},
 		bindGroups = {},
 		bufferCopy = vk.BufferCopyArray(1),
 		memoryBarrier = vk.MemoryBarrierArray(1),
@@ -390,12 +387,8 @@ function VKCommandEncoder:_beginRenderPass(pipeline, descriptor)
 		end
 	end
 
-	-- Use a cached framebuffer when rendering to a swapchain (the common case).
-	-- Swapchain framebuffers are lazily created and cached per
-	-- (renderPass, imageIdx, dimensions) -- and per depth view when one is
-	-- attached, so a depth-attached pass is cached too rather than building and
-	-- destroying a VkFramebuffer every frame.
-	-- For non-swapchain rendering, create a transient framebuffer tracked per-frame.
+	-- Use a cached framebuffer when rendering to a swapchain (the common case), and a
+	-- framebuffer of this pass's own otherwise.
 	local framebuffer
 	if swapchainForFB then
 		local depthView = nil
@@ -412,7 +405,6 @@ function VKCommandEncoder:_beginRenderPass(pipeline, descriptor)
 			height = height,
 			layers = 1,
 		})
-		self.framebuffers[#self.framebuffers + 1] = framebuffer
 	end
 
 	local clearValues
@@ -712,63 +704,56 @@ function VKCommandEncoder:_flushStagedWrites()
 		1, self.memoryBarrier)
 end
 
---- Hand out `size` bytes of host-visible staging memory for this command
---- buffer, allocating or growing the staging buffer as needed.
+--- Hand out `size` bytes of host-visible staging memory for this command buffer, growing the
+--- staging buffer as needed.
 ---
---- The staging buffer lives on the command buffer rather than the encoder,
---- because copies recorded from it are only finished once the command buffer
---- retires at the end of the frame. Swapchain command buffers are reused per
---- frame slot and the slot waits its fence before being re-recorded, so the
---- same allocation is safely reused next frame; a command buffer destroyed
---- after one use frees it with everything else.
+--- The staging buffer lives on the command buffer rather than the encoder, because the copies
+--- recorded out of it finish only when the command buffer retires. Swapchain command buffers are
+--- reused per frame slot and the slot waits its fence before being re-recorded, so the same
+--- allocation is safely reused next frame; a command buffer used once frees it with everything
+--- else.
 ---
---- A staging buffer that is outgrown mid-frame is still referenced by copies
---- already recorded into it, so it is handed to the transient resource list and
---- freed when the command buffer is recycled instead of immediately.
----
---- It is made the size it has to be rather than the next power of two past it: an
---- upload of a picture is one of these, and doubling a four megabyte one to eight
---- is memory asked of a driver that may not have it to spare -- the window host
---- visible memory comes out of is a small one on most machines.
+--- It is made the size it has to be rather than the next power of two past it: an upload of a
+--- picture is one of these, and doubling a four megabyte one to eight is memory asked of a driver
+--- that may not have it to spare.
 ---@param size number
----@return { buffer: vk.ffi.Buffer, memory: vk.ffi.DeviceMemory, pointer: ffi.cdata*, size: number, offset: number }
+---@return hood-vk.Buffer staging
 ---@private
 function VKCommandEncoder:_staging(size)
-	local staging = self.buffer.staging
-
-	if staging and staging.offset + size <= staging.size then
-		return staging
-	end
+	local staging = self.buffer.stagingBuffer
 
 	if staging then
-		self:_trackStagingResource(staging.buffer, staging.memory)
+		if staging.staging.offset + size <= staging.descriptor.size then
+			return staging
+		end
+
+		-- Copies already recorded out of this one still reference it, so it is kept until the
+		-- command buffer is recycled rather than freed here.
+		self.buffer.stagingResources = self.buffer.stagingResources or {}
+		table.insert(self.buffer.stagingResources, staging)
 	end
 
-	local needed = (staging and staging.offset or 0) + size
-	local capacity = math.max(STAGING_MIN_SIZE, needed)
-
-	staging = memory.createMapped(self.device, capacity,
-		vk.BufferUsageFlagBits.TRANSFER_SRC)
-	staging.offset = 0
-	self.buffer.staging = staging
+	local capacity = math.max(STAGING_MIN_SIZE, (staging and staging.staging.offset or 0) + size)
+	staging = VKBuffer.new(self.device, {
+		size = capacity,
+		usages = { "COPY_SRC" },
+		mapped = true,
+	})
+	staging.staging = { offset = 0 }
+	self.buffer.stagingBuffer = staging
 
 	return staging
 end
 
 --- Upload CPU data into a buffer.
 ---
---- A mapped buffer is written directly by the CPU: no staging, no copy command,
---- nothing submitted. That is the path per-frame data should take.
+--- A mapped buffer is written directly by the CPU: no staging, no copy command, nothing submitted.
+--- That is the path per-frame data should take, and what `VKQueue:writeBuffer` routes to for a
+--- buffer it can write inline.
 ---
---- Everything else goes through host-visible staging memory and a
---- vkCmdCopyBuffer. vkCmdUpdateBuffer was the old path here, but the spec
---- intends it for small updates only, and it is stricter than a copy: its
---- dataSize must be a multiple of 4 (validation reports
---- VUID-vkCmdUpdateBuffer-dataSize-00038), so writing a 6 byte index buffer was
---- never actually valid, and it is capped at 65536 bytes per call, which hood
---- used to work around by chunking. vkCmdCopyBuffer has neither restriction,
---- and drivers implement it as a straight transfer instead of as an internal
---- update path intended for a few hundred bytes.
+--- Everything else goes through host-visible staging memory and a vkCmdCopyBuffer, which is
+--- intended for this unlike vkCmdUpdateBuffer: that one requires a dataSize that is a multiple of
+--- 4 (VUID-vkCmdUpdateBuffer-dataSize-00038) and caps at 65536 bytes per call.
 ---@param buffer hood-vk.Buffer
 ---@param size number
 ---@param data ffi.cdata*
@@ -787,17 +772,18 @@ function VKCommandEncoder:writeBuffer(buffer, size, data, offset)
 	end
 
 	local staging = self:_staging(size)
-	ffi.copy(staging.pointer + staging.offset, data, size)
+	local stagingOffset = staging.staging.offset
+
+	ffi.copy(staging:mappedPointer(stagingOffset), data, size)
+	staging.staging.offset = stagingOffset + size
 
 	local region = self.bufferCopy[0]
-	region.srcOffset = staging.offset
+	region.srcOffset = stagingOffset
 	region.dstOffset = offset
 	region.size = size
 
-	self.device.handle:cmdCopyBuffer(self.buffer.handle, staging.buffer,
-		buffer.handle, 1, self.bufferCopy)
+	self.device.handle:cmdCopyBuffer(self.buffer.handle, staging.handle, buffer.handle, 1, self.bufferCopy)
 
-	staging.offset = staging.offset + size
 	self.stagedWrites = true
 end
 
@@ -852,19 +838,6 @@ function VKCommandEncoder:copyBuffer(source, destination, size, sourceOffset, de
 	self.stagedWrites = true
 end
 
----@param stagingBuffer vk.ffi.Buffer
----@param stagingMemory vk.ffi.DeviceMemory
-function VKCommandEncoder:_trackStagingResource(stagingBuffer, stagingMemory)
-	if not self.buffer.stagingResources then
-		self.buffer.stagingResources = {}
-	end
-	self.buffer.stagingResources[#self.buffer.stagingResources + 1] = {
-		buffer = stagingBuffer,
-		memory = stagingMemory,
-	}
-end
-
--- TODO: Completely rewrite this
 ---@param texture hood-vk.Texture
 ---@param descriptor hood.TextureWriteDescriptor
 ---@param data ffi.cdata*
@@ -874,15 +847,12 @@ function VKCommandEncoder:writeTexture(texture, descriptor, data)
 	local depth = descriptor.depth or 1
 	local dataSize = (descriptor.bytesPerRow or (width * 4)) * height * depth
 
-	-- Staging is bump-allocated per command buffer and shared with buffer
-	-- uploads, instead of a fresh buffer, memory allocation and mapping on
-	-- every single texture.
 	local staging = self:_staging(dataSize)
-	local stagingBuffer = staging.buffer
-	local stagingOffset = staging.offset
+	local stagingOffset = staging.staging.offset
 
-	ffi.copy(staging.pointer + stagingOffset, data + (descriptor.offset or 0), dataSize)
-	staging.offset = stagingOffset + math.ceil(dataSize / 4) * 4
+	ffi.copy(staging:mappedPointer(stagingOffset), data + (descriptor.offset or 0), dataSize)
+	-- Rounded up to 4: a vkCmdCopyBufferToImage source offset must be a multiple of 4.
+	staging.staging.offset = stagingOffset + math.ceil(dataSize / 4) * 4
 
 	-- Transition image to TRANSFER_DST_OPTIMAL
 	local mip = descriptor.mip or 0
@@ -935,7 +905,7 @@ function VKCommandEncoder:writeTexture(texture, descriptor, data)
 	region[0].imageExtent.depth = depth
 
 	self.device.handle:cmdCopyBufferToImage(
-		self.buffer.handle, stagingBuffer, texture.handle,
+		self.buffer.handle, staging.handle, texture.handle,
 		vk.ImageLayout.TRANSFER_DST_OPTIMAL, 1, region)
 
 	-- Transition image to SHADER_READ_ONLY_OPTIMAL
@@ -1131,30 +1101,9 @@ function VKCommandEncoder:finish()
 	end
 
 	self.device.handle:endCommandBuffer(self.buffer.handle)
+	self.buffer._swapchain = self._swapchain
 
-	local buffer = self.buffer
-	local imageViews, framebuffers, renderPasses = self.imageViews, self.framebuffers, self.renderPasses
-
-	-- Hand the tracking tables over to the command buffer only when something
-	-- transient was recorded. The common swapchain path tracks nothing (views,
-	-- framebuffers and render passes are all cached on the swapchain), so the
-	-- encoder keeps its tables and nothing is allocated per frame.
-	if #imageViews ~= 0 or #framebuffers ~= 0 or #renderPasses ~= 0 then
-		buffer.imageViews = imageViews
-		buffer.framebuffers = framebuffers
-		buffer.renderPasses = renderPasses
-		self.imageViews = {}
-		self.framebuffers = {}
-		self.renderPasses = {}
-	else
-		buffer.imageViews = nil
-		buffer.framebuffers = nil
-		buffer.renderPasses = nil
-	end
-
-	buffer._swapchain = self._swapchain
-
-	return buffer
+	return self.buffer
 end
 
 return VKCommandEncoder
