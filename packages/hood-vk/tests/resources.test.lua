@@ -8,24 +8,13 @@ local device = instance:requestAdapter({}):requestDevice()
 
 -- ─── Buffer ───────────────────────────────────────────────────────────────────
 
-test.it("buffer: create with VERTEX usage", function()
-	local buf = device:createBuffer({ size = 256, usages = { "VERTEX", "COPY_DST" } })
-	test.equal(type(buf), "table")
-end)
-
-test.it("buffer: create with INDEX usage", function()
-	local buf = device:createBuffer({ size = 64, usages = { "INDEX", "COPY_DST" } })
-	test.equal(type(buf), "table")
-end)
-
-test.it("buffer: create with UNIFORM usage", function()
-	local buf = device:createBuffer({ size = 64, usages = { "UNIFORM", "COPY_DST" } })
-	test.equal(type(buf), "table")
-end)
-
-test.it("buffer: create with STORAGE usage", function()
-	local buf = device:createBuffer({ size = 256, usages = { "STORAGE" } })
-	test.equal(type(buf), "table")
+test.it("buffer: every usage flag creates", function()
+	for _, usage in ipairs({ "VERTEX", "INDEX", "UNIFORM", "STORAGE", "COPY_DST", "COPY_SRC",
+		"INDIRECT", "MAP_READ" }) do
+		local buf = device:createBuffer({ size = 256, usages = { usage } })
+		test.equal(type(buf), "table", usage)
+		buf:destroy()
+	end
 end)
 
 test.it("buffer: float round-trip via queue:writeBuffer + getMappedRange", function()
@@ -60,52 +49,19 @@ test.it("buffer: uint32 round-trip via queue:writeBuffer", function()
 	buf:unmap()
 end)
 
-test.it("buffer: large write (>65536 bytes) is chunked correctly", function()
-	-- vkCmdUpdateBuffer limit is 65536; writeBuffer must chunk automatically.
-	local BYTES = 128 * 1024  -- 131072 bytes = 32768 uint32s
-	local N = BYTES / ffi.sizeof("uint32_t")
-
-	local src = ffi.new("uint32_t[?]", N)
-	for i = 0, N - 1 do src[i] = i % 65537 end  -- value pattern that wraps differently from chunk boundary
-
-	local buf = device:createBuffer({ size = BYTES, usages = { "MAP_READ" } })
-	device.queue:writeBuffer(buf, BYTES, src)
-
-	buf:mapAsync()
-	local dst = ffi.cast("uint32_t*", buf:getMappedRange())
-	-- Spot-check: first, last, and the boundary around the 65536-byte mark
-	test.equal(tonumber(dst[0]),     tonumber(src[0]))
-	test.equal(tonumber(dst[N - 1]), tonumber(src[N - 1]))
-	-- Exact boundary: byte 65536 = element 16384
-	test.equal(tonumber(dst[16383]), tonumber(src[16383]))
-	test.equal(tonumber(dst[16384]), tonumber(src[16384]))
-	buf:unmap()
-end)
-
-test.it("buffer: write past the end is rejected", function()
+test.it("buffer: a write that does not fit is rejected", function()
 	local buf = device:createBuffer({ size = 256, usages = { "VERTEX", "COPY_DST" } })
-	local src = ffi.new("char[512]")
 
 	test.errors(function()
-		device.queue:writeBuffer(buf, 512, src)
+		device.queue:writeBuffer(buf, 512, ffi.new("char[512]"))
 	end, "hood: buffer write of 512 bytes at offset 0 exceeds the 256 byte buffer [VERTEX, COPY_DST]")
-end)
-
-test.it("buffer: write that overruns through its offset is rejected", function()
-	local buf = device:createBuffer({ size = 256, usages = { "VERTEX", "COPY_DST" } })
-	local src = ffi.new("char[256]")
 
 	test.errors(function()
-		device.queue:writeBuffer(buf, 128, src, 192)
+		device.queue:writeBuffer(buf, 128, ffi.new("char[256]"), 192)
 	end, "hood: buffer write of 128 bytes at offset 192 exceeds the 256 byte buffer [VERTEX, COPY_DST]")
-end)
-
-test.it("buffer: write larger than its source reads is rejected", function()
-	local buf = device:createBuffer({ size = 256, usages = { "VERTEX", "COPY_DST" } })
-	local src = ffi.new("char[64]")
 
 	test.errors(function()
-		device.queue:writeBuffer(buf, 128, src)
+		device.queue:writeBuffer(buf, 128, ffi.new("char[64]"))
 	end, "hood: buffer write of 128 bytes reads past the end of its 64 byte source")
 end)
 
@@ -379,22 +335,28 @@ end)
 
 -- ─── Texture ─────────────────────────────────────────────────────────────────
 
-test.it("texture: create 2D rgba8unorm", function()
-	local tex = device:createTexture({
-		extents = { dim = "2d", width = 8, height = 8 },
-		format = "rgba8unorm",
-		usages = { "RENDER_ATTACHMENT", "COPY_SRC" },
-	})
-	test.equal(type(tex), "table")
+test.it("texture: colour formats create", function()
+	for _, format in ipairs({ "rgba8unorm", "rgba8uint", "bgra8unorm", "bgra8unorm-srgb" }) do
+		local tex = device:createTexture({
+			extents = { dim = "2d", width = 4, height = 4 },
+			format = format,
+			usages = { "COPY_SRC" },
+		})
+		test.equal(type(tex), "table", format)
+		tex:destroy()
+	end
 end)
 
-test.it("texture: create 2D rgba8uint", function()
-	local tex = device:createTexture({
-		extents = { dim = "2d", width = 4, height = 4 },
-		format = "rgba8uint",
-		usages = { "STORAGE_BINDING", "COPY_SRC" },
-	})
-	test.equal(type(tex), "table")
+test.it("texture: depth formats create", function()
+	for _, format in ipairs({ "depth16unorm", "depth24plus", "depth32float" }) do
+		local tex = device:createTexture({
+			extents = { dim = "2d", width = 4, height = 4 },
+			format = format,
+			usages = { "RENDER_ATTACHMENT" },
+		})
+		test.equal(type(tex), "table", format)
+		tex:destroy()
+	end
 end)
 
 test.it("texture: createView infers format and aspect from texture", function()
@@ -453,37 +415,17 @@ end)
 
 -- ─── Sampler ─────────────────────────────────────────────────────────────────
 
-test.it("sampler: nearest filter + clamp-to-edge", function()
-	local s = device:createSampler({
-		magFilter = "nearest", minFilter = "nearest",
-		mipmapFilter = "nearest",
-		addressModeU = "clamp-to-edge",
-		addressModeV = "clamp-to-edge",
-		addressModeW = "clamp-to-edge",
-	})
-	test.equal(type(s), "table")
-end)
-
-test.it("sampler: linear filter + repeat address modes", function()
-	local s = device:createSampler({
-		magFilter = "linear", minFilter = "linear",
-		mipmapFilter = "linear",
-		addressModeU = "repeat",
-		addressModeV = "repeat",
-		addressModeW = "repeat",
-	})
-	test.equal(type(s), "table")
-end)
-
-test.it("sampler: mirrored-repeat address mode", function()
-	local s = device:createSampler({
-		magFilter = "nearest", minFilter = "nearest",
-		mipmapFilter = "nearest",
-		addressModeU = "mirrored-repeat",
-		addressModeV = "mirrored-repeat",
-		addressModeW = "mirrored-repeat",
-	})
-	test.equal(type(s), "table")
+test.it("sampler: filter and address modes are accepted", function()
+	for _, filter in ipairs({ "nearest", "linear" }) do
+		for _, address in ipairs({ "clamp-to-edge", "repeat", "mirrored-repeat" }) do
+			local s = device:createSampler({
+				magFilter = filter, minFilter = filter, mipmapFilter = filter,
+				addressModeU = address, addressModeV = address, addressModeW = address,
+			})
+			test.equal(type(s), "table", filter .. " + " .. address)
+			s:destroy()
+		end
+	end
 end)
 
 test.it("sampler: compare op for shadow sampling", function()

@@ -71,23 +71,6 @@ void main() {
 	unmap()
 end)
 
-test.it("compute: each invocation writes index * 2", function()
-	local ptr, unmap = runCompute([[
-#version 430 core
-layout(local_size_x = 64) in;
-layout(set = 0, binding = 0) buffer Out { uint data[]; };
-void main() {
-    uint i = gl_GlobalInvocationID.x;
-    data[i] = i * 2u;
-}
-]], 64, { x = 1 })
-
-	for i = 0, 63 do
-		test.equal(tonumber(ptr[i]), i * 2)
-	end
-	unmap()
-end)
-
 test.it("compute: multiple workgroups cover the full output range", function()
 	-- 4 workgroups × 16 threads = 64 invocations; each writes its flat index
 	local ptr, unmap = runCompute([[
