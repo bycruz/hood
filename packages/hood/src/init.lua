@@ -1,16 +1,9 @@
--- TODO: turn this into a feature flag when those exist in lpm
----@type boolean
-VULKAN = os.getenv("VULKAN") == "1"
+---@class hood: hood-core.Enums
+local hood = setmetatable({
+	Instance = require("hood.instance"),
+}, {
+	__index = require("hood-core"),
+})
 
----@class hood: hood.Enums
-local hood = {}
-
-hood.Instance = require("hood.instance")
-hood.VertexLayout = require("hood-core.vertex_layout")
-
-local enums = require("hood-core.enums")
-for k, v in pairs(enums) do
-	hood[k] = v
-end
-
+---@cast hood hood-core.Enums
 return hood

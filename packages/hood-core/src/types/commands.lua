@@ -30,6 +30,8 @@
 
 ---@class hood.ComputePassDescriptor
 
+---@class hood.CommandBuffer
+
 ---@class hood.CommandEncoder
 ---@field finish fun(self: hood.CommandEncoder): hood.CommandBuffer
 ---@field beginRendering fun(self: hood.CommandEncoder, descriptor: hood.RenderPassDescriptor)
@@ -52,3 +54,10 @@
 ---@field endComputePass fun(self: hood.CommandEncoder)
 ---@field dispatchWorkgroups fun(self: hood.CommandEncoder, x: number, y: number, z: number)
 ---@field setComputePipeline fun(self: hood.CommandEncoder, pipeline: hood.ComputePipeline)
+
+---@class hood.Queue
+---@field submit fun(self: hood.Queue, commandBuffer: hood.CommandBuffer)
+---@field present fun(self: hood.Queue, swapchain: hood.Swapchain)
+---@field writeBuffer fun(self: hood.Queue, buffer: hood.Buffer, size: number, data: ffi.cdata*, offset: number?)
+---@field writeTexture fun(self: hood.Queue, texture: hood.Texture, descriptor: hood.TextureWriteDescriptor, data: ffi.cdata*)
+---@field waitIdle fun(self: hood.Queue)

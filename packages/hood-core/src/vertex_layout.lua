@@ -46,6 +46,27 @@ function VertexLayout:isInstanceRate()
 	return self.stepMode == "instance"
 end
 
+--- Flatten several layouts into the vertex attributes a pipeline reads, in declaration
+--- order. Locations run on across every layout, so a second layout does not start at 0,
+--- and an attribute that names its own location does not consume a sequential one.
+---@param buffers hood.VertexLayout[]
+---@return { attribute: hood.VertexLayout.Attribute, bufferIndex: number, location: number }[]
+function VertexLayout.resolveLocations(buffers)
+	local resolved = {}
+
+	for bufferIndex, buffer in ipairs(buffers) do
+		for _, attribute in ipairs(buffer.attributes) do
+			resolved[#resolved + 1] = {
+				attribute = attribute,
+				bufferIndex = bufferIndex,
+				location = attribute.location or #resolved,
+			}
+		end
+	end
+
+	return resolved
+end
+
 --- Bytes one component of each attribute type takes.
 local componentSize = {
 	f32 = ffi.sizeof("float"),
