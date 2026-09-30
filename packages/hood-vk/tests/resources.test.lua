@@ -2,6 +2,7 @@ local ffi = require("ffi")
 local test = require("lde-test")
 local core = require("hood-core")
 local vk = require("hood-vk")
+local vkConversions = require("hood-vk.convert")
 
 local instance = vk.new({ backend = "vulkan", flags = { "headless" } })
 local device = instance:requestAdapter({}):requestDevice()
@@ -450,4 +451,56 @@ test.it("sampler: destroy does not error", function()
 	})
 	s:destroy()
 	test.equal(true, true)
+end)
+
+-- ─── Surface format choice ────────────────────────────────────────────────────
+--- Which format a swapchain is made in decides how a shader's output is stored: write linear
+--- values into an `-srgb` format and the hardware encodes them again, which is the difference
+--- between the same app looking right and looking washed out. Drivers disagree about which
+--- format to list first, so the choice cannot be left to the driver.
+
+local ffiSurface = function(fmt)
+	return { format = fmt, colorSpace = 0 }
+end
+
+local vkEnums = require("vkapi.ffi.enums")
+
+test.it("surface format: no request takes the driver's first choice", function()
+	local formats = { ffiSurface(vkEnums.Format.B8G8R8A8_UNORM),
+		ffiSurface(vkEnums.Format.B8G8R8A8_SRGB) }
+
+	local picked = vkConversions.pickSurfaceFormat(formats, nil)
+	test.equal(picked.format, vkEnums.Format.B8G8R8A8_UNORM)
+end)
+
+test.it("surface format: a request is honoured wherever it sits in the list", function()
+	-- The same set of formats in either order must answer the same thing when asked.
+	local linear = vkEnums.Format.B8G8R8A8_UNORM
+	local srgb = vkEnums.Format.B8G8R8A8_SRGB
+
+	local first = vkConversions.pickSurfaceFormat({ ffiSurface(linear), ffiSurface(srgb) }, "bgra8unorm-srgb")
+	local second = vkConversions.pickSurfaceFormat({ ffiSurface(srgb), ffiSurface(linear) }, "bgra8unorm-srgb")
+
+	test.equal(first.format, srgb)
+	test.equal(second.format, srgb)
+end)
+
+test.it("surface format: one the surface does not support is refused", function()
+	local ok, err = pcall(vkConversions.pickSurfaceFormat,
+		{ ffiSurface(vkEnums.Format.B8G8R8A8_UNORM) }, "bgra8unorm-srgb")
+
+	test.equal(ok, false)
+	test.truthy(tostring(err):match("Requested surface format not supported"))
+end)
+
+test.it("surface format: every format hood names converts and inverts back", function()
+	local names = { "rgba8unorm", "rgba8unorm-srgb", "rgba8uint", "bgra8unorm",
+		"bgra8unorm-srgb", "depth16unorm", "depth24plus", "depth32float" }
+
+	for _, name in ipairs(names) do
+		local vkFormat = vkConversions.textureFormat[name]
+		test.truthy(vkFormat, name .. " converts")
+		test.equal(vkConversions.from.textureFormat[vkFormat], name,
+			name .. " inverts back to itself")
+	end
 end)

@@ -23,8 +23,16 @@ local adapter = instance:requestAdapter({ powerPreference = "high-performance" }
 local device = adapter:requestDevice()
 
 -- Create surface and swapchain
+--
+-- Drivers disagree about which swapchain format to hand back first, and the format decides
+-- whether the hardware encodes the shader's output again: the same triangle comes out washed
+-- out on one GPU and correct on another. This example writes colours that are already
+-- display-ready, so it takes the driver's choice. An app writing linear values would name
+-- `format = "bgra8unorm-srgb"` here (Vulkan only; the OpenGL backend ignores the field).
+local surfaceConfig = { presentMode = "immediate" }
+
 local surface = instance:createSurface(window)
-local swapchain = surface:configure(device, { presentMode = "immediate" })
+local swapchain = surface:configure(device, surfaceConfig)
 
 -- Define vertex layout: position (vec3) + color (vec4)
 local vertexLayout = hood.VertexLayout.new()
@@ -109,7 +117,7 @@ eventLoop:run(function(event, handler)
 
 		-- Resize handling
 		if not texture then
-			swapchain = surface:configure(device, { presentMode = "immediate" }, swapchain)
+			swapchain = surface:configure(device, surfaceConfig, swapchain)
 			texture = swapchain:getCurrentTexture()
 
 			if not texture then

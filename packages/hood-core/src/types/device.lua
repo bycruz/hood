@@ -24,6 +24,7 @@
 
 ---@class hood.SurfaceConfig
 ---@field presentMode hood.PresentMode
+---@field format hood.TextureFormat?
 
 ---@class hood.Surface
 ---@field new fun(window: winit.Window): hood.Surface

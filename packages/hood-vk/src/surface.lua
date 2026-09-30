@@ -44,8 +44,7 @@ function VKSurface:configure(device, config, oldSwapchain)
 	local caps = vk.getPhysicalDeviceSurfaceCapabilitiesKHR(device.pd, self.handle)
 	local formats = vk.getPhysicalDeviceSurfaceFormatsKHR(device.pd, self.handle)
 
-	---@type vk.ffi.SurfaceFormatKHR
-	local format = formats[1]
+	local format = vkConversions.pickSurfaceFormat(formats, config.format)
 
 	local imageCount = caps.minImageCount + 1
 	if caps.maxImageCount > 0 and imageCount > caps.maxImageCount then
@@ -63,11 +62,6 @@ function VKSurface:configure(device, config, oldSwapchain)
 	-- drops the frame; the window has a size again when it is restored.
 	if extent.width == 0 or extent.height == 0 then
 		return nil
-	end
-
-	local hoodFormat = vkConversions.from.textureFormat[format.format]
-	if not hoodFormat then
-		error("Unsupported swapchain format: " .. tostring(format.format))
 	end
 
 	-- Query supported present modes and validate requested mode
@@ -103,7 +97,8 @@ function VKSurface:configure(device, config, oldSwapchain)
 		oldSwapchain = oldSwapchain and oldSwapchain.handle or nil
     })
 
-	local newSwapchain = VKSwapchain.new(device, hoodFormat, swapchainInfo)
+	local newSwapchain = VKSwapchain.new(device, vkConversions.from.textureFormat[format.format],
+		swapchainInfo)
 	newSwapchain.surface = self
 
 	if oldSwapchain then

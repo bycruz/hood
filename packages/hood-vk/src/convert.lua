@@ -31,12 +31,13 @@ vkConversions.textureViewType = {
 ---@type table<hood.TextureFormat, vk.Format>
 vkConversions.textureFormat = {
 	["rgba8unorm"] = vk.Format.R8G8B8A8_UNORM,
+	["rgba8unorm-srgb"] = vk.Format.R8G8B8A8_SRGB,
 	["rgba8uint"] = vk.Format.R8G8B8A8_UINT,
 	["depth16unorm"] = vk.Format.D16_UNORM,
 	["depth24plus"] = vk.Format.X8_D24_UNORM_PACK32,
 	["depth32float"] = vk.Format.D32_SFLOAT,
 	["bgra8unorm"] = vk.Format.B8G8R8A8_UNORM,
-	["bgra8unorm-srgb"] = vk.Format.B8G8R8A8_SRGB
+	["bgra8unorm-srgb"] = vk.Format.B8G8R8A8_SRGB,
 }
 
 ---@type table<hood.TextureAspect, vk.ImageAspectFlagBits>
@@ -136,8 +137,32 @@ local function invert(t)
 	return inverted
 end
 
---- LuaLS sucks so I have to do the typing manually here, generics don't resolve.
+--- Generics do not resolve through LuaLS, so these are typed by hand.
 vkConversions.from = {}
 vkConversions.from.textureFormat = invert(vkConversions.textureFormat) ---@type table<vk.Format, hood.TextureFormat>
+
+--- The surface format a swapchain is made in.
+---
+--- Drivers do not agree on which format to list first, so an app that asks for none gets
+--- whatever its GPU happens to prefer: the same shader output written into a linear format and
+--- into an `-srgb` one produces different pixels.
+---@param formats vk.ffi.SurfaceFormatKHR[]
+---@param requested hood.TextureFormat? # nil takes the driver's first choice
+---@return vk.ffi.SurfaceFormatKHR
+function vkConversions.pickSurfaceFormat(formats, requested)
+	if not requested then
+		return formats[1]
+	end
+
+	local wanted = vkConversions.textureFormat[requested]
+
+	for _, format in ipairs(formats) do
+		if format.format == wanted then
+			return format
+		end
+	end
+
+	error("Requested surface format not supported: " .. tostring(requested))
+end
 
 return vkConversions
