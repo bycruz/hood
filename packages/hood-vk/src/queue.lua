@@ -142,14 +142,14 @@ end
 
 --- Claim a freshly created texture's subresources so it can be drawn with.
 ---
---- Sampling goes through a view, and a descriptor covers the whole view, so a
---- texture drawn through it needs every layer in the layout that descriptor
---- names even before anything has been written to it. Doing that here rather
---- than where the texture is first bound or written keeps the barrier outside
---- any render pass, which is where hood's passes require barriers to be.
+--- Sampling goes through a view and a descriptor covers the whole view, so a texture drawn
+--- through it needs every layer in the layout the descriptor names even before anything has been
+--- written to it. Doing this at creation keeps the barrier outside any render pass, which is
+--- where barriers have to be.
 ---@param texture hood-vk.Texture
 function VKQueue:claimTexture(texture)
 	local cmd = VKCommandEncoder.new(self.device, self:transientBuffer())
+
 	if not cmd:claimTexture(texture) then
 		return
 	end

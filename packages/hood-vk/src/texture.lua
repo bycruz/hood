@@ -1,5 +1,6 @@
 local vk = require("vkapi")
 
+local layout = require("hood-core.layout")
 local vkConvert = require("hood-vk.convert")
 local memory = require("hood-vk.memory")
 
@@ -14,20 +15,13 @@ local VKTextureView = require("hood-vk.texture_view")
 ---@field viewType vk.ImageViewType
 ---@field isDepth boolean?
 ---@field usage vk.ImageUsageFlagBits
+---@field layout vk.ImageLayout? # Where the image currently is, as recorded by hood-vk.image
 ---@field isSwapchain boolean?
 ---@field swapchain hood-vk.Swapchain?
 ---@field swapchainImageIdx integer? 0-based index into the swapchain images, set when isSwapchain is true
 ---@field private device hood-vk.Device
 local VKTexture = {}
 VKTexture.__index = VKTexture
-
---- TODO: Deduplicate this code from the pipeline
----@param format hood.TextureFormat
-local function isDepthFormat(format)
-	return format == "depth16unorm"
-		or format == "depth24plus"
-		or format == "depth32float"
-end
 
 ---@param extents hood.TextureExtents
 local function viewTypeFromExtents(extents)
@@ -57,7 +51,7 @@ function VKTexture.new(device, descriptor)
 	-- An extents that names no count is one layer, which is what most textures are: reading the
 	-- count straight off it makes an image with no layers at all
 	local layers = descriptor.extents.dim ~= "3d" and (descriptor.extents.count or 1) or 1
-	local isDepth = isDepthFormat(descriptor.format)
+	local isDepth = layout.isDepthFormat(descriptor.format)
 
 	---@type vk.ImageUsageFlagBits
 	local vkUsage = 0
@@ -108,6 +102,7 @@ function VKTexture.new(device, descriptor)
 		isDepth = isDepth,
 		viewType = viewTypeFromExtents(descriptor.extents),
 		usage = vkUsage,
+		layout = vk.ImageLayout.UNDEFINED,
 	}, VKTexture)
 end
 

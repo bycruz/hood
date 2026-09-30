@@ -3,6 +3,7 @@ local ffi = require("ffi")
 local vk = require("vkapi")
 local vkConversions = require("hood-vk.convert")
 
+local image = require("hood-vk.image")
 local VKBuffer = require("hood-vk.buffer")
 local VKCommandBuffer = require("hood-vk.command_buffer")
 
@@ -17,6 +18,7 @@ local STAGING_MIN_SIZE = 256 * 1024
 ---@field pipeline hood-vk.Pipeline?
 ---@field computePipeline hood-vk.ComputePipeline?
 ---@field bindGroups table<number, hood-vk.BindGroup>
+---@field _attachments { texture: hood-vk.Texture, finalLayout: vk.ImageLayout }[] # Where the pass leaves each attachment
 ---@field bufferCopy vk.ffi.BufferCopy[] scratch for vkCmdCopyBuffer regions
 ---@field memoryBarrier vk.ffi.MemoryBarrier[] scratch for _flushStagedWrites
 ---@field depthBarrier vk.ffi.ImageMemoryBarrier[] scratch for endRendering
@@ -67,11 +69,15 @@ function VKCommandEncoder.new(device, reuseBuffer)
 		encoder.sampleableDepth = nil
 		encoder.sampleableDepthLayers = nil
 
-		-- Bind groups are only consulted by compute passes; drop stale entries
-		-- so a later frame never sees groups from an earlier one. This costs
+		-- Bind groups are only consulted by compute passes and attachment layouts by the end of
+		-- a pass, so stale entries are dropped only where they were recorded. This costs
 		-- nothing on the render-only path.
 		if next(encoder.bindGroups) ~= nil then
 			encoder.bindGroups = {}
+		end
+
+		if #encoder._attachments ~= 0 then
+			encoder._attachments = {}
 		end
 
 		return encoder
@@ -81,6 +87,7 @@ function VKCommandEncoder.new(device, reuseBuffer)
 		device = device,
 		buffer = buffer,
 		bindGroups = {},
+		_attachments = {},
 		bufferCopy = vk.BufferCopyArray(1),
 		memoryBarrier = vk.MemoryBarrierArray(1),
 		depthBarrier = vk.ImageMemoryBarrierArray(1),
@@ -243,59 +250,48 @@ function VKCommandEncoder:_beginRenderPass(pipeline, descriptor)
 	local attachmentDescs = {}
 	local colorRefs = {}
 
-	-- Color attachments — use numeric for loop for JIT-friendliness
 	for i = 1, #colorAttachments do
 		local att = colorAttachments[i]
 		local view = att.texture --[[@as hood-vk.TextureView]]
-		local isSwapchain = view.texture and view.texture.isSwapchain
+		local texture = view.texture
+		local isSwapchain = texture.isSwapchain == true
 
-		-- Image views are owned by their textures and must outlive this command
-		-- buffer, so they are never tracked here for cleanup.
-		if isSwapchain and view.texture.swapchain then
-			self._swapchain = view.texture.swapchain
+		if isSwapchain and texture.swapchain then
+			self._swapchain = texture.swapchain
 		end
 		imageViews[i - 1] = view.handle
 
+		local initialLayout, finalLayout = image.passLayouts(view, isSwapchain, att.op)
+
 		attachmentDescs[#attachmentDescs + 1] = {
-			format = view.texture.format,
+			format = texture.format,
 			samples = vk.SampleCountFlagBits.COUNT_1,
 			loadOp = att.op.type == "clear" and vk.AttachmentLoadOp.CLEAR or vk.AttachmentLoadOp.LOAD,
 			storeOp = vk.AttachmentStoreOp.STORE,
 			stencilLoadOp = vk.AttachmentLoadOp.DONT_CARE,
 			stencilStoreOp = vk.AttachmentStoreOp.DONT_CARE,
-			initialLayout = vk.ImageLayout.UNDEFINED,
-			finalLayout = isSwapchain and vk.ImageLayout.PRESENT_SRC_KHR or vk.ImageLayout.SHADER_READ_ONLY_OPTIMAL,
+			initialLayout = initialLayout,
+			finalLayout = finalLayout,
 		}
 
 		colorRefs[#colorRefs + 1] = {
 			attachment = #attachmentDescs - 1,
-			layout = vk.ImageLayout.COLOR_ATTACHMENT_OPTIMAL
+			layout = vk.ImageLayout.COLOR_ATTACHMENT_OPTIMAL,
 		}
+
+		self._attachments[#self._attachments + 1] = { texture = texture, finalLayout = finalLayout }
 	end
 
 	local depthRef = nil
 	if depthAttachment then
 		local view = depthAttachment.texture --[[@as hood-vk.TextureView]]
+		local texture = view.texture
 		imageViews[totalAttachments - 1] = view.handle
 
-		-- A depth texture made with TEXTURE_BINDING is one that is going to be sampled,
-		-- the way WebGPU and D3D12 both read usages, so the pass leaves it in the layout
-		-- a shader reads rather than the one a pass ends in. A pass that loads therefore
-		-- finds it in the read layout and says so, rather than calling it UNDEFINED and
-		-- inviting the driver to discard what it is about to load.
-		local sampled = view.texture.usage
-			and bit.band(view.texture.usage, vk.ImageUsageFlagBits.SAMPLED) ~= 0
-		local finalLayout = sampled
-			and vk.ImageLayout.SHADER_READ_ONLY_OPTIMAL
-			or vk.ImageLayout.DEPTH_STENCIL_ATTACHMENT_OPTIMAL
-
-		local initialLayout = vk.ImageLayout.UNDEFINED
-		if depthAttachment.op.type ~= "clear" and sampled then
-			initialLayout = vk.ImageLayout.SHADER_READ_ONLY_OPTIMAL
-		end
+		local initialLayout, finalLayout = image.passLayouts(view, false, depthAttachment.op)
 
 		attachmentDescs[#attachmentDescs + 1] = {
-			format = view.texture.format,
+			format = texture.format,
 			samples = vk.SampleCountFlagBits.COUNT_1,
 			loadOp = depthAttachment.op.type == "clear" and vk.AttachmentLoadOp.CLEAR or vk.AttachmentLoadOp.LOAD,
 			storeOp = vk.AttachmentStoreOp.STORE,
@@ -305,10 +301,14 @@ function VKCommandEncoder:_beginRenderPass(pipeline, descriptor)
 			finalLayout = finalLayout,
 		}
 
-		if sampled then
-			self.sampleableDepth = view.texture
+		-- A depth texture left in the layout a shader reads has its writes made visible after
+		-- the pass: a barrier cannot be recorded inside one.
+		if finalLayout == vk.ImageLayout.SHADER_READ_ONLY_OPTIMAL then
+			self.sampleableDepth = texture
 			self.sampleableDepthLayers = view.layerCount
 		end
+
+		self._attachments[#self._attachments + 1] = { texture = texture, finalLayout = finalLayout }
 
 		depthRef = {
 			attachment = #attachmentDescs - 1,
@@ -514,67 +514,35 @@ local descriptorSetArray = vk.DescriptorSetArray(1)
 
 ---@param index number
 ---@param bindGroup hood-vk.BindGroup
---- Put every subresource of a freshly created texture into one layout.
+--- Move every subresource of a freshly created texture into one layout.
 ---
---- A texture is sampled through a view, and a descriptor covers the whole view,
---- so every layer of a sampled texture has to be in the layout the descriptor is
---- written with -- even the ones nothing was ever written to. A layer left in
---- UNDEFINED fails VUID-vkCmdDraw-None-09600 and reads as nothing, so writing
---- layer 0 of an array would otherwise make every later layer sample as empty.
+--- Sampling goes through a view and a descriptor covers the whole view, so every layer of a
+--- sampled texture has to be in the layout the descriptor is written with -- even the ones
+--- nothing was ever written to. A layer left in UNDEFINED reads as nothing, so writing layer 0
+--- of an array would otherwise make every later layer sample as empty.
 ---
---- This belongs at creation, which is the only point with a command buffer of
---- its own outside a render pass: hood's render passes do not allow barriers
---- within them (VUID-vkCmdPipelineBarrier-None-07889).
----
---- Only correct before the image has been written to, since a layer with its own
---- tracked layout has already been moved somewhere deliberately. Texture
---- creators call it once; `texture.layoutDefault` records the result.
+--- This belongs at creation, which is the only point with a command buffer of its own outside
+--- a render pass: barriers cannot be recorded within one.
 ---@param texture hood-vk.Texture
 ---@return boolean claimed
 function VKCommandEncoder:claimTexture(texture)
-	if texture.layoutDefault then
-		return false
-	end
-
-	-- A depth texture is left alone: the barrier below is a colour one, and a depth
-	-- image is moved into the layout a shader reads by the pass that writes it, which
-	-- is the only place that can put it there before anything samples it.
+	-- A depth texture is left alone: a depth image is moved into the layout a shader reads by
+	-- the pass that writes it, which is the only place that can put it there before it is
+	-- sampled.
 	if texture.isDepth then
 		return false
 	end
 
 	-- Only a texture that can be sampled is moved into a shader read layout:
-	-- VUID-VkImageMemoryBarrier-oldLayout-01211 requires the SAMPLED usage for
-	-- it, and render attachment layouts are the render pass's business.
-	local canSample = texture.usage
-		and bit.band(texture.usage, vk.ImageUsageFlagBits.SAMPLED) ~= 0
-	if not canSample then
+	-- VUID-VkImageMemoryBarrier-oldLayout-01211 requires the SAMPLED usage for it, and render
+	-- attachment layouts are the render pass's business.
+	if bit.band(texture.usage, vk.ImageUsageFlagBits.SAMPLED) == 0 then
 		return false
 	end
 
-	local whole = vk.ImageMemoryBarrierArray(1)
-	whole[0].srcAccessMask = 0
-	whole[0].dstAccessMask = vk.AccessFlags.SHADER_READ
-	whole[0].oldLayout = vk.ImageLayout.UNDEFINED
-	whole[0].newLayout = vk.ImageLayout.SHADER_READ_ONLY_OPTIMAL
-	whole[0].srcQueueFamilyIndex = 0xFFFFFFFF -- VK_QUEUE_FAMILY_IGNORED
-	whole[0].dstQueueFamilyIndex = 0xFFFFFFFF
-	whole[0].image = texture.handle
-	whole[0].subresourceRange.aspectMask = vk.ImageAspectFlagBits.COLOR
-	whole[0].subresourceRange.baseMipLevel = 0
-	whole[0].subresourceRange.levelCount = vk.REMAINING_MIP_LEVELS
-	whole[0].subresourceRange.baseArrayLayer = 0
-	whole[0].subresourceRange.layerCount = vk.REMAINING_ARRAY_LAYERS
-
-	self.device.handle:cmdPipelineBarrier(
-		self.buffer.handle,
-		vk.PipelineStageFlagBits.TOP_OF_PIPE,
-		vk.PipelineStageFlagBits.FRAGMENT_SHADER,
-		1, whole)
-
-	texture.layerLayouts = {}
-	texture.layoutDefault = vk.ImageLayout.SHADER_READ_ONLY_OPTIMAL
-	return true
+	return image.transition(self.device, self.buffer.handle, texture,
+		vk.ImageLayout.SHADER_READ_ONLY_OPTIMAL, vk.PipelineStageFlagBits.FRAGMENT_SHADER,
+		vk.AccessFlags.SHADER_READ)
 end
 
 function VKCommandEncoder:setBindGroup(index, bindGroup)
@@ -592,15 +560,8 @@ function VKCommandEncoder:setBindGroup(index, bindGroup)
 	self.bindGroups[index] = bindGroup
 	descriptorSetArray[0] = bindGroup.set
 
-	self.device.handle:cmdBindDescriptorSets(
-		self.buffer.handle,
-		bindPoint,
-		layout,
-		index,
-		1,
-		descriptorSetArray,
-		0
-	)
+	self.device.handle:cmdBindDescriptorSets(self.buffer.handle, bindPoint, layout, index, 1,
+		descriptorSetArray, 0)
 end
 
 --- End the open render pass.
@@ -619,35 +580,30 @@ function VKCommandEncoder:endRendering()
 	self.inRenderPass = false
 	self.device.handle:cmdEndRenderPass(self.buffer.handle)
 
-	-- A depth attachment the frame goes on to sample was left by the pass in the layout
-	-- a shader reads, so what is left is to make its writes visible to those reads. A
-	-- barrier cannot be recorded inside a render pass, which is why it is here rather
-	-- than with the pass that wrote it
+	-- Remember where the pass left each attachment, so the next pass or copy finds it there.
+	local attachments = self._attachments
+	for i = 1, #attachments do
+		local attachment = attachments[i]
+		attachment.texture.layout = attachment.finalLayout
+	end
+	self._attachments = {}
+
+	-- A depth attachment the frame goes on to sample was left by the pass in the layout a
+	-- shader reads, so what is left is to make its writes visible to those reads. The pass
+	-- cannot record that barrier itself: barriers are not recordable within a render pass.
 	local depth = self.sampleableDepth
 	if depth then
-		local layers = self.sampleableDepthLayers or 1
+		image.barrier(self.device, self.buffer.handle, self.depthBarrier, depth,
+			vk.ImageLayout.SHADER_READ_ONLY_OPTIMAL,
+			vk.PipelineStageFlagBits.LATE_FRAGMENT_TESTS,
+			vk.AccessFlags.DEPTH_STENCIL_ATTACHMENT_WRITE,
+			vk.AccessFlags.SHADER_READ,
+			vk.PipelineStageFlagBits.FRAGMENT_SHADER,
+			vk.ImageAspectFlagBits.DEPTH,
+			self.sampleableDepthLayers or 1)
+
 		self.sampleableDepth = nil
 		self.sampleableDepthLayers = nil
-
-		local barrier = self.depthBarrier[0]
-		barrier.srcAccessMask = vk.AccessFlags.DEPTH_STENCIL_ATTACHMENT_WRITE
-		barrier.dstAccessMask = vk.AccessFlags.SHADER_READ
-		barrier.oldLayout = vk.ImageLayout.SHADER_READ_ONLY_OPTIMAL
-		barrier.newLayout = vk.ImageLayout.SHADER_READ_ONLY_OPTIMAL
-		barrier.srcQueueFamilyIndex = 0xFFFFFFFF -- VK_QUEUE_FAMILY_IGNORED
-		barrier.dstQueueFamilyIndex = 0xFFFFFFFF
-		barrier.image = depth.handle
-		barrier.subresourceRange.aspectMask = vk.ImageAspectFlagBits.DEPTH
-		barrier.subresourceRange.baseMipLevel = 0
-		barrier.subresourceRange.levelCount = 1
-		barrier.subresourceRange.baseArrayLayer = 0
-		barrier.subresourceRange.layerCount = layers
-
-		self.device.handle:cmdPipelineBarrier(
-			self.buffer.handle,
-			vk.PipelineStageFlagBits.LATE_FRAGMENT_TESTS,
-			vk.PipelineStageFlagBits.FRAGMENT_SHADER,
-			1, self.depthBarrier)
 	end
 end
 
@@ -696,12 +652,8 @@ function VKCommandEncoder:_flushStagedWrites()
 
 	-- Not usable inside a render pass, where the stage masks have to stay within
 	-- the graphics stages; both call sites are outside one.
-	self.device.handle:cmdPipelineBarrier(
-		self.buffer.handle,
-		vk.PipelineStageFlagBits.TRANSFER,
-		vk.PipelineStageFlagBits.ALL_COMMANDS,
-		0, nil,
-		1, self.memoryBarrier)
+	self.device.handle:cmdPipelineBarrier(self.buffer.handle, vk.PipelineStageFlagBits.TRANSFER,
+		vk.PipelineStageFlagBits.ALL_COMMANDS, 0, nil, 1, self.memoryBarrier)
 end
 
 --- Hand out `size` bytes of host-visible staging memory for this command buffer, growing the
@@ -833,8 +785,7 @@ function VKCommandEncoder:copyBuffer(source, destination, size, sourceOffset, de
 	region.dstOffset = destinationOffset
 	region.size = size
 
-	self.device.handle:cmdCopyBuffer(self.buffer.handle, source.handle,
-		destination.handle, 1, self.bufferCopy)
+	self.device.handle:cmdCopyBuffer(self.buffer.handle, source.handle, destination.handle, 1, self.bufferCopy)
 	self.stagedWrites = true
 end
 
@@ -854,44 +805,14 @@ function VKCommandEncoder:writeTexture(texture, descriptor, data)
 	-- Rounded up to 4: a vkCmdCopyBufferToImage source offset must be a multiple of 4.
 	staging.staging.offset = stagingOffset + math.ceil(dataSize / 4) * 4
 
-	-- Transition image to TRANSFER_DST_OPTIMAL
 	local mip = descriptor.mip or 0
 	local layer = descriptor.layer or 0
 
-	-- Use tracked layout if available, then whatever the image was claimed with
-	-- at creation, and only then UNDEFINED for a texture nothing has touched.
-	texture.layerLayouts = texture.layerLayouts or {}
-	local oldLayout = texture.layerLayouts[layer] or texture.layoutDefault or vk.ImageLayout.UNDEFINED
-	local srcAccessMask = 0
-	local srcStage = vk.PipelineStageFlagBits.TOP_OF_PIPE
-	if oldLayout == vk.ImageLayout.SHADER_READ_ONLY_OPTIMAL then
-		srcAccessMask = vk.AccessFlags.SHADER_READ
-		srcStage = vk.PipelineStageFlagBits.FRAGMENT_SHADER
-	end
+	image.transition(self.device, self.buffer.handle, texture,
+		vk.ImageLayout.TRANSFER_DST_OPTIMAL, vk.PipelineStageFlagBits.TRANSFER, vk.AccessFlags.TRANSFER_WRITE)
 
-	local barriers = vk.ImageMemoryBarrierArray(1)
-	barriers[0].srcAccessMask = srcAccessMask
-	barriers[0].dstAccessMask = vk.AccessFlags.TRANSFER_WRITE
-	barriers[0].oldLayout = oldLayout
-	barriers[0].newLayout = vk.ImageLayout.TRANSFER_DST_OPTIMAL
-	barriers[0].srcQueueFamilyIndex = 0xFFFFFFFF -- VK_QUEUE_FAMILY_IGNORED
-	barriers[0].dstQueueFamilyIndex = 0xFFFFFFFF
-	barriers[0].image = texture.handle
-	barriers[0].subresourceRange.aspectMask = vk.ImageAspectFlagBits.COLOR
-	barriers[0].subresourceRange.baseMipLevel = mip
-	barriers[0].subresourceRange.levelCount = 1
-	barriers[0].subresourceRange.baseArrayLayer = layer
-	barriers[0].subresourceRange.layerCount = 1
-
-	self.device.handle:cmdPipelineBarrier(
-		self.buffer.handle,
-		srcStage,
-		vk.PipelineStageFlagBits.TRANSFER,
-		1, barriers)
-
-	-- Copy buffer to image. The staging allocation is bump-allocated, so the
-	-- region has to point at this upload's slice of it rather than assuming the
-	-- data starts at zero.
+	-- The region points at this upload's slice of the staging allocation rather than assuming
+	-- the data starts at zero.
 	local region = vk.BufferImageCopyArray(1)
 	region[0].bufferOffset = stagingOffset
 	region[0].bufferRowLength = descriptor.bytesPerRow and (descriptor.bytesPerRow / 4) or 0
@@ -904,27 +825,12 @@ function VKCommandEncoder:writeTexture(texture, descriptor, data)
 	region[0].imageExtent.height = height
 	region[0].imageExtent.depth = depth
 
-	self.device.handle:cmdCopyBufferToImage(
-		self.buffer.handle, staging.handle, texture.handle,
+	self.device.handle:cmdCopyBufferToImage(self.buffer.handle, staging.handle, texture.handle,
 		vk.ImageLayout.TRANSFER_DST_OPTIMAL, 1, region)
 
-	-- Transition image to SHADER_READ_ONLY_OPTIMAL
-	barriers[0].srcAccessMask = vk.AccessFlags.TRANSFER_WRITE
-	barriers[0].dstAccessMask = vk.AccessFlags.SHADER_READ
-	barriers[0].oldLayout = vk.ImageLayout.TRANSFER_DST_OPTIMAL
-	barriers[0].newLayout = vk.ImageLayout.SHADER_READ_ONLY_OPTIMAL
-
-	self.device.handle:cmdPipelineBarrier(
-		self.buffer.handle,
-		vk.PipelineStageFlagBits.TRANSFER,
-		vk.PipelineStageFlagBits.FRAGMENT_SHADER,
-		1, barriers)
-
-	-- Track current layout per layer
-	texture.layerLayouts[layer] = vk.ImageLayout.SHADER_READ_ONLY_OPTIMAL
+	image.transition(self.device, self.buffer.handle, texture, vk.ImageLayout.SHADER_READ_ONLY_OPTIMAL,
+		vk.PipelineStageFlagBits.FRAGMENT_SHADER, vk.AccessFlags.SHADER_READ)
 end
-
-local copyBarrier = vk.ImageMemoryBarrierArray(1)
 
 ---@param source hood.ImageCopyTexture
 ---@param destination hood.ImageCopyBuffer
@@ -936,34 +842,8 @@ function VKCommandEncoder:copyTextureToBuffer(source, destination, copySize)
 	local origin = source.origin or {}
 	local layer = origin.z or 0
 
-	texture.layerLayouts = texture.layerLayouts or {}
-	local oldLayout = texture.layerLayouts[layer] or vk.ImageLayout.SHADER_READ_ONLY_OPTIMAL
-
-	local srcAccessMask = vk.AccessFlags.COLOR_ATTACHMENT_WRITE
-	local srcStage = vk.PipelineStageFlagBits.COLOR_ATTACHMENT_OUTPUT
-	if oldLayout == vk.ImageLayout.SHADER_READ_ONLY_OPTIMAL then
-		srcAccessMask = vk.AccessFlags.SHADER_READ
-		srcStage = vk.PipelineStageFlagBits.FRAGMENT_SHADER
-	end
-
-	copyBarrier[0].srcAccessMask = srcAccessMask
-	copyBarrier[0].dstAccessMask = vk.AccessFlags.TRANSFER_READ
-	copyBarrier[0].oldLayout = oldLayout
-	copyBarrier[0].newLayout = vk.ImageLayout.TRANSFER_SRC_OPTIMAL
-	copyBarrier[0].srcQueueFamilyIndex = 0xFFFFFFFF
-	copyBarrier[0].dstQueueFamilyIndex = 0xFFFFFFFF
-	copyBarrier[0].image = texture.handle
-	copyBarrier[0].subresourceRange.aspectMask = vk.ImageAspectFlagBits.COLOR
-	copyBarrier[0].subresourceRange.baseMipLevel = mipLevel
-	copyBarrier[0].subresourceRange.levelCount = 1
-	copyBarrier[0].subresourceRange.baseArrayLayer = layer
-	copyBarrier[0].subresourceRange.layerCount = 1
-
-	self.device.handle:cmdPipelineBarrier(
-		self.buffer.handle,
-		srcStage,
-		vk.PipelineStageFlagBits.TRANSFER,
-		1, copyBarrier)
+	image.transition(self.device, self.buffer.handle, texture,
+		vk.ImageLayout.TRANSFER_SRC_OPTIMAL, vk.PipelineStageFlagBits.TRANSFER, vk.AccessFlags.TRANSFER_READ)
 
 	local region = vk.BufferImageCopyArray(1)
 	region[0].bufferOffset = destination.offset or 0
@@ -980,70 +860,27 @@ function VKCommandEncoder:copyTextureToBuffer(source, destination, copySize)
 	region[0].imageExtent.height = copySize.height
 	region[0].imageExtent.depth = copySize.depthOrArrayLayers or 1
 
-	self.device.handle:cmdCopyImageToBuffer(
-		self.buffer.handle, texture.handle,
+	self.device.handle:cmdCopyImageToBuffer(self.buffer.handle, texture.handle,
 		vk.ImageLayout.TRANSFER_SRC_OPTIMAL, buffer.handle, 1, region)
 
-	-- Transition back so the next writeTexture on this layer sees the correct layout
-	copyBarrier[0].srcAccessMask = vk.AccessFlags.TRANSFER_READ
-	copyBarrier[0].dstAccessMask = vk.AccessFlags.SHADER_READ
-	copyBarrier[0].oldLayout = vk.ImageLayout.TRANSFER_SRC_OPTIMAL
-	copyBarrier[0].newLayout = vk.ImageLayout.SHADER_READ_ONLY_OPTIMAL
-
-	self.device.handle:cmdPipelineBarrier(
-		self.buffer.handle,
-		vk.PipelineStageFlagBits.TRANSFER,
-		vk.PipelineStageFlagBits.FRAGMENT_SHADER,
-		1, copyBarrier)
-
-	texture.layerLayouts[layer] = vk.ImageLayout.SHADER_READ_ONLY_OPTIMAL
+	-- Back to wherever this texture lives when nothing holds it: a readback target is not
+	-- necessarily one that can be sampled.
+	image.transition(self.device, self.buffer.handle, texture, image.restingLayout(texture),
+		vk.PipelineStageFlagBits.FRAGMENT_SHADER, vk.AccessFlags.SHADER_READ)
 end
-
-local storageBarrier = vk.ImageMemoryBarrierArray(1)
 
 ---@param descriptor hood.ComputePassDescriptor
 function VKCommandEncoder:beginComputePass(descriptor)
-	-- Same reasoning as the render pass: staged writes must be visible before
-	-- the dispatch reads them.
+	-- Same reasoning as the render pass: staged writes must be visible before the dispatch
+	-- reads them.
 	self:_flushStagedWrites()
 
-	for _, bindGroup in pairs(self.bindGroups) do
-		for _, entry in ipairs(bindGroup.entries) do
-			if entry.type == "storageTexture" then
-				local view = entry.texture --[[@as hood-vk.TextureView]]
-				local tex = view.texture
-				local layer = view.baseArrayLayer
-				tex.layerLayouts = tex.layerLayouts or {}
-				local currentLayout = tex.layerLayouts[layer] or tex.layoutDefault or vk.ImageLayout.UNDEFINED
-				if currentLayout ~= vk.ImageLayout.GENERAL then
-					local srcAccess = 0
-					local srcStage = vk.PipelineStageFlagBits.TOP_OF_PIPE
-					if currentLayout == vk.ImageLayout.SHADER_READ_ONLY_OPTIMAL then
-						srcAccess = vk.AccessFlags.SHADER_READ
-						srcStage = vk.PipelineStageFlagBits.FRAGMENT_SHADER
-					end
-					storageBarrier[0].srcAccessMask = srcAccess
-					storageBarrier[0].dstAccessMask = vk.AccessFlags.SHADER_WRITE
-					storageBarrier[0].oldLayout = currentLayout
-					storageBarrier[0].newLayout = vk.ImageLayout.GENERAL
-					storageBarrier[0].srcQueueFamilyIndex = 0xFFFFFFFF
-					storageBarrier[0].dstQueueFamilyIndex = 0xFFFFFFFF
-					storageBarrier[0].image = tex.handle
-					storageBarrier[0].subresourceRange.aspectMask = vk.ImageAspectFlagBits.COLOR
-					storageBarrier[0].subresourceRange.baseMipLevel = 0
-					storageBarrier[0].subresourceRange.levelCount = 1
-					storageBarrier[0].subresourceRange.baseArrayLayer = layer
-					storageBarrier[0].subresourceRange.layerCount = view.layerCount
-					self.device.handle:cmdPipelineBarrier(
-						self.buffer.handle,
-						srcStage,
-						vk.PipelineStageFlagBits.COMPUTE_SHADER,
-						1, storageBarrier)
-					tex.layerLayouts[layer] = vk.ImageLayout.GENERAL
-				end
-			end
-		end
-	end
+	-- A storage texture is written through a descriptor, and a descriptor names one layout for
+	-- the whole view, so it has to be GENERAL for the dispatch.
+	image.eachStorageTexture(self.bindGroups, function(texture)
+		image.transition(self.device, self.buffer.handle, texture,
+			vk.ImageLayout.GENERAL, vk.PipelineStageFlagBits.COMPUTE_SHADER, vk.AccessFlags.SHADER_WRITE)
+	end)
 end
 
 ---@param pipeline hood-vk.ComputePipeline
@@ -1061,38 +898,12 @@ function VKCommandEncoder:dispatchWorkgroups(x, y, z)
 end
 
 function VKCommandEncoder:endComputePass()
-	-- Transition storage textures back to SHADER_READ_ONLY_OPTIMAL so the render pass can sample them
-	for _, bindGroup in pairs(self.bindGroups) do
-		for _, entry in ipairs(bindGroup.entries) do
-			if entry.type == "storageTexture" then
-				local view = entry.texture --[[@as hood-vk.TextureView]]
-				local tex = view.texture
-				local layer = view.baseArrayLayer
-				tex.layerLayouts = tex.layerLayouts or {}
-				local currentLayout = tex.layerLayouts[layer] or tex.layoutDefault or vk.ImageLayout.UNDEFINED
-				if currentLayout ~= vk.ImageLayout.SHADER_READ_ONLY_OPTIMAL then
-					storageBarrier[0].srcAccessMask = vk.AccessFlags.SHADER_WRITE
-					storageBarrier[0].dstAccessMask = vk.AccessFlags.SHADER_READ
-					storageBarrier[0].oldLayout = currentLayout
-					storageBarrier[0].newLayout = vk.ImageLayout.SHADER_READ_ONLY_OPTIMAL
-					storageBarrier[0].srcQueueFamilyIndex = 0xFFFFFFFF
-					storageBarrier[0].dstQueueFamilyIndex = 0xFFFFFFFF
-					storageBarrier[0].image = tex.handle
-					storageBarrier[0].subresourceRange.aspectMask = vk.ImageAspectFlagBits.COLOR
-					storageBarrier[0].subresourceRange.baseMipLevel = 0
-					storageBarrier[0].subresourceRange.levelCount = 1
-					storageBarrier[0].subresourceRange.baseArrayLayer = layer
-					storageBarrier[0].subresourceRange.layerCount = view.layerCount
-					self.device.handle:cmdPipelineBarrier(
-						self.buffer.handle,
-						vk.PipelineStageFlagBits.COMPUTE_SHADER,
-						vk.PipelineStageFlagBits.FRAGMENT_SHADER,
-						1, storageBarrier)
-					tex.layerLayouts[layer] = vk.ImageLayout.SHADER_READ_ONLY_OPTIMAL
-				end
-			end
-		end
-	end
+	-- Back to the layout a render pass samples from, so the same texture can be drawn with.
+	image.eachStorageTexture(self.bindGroups, function(texture)
+		image.transition(self.device, self.buffer.handle, texture,
+			vk.ImageLayout.SHADER_READ_ONLY_OPTIMAL, vk.PipelineStageFlagBits.FRAGMENT_SHADER,
+			vk.AccessFlags.SHADER_READ)
+	end)
 end
 
 function VKCommandEncoder:finish()

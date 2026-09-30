@@ -1,6 +1,7 @@
 local ffi = require("ffi")
 
 local vk = require("vkapi")
+local coreLayout = require("hood-core.layout")
 local vkConversions = require("hood-vk.convert")
 
 --- Vertex attribute formats, keyed by the layout's attribute type and size.
@@ -95,13 +96,6 @@ local normalizedFormatMap = {
 local function attributeFormat(attr)
 	local map = attr.normalized and normalizedFormatMap[attr.type] or attributeFormatMap[attr.type]
 	return map and map[attr.size] or nil
-end
-
----@param format hood.TextureFormat
-local function isDepthFormat(format)
-	return format == "depth16unorm"
-		or format == "depth24plus"
-		or format == "depth32float"
 end
 
 ---@class hood-vk.Pipeline
@@ -221,7 +215,7 @@ function VKPipeline.new(device, descriptor)
 		if not vkFormat then
 			error("Unsupported texture format: " .. tostring(target.format))
 		end
-		if not isDepthFormat(target.format) then
+		if not coreLayout.isDepthFormat(target.format) then
 			attachmentDescs[#attachmentDescs + 1] = {
 				format = vkFormat,
 				samples = vk.SampleCountFlagBits.COUNT_1,
