@@ -18,7 +18,8 @@ local VKTextureView = require("hood-vk.texture_view")
 ---@field descriptorPool vk.ffi.DescriptorPool # The pool descriptor sets are handed out of
 ---@field descriptorPools vk.ffi.DescriptorPool[] # And the ones before it, once it filled up
 ---@field descriptorSetPools table<vk.ffi.DescriptorSet, vk.ffi.DescriptorPool> # Which pool a set came from
----@field _renderPassCache table<string, vk.ffi.RenderPass>
+---@field _renderPassCache table<string, vk.ffi.RenderPass> # Render passes by attachment signature
+---@field _framebufferCache table<string, vk.ffi.Framebuffer> # Framebuffers by render pass and images
 ---@field _commandPool vk.ffi.CommandPool? # Made when the first command buffer is, one per device
 local VKDevice = {}
 VKDevice.__index = VKDevice
@@ -66,9 +67,10 @@ function VKDevice.new(adapter)
 	device.descriptorSetPools = {}
 	device.descriptorPool = device:createDescriptorPool()
 
-	-- Cache for render passes keyed by attachment configuration, so we don't
-	-- create VkRenderPass objects every frame (they're usually reused).
+	-- Passes and framebuffers keyed by what they were made from: a frame that renders the same
+	-- way again reuses them rather than asking the driver for new ones.
 	device._renderPassCache = {}
+	device._framebufferCache = {}
 
 	return device
 end

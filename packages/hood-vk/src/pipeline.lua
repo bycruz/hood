@@ -2,6 +2,7 @@ local ffi = require("ffi")
 
 local vk = require("vkapi")
 local coreLayout = require("hood-core.layout")
+local pass = require("hood-vk.pass")
 local vkConversions = require("hood-vk.convert")
 
 --- Vertex attribute formats, keyed by the layout's attribute type and size.
@@ -205,85 +206,49 @@ function VKPipeline.new(device, descriptor)
 		pSetLayouts = descriptorSetLayouts,
 	})
 
-	---@type vk.AttachmentDescription[]
-	local attachmentDescs = {}
-	---@type vk.AttachmentReference[]
-	local colorRefs = {}
+	-- The pass the pipeline was made against: the formats it renders to are all it needs, and
+	-- a frame rendering into textures of those formats uses the same pass.
+	local colorSpecs = {}
+	local depthSpec = nil
 
-	for _, target in ipairs(targets) do
+	for i, target in ipairs(targets) do
 		local vkFormat = vkConversions.textureFormat[target.format]
+
 		if not vkFormat then
 			error("Unsupported texture format: " .. tostring(target.format))
 		end
+
 		if not coreLayout.isDepthFormat(target.format) then
-			attachmentDescs[#attachmentDescs + 1] = {
+			-- A pipeline is made against formats and cannot know which of them the app goes on
+			-- to sample, so it states the sampled case: that is what a colour target is for,
+			-- and a frame that renders one it never samples gets a pass of its own.
+			colorSpecs[#colorSpecs + 1] = {
 				format = vkFormat,
-				samples = vk.SampleCountFlagBits.COUNT_1,
 				loadOp = vk.AttachmentLoadOp.CLEAR,
-				storeOp = vk.AttachmentStoreOp.STORE,
-				stencilLoadOp = vk.AttachmentLoadOp.DONT_CARE,
-				stencilStoreOp = vk.AttachmentStoreOp.DONT_CARE,
 				initialLayout = vk.ImageLayout.UNDEFINED,
-				finalLayout = vk.ImageLayout.PRESENT_SRC_KHR,
-			}
-			colorRefs[#colorRefs + 1] = {
-				attachment = #attachmentDescs - 1,
-				layout = vk.ImageLayout.COLOR_ATTACHMENT_OPTIMAL,
+				finalLayout = vk.ImageLayout.SHADER_READ_ONLY_OPTIMAL,
+				sampled = true,
 			}
 		end
 	end
 
-	---@type vk.AttachmentReference?
-	local depthRef = nil
 	if descriptor.depthStencil then
-		local vkFormat = vkConversions.textureFormat[descriptor.depthStencil.format]
-		if not vkFormat then
+		local depthFormat = vkConversions.textureFormat[descriptor.depthStencil.format]
+
+		if not depthFormat then
 			error("Unsupported depth format: " .. tostring(descriptor.depthStencil.format))
 		end
-		attachmentDescs[#attachmentDescs + 1] = {
-			format = vkFormat,
-			samples = vk.SampleCountFlagBits.COUNT_1,
+
+		depthSpec = {
+			format = depthFormat,
 			loadOp = vk.AttachmentLoadOp.CLEAR,
-			storeOp = vk.AttachmentStoreOp.STORE,
-			stencilLoadOp = vk.AttachmentLoadOp.DONT_CARE,
-			stencilStoreOp = vk.AttachmentStoreOp.DONT_CARE,
 			initialLayout = vk.ImageLayout.UNDEFINED,
 			finalLayout = vk.ImageLayout.DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
-		}
-		depthRef = {
-			attachment = #attachmentDescs - 1,
-			layout = vk.ImageLayout.DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+			sampled = false,
 		}
 	end
 
-	local depthStageMask = 0
-	local depthAccessMask = 0
-	if descriptor.depthStencil then
-		depthStageMask = bit.bor(vk.PipelineStageFlagBits.EARLY_FRAGMENT_TESTS,
-			vk.PipelineStageFlagBits.LATE_FRAGMENT_TESTS)
-		depthAccessMask = bit.bor(vk.AccessFlags.DEPTH_STENCIL_ATTACHMENT_READ,
-			vk.AccessFlags.DEPTH_STENCIL_ATTACHMENT_WRITE)
-	end
-
-	local renderPass = device.handle:createRenderPass({
-		attachments = attachmentDescs,
-		subpasses = {
-			{
-				pipelineBindPoint = vk.PipelineBindPoint.GRAPHICS,
-				colorAttachments = colorRefs,
-				depthStencilAttachment = depthRef,
-			},
-		},
-		dependencies = {
-			{
-				srcSubpass = vk.SUBPASS_EXTERNAL,
-				dstSubpass = 0,
-				srcStageMask = bit.bor(vk.PipelineStageFlagBits.COLOR_ATTACHMENT_OUTPUT, depthStageMask),
-				dstStageMask = bit.bor(vk.PipelineStageFlagBits.COLOR_ATTACHMENT_OUTPUT, depthStageMask),
-				dstAccessMask = bit.bor(vk.AccessFlags.COLOR_ATTACHMENT_WRITE, depthAccessMask),
-			},
-		},
-	})
+	local renderPass = pass.define(device, colorSpecs, depthSpec)
 
 	local frontFace, cullMode = vk.FrontFace.COUNTER_CLOCKWISE, vk.CullModeFlagBits.NONE
 	if descriptor.primitive then
@@ -348,10 +313,11 @@ function VKPipeline.new(device, descriptor)
 	}, VKPipeline)
 end
 
+--- The render pass is not this pipeline's to free: it belongs to the device's cache and other
+--- pipelines and frames made against the same formats are still using it.
 function VKPipeline:destroy()
 	self.device.handle:destroyPipeline(self.handle)
 	self.device.handle:destroyPipelineLayout(self.layout)
-	self.device.handle:destroyRenderPass(self.renderPass)
 end
 
 return VKPipeline

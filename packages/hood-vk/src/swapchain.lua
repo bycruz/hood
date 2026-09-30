@@ -25,7 +25,7 @@ local VKCommandEncoder = require("hood-vk.command_encoder")
 ---@field imageCount integer Number of swapchain images (cached to avoid #images per frame)
 ---@field imageViews vk.ffi.ImageView[] # 1 indexed array of pre-created VkImageViews
 ---@field _framebufferCache table<userdata, table<integer, { framebuffer: vk.ffi.Framebuffer, width: number, height: number }>>
----@field _cachedRenderPass vk.ffi.RenderPass?
+---@field _retiredFramebuffers vk.ffi.Framebuffer[] # Replaced framebuffers, freed once the device is idle
 local VKSwapchain = {}
 VKSwapchain.__index = VKSwapchain
 

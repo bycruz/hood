@@ -146,13 +146,14 @@ end
 --- through it needs every layer in the layout the descriptor names even before anything has been
 --- written to it. Doing this at creation keeps the barrier outside any render pass, which is
 --- where barriers have to be.
+---
+--- The recording is finished even when nothing was claimed, which is most textures: a texture
+--- with no barrier to record is still a texture that was asked for, and the command buffer the
+--- queue records into is reused, so it cannot be left open.
 ---@param texture hood-vk.Texture
 function VKQueue:claimTexture(texture)
 	local cmd = VKCommandEncoder.new(self.device, self:transientBuffer())
-
-	if not cmd:claimTexture(texture) then
-		return
-	end
+	cmd:claimTexture(texture)
 
 	self:submit(cmd:finish())
 	self.device.handle:queueWaitIdle(self.handle)

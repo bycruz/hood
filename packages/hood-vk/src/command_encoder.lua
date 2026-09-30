@@ -4,6 +4,7 @@ local vk = require("vkapi")
 local vkConversions = require("hood-vk.convert")
 
 local image = require("hood-vk.image")
+local pass = require("hood-vk.pass")
 local VKBuffer = require("hood-vk.buffer")
 local VKCommandBuffer = require("hood-vk.command_buffer")
 
@@ -143,7 +144,7 @@ end
 ---@param pipeline hood-vk.Pipeline
 function VKCommandEncoder:setPipeline(pipeline)
 	if self.pendingDescriptor then
-		self:_beginRenderPass(pipeline, self.pendingDescriptor)
+		self:_beginRenderPass(self.pendingDescriptor)
 		self.pendingDescriptor = nil
 	end
 
@@ -153,7 +154,7 @@ end
 
 ---@param pipeline hood-vk.Pipeline
 ---@param descriptor hood.RenderPassDescriptor
-function VKCommandEncoder:_beginRenderPass(pipeline, descriptor)
+function VKCommandEncoder:_beginRenderPass(descriptor)
 	-- Anything staged earlier has to be visible before the first draw reads it.
 	self:_flushStagedWrites()
 
@@ -161,144 +162,57 @@ function VKCommandEncoder:_beginRenderPass(pipeline, descriptor)
 	local depthAttachment = descriptor.depthStencilAttachment
 	local totalAttachments = #colorAttachments + (depthAttachment and 1 or 0)
 
-	local width, height
-	if colorAttachments[1] then
-		local view = colorAttachments[1].texture --[[@as hood-vk.TextureView]]
-		width, height = view.texture.width, view.texture.height
-	elseif depthAttachment then
-		local view = depthAttachment.texture --[[@as hood-vk.TextureView]]
-		width, height = view.texture.width, view.texture.height
-	end
-
-	-- Detect if the first color attachment is a swapchain texture, so we can
-	-- use pre-created image views and cached framebuffers from the swapchain.
-	local swapchainForFB = nil
-	if colorAttachments[1] then
-		local view = colorAttachments[1].texture --[[@as hood-vk.TextureView]]
-		if view.texture and view.texture.isSwapchain and view.texture.swapchain then
-			swapchainForFB = view.texture.swapchain
-		end
-	end
-
-	-- Fast path: rendering into the swapchain with the render pass already
-	-- cached. Everything below only exists to *create* the render pass and its
-	-- framebuffer, so on a cache hit we skip all of it (no tables, no loops,
-	-- no per-frame allocation) and go straight to vkCmdBeginRenderPass.
-	--
-	-- This covers any attachment count, including the colour + depth pass lupa
-	-- uses; previously it was limited to a single colour attachment, which made
-	-- every depth-attached frame rebuild two attachment tables and create and
-	-- destroy a VkFramebuffer.
-	if swapchainForFB and swapchainForFB._cachedRenderPass then
-		self._swapchain = swapchainForFB
-
-		local renderPass = swapchainForFB._cachedRenderPass
-
-		local depthView = nil
-		if depthAttachment then
-			depthView = depthAttachment.texture.handle
-		end
-		local framebuffer = swapchainForFB:getFramebuffer(renderPass, width, height, depthView)
-
-		local clearValues
-		if totalAttachments == 1 then
-			clearValues = _reusableClearValues
-		elseif totalAttachments == 2 then
-			clearValues = _reusableClearValues2
-		else
-			clearValues = vk.ClearValueArray(totalAttachments)
-		end
-
-		for i = 1, #colorAttachments do
-			local att = colorAttachments[i]
-			if att.op.type == "clear" then
-				local c = att.op.color
-				local v = clearValues[i - 1].color.float32
-				v[0] = c.r
-				v[1] = c.g
-				v[2] = c.b
-				v[3] = c.a
-			end
-		end
-
-		if depthAttachment and depthAttachment.op.type == "clear" then
-			local ds = clearValues[totalAttachments - 1].depthStencil
-			ds.depth = depthAttachment.op.depth
-			ds.stencil = 0
-		end
-
-		local beginInfo = _reusableBeginInfo
-		beginInfo.renderPass = renderPass
-		beginInfo.framebuffer = framebuffer
-		beginInfo.renderArea.offset.x = 0
-		beginInfo.renderArea.offset.y = 0
-		beginInfo.renderArea.extent.width = width
-		beginInfo.renderArea.extent.height = height
-		beginInfo.clearValueCount = totalAttachments
-		beginInfo.pClearValues = clearValues
-
-		self:_beginRenderPassRaw(beginInfo)
-		return
-	end
-
-	local imageViews
-	if totalAttachments == 1 then
-		imageViews = _reusableImageViews
-	else
-		imageViews = ffi.new("VkImageView[?]", totalAttachments)
-	end
-	local attachmentDescs = {}
-	local colorRefs = {}
+	-- The pass is defined once per attachment configuration and reused, so this describes the
+	-- attachments rather than creating anything; pass.define sorts out the rest.
+	local colorSpecs = {}
+	local depthSpec = nil
+	local imageViews = totalAttachments == 1 and _reusableImageViews
+		or ffi.new("VkImageView[?]", totalAttachments)
+	local handles = {}
+	local width, height = nil, nil
 
 	for i = 1, #colorAttachments do
 		local att = colorAttachments[i]
 		local view = att.texture --[[@as hood-vk.TextureView]]
 		local texture = view.texture
 		local isSwapchain = texture.isSwapchain == true
+		local initialLayout, finalLayout = image.passLayouts(view, isSwapchain, att.op)
 
-		if isSwapchain and texture.swapchain then
+		if isSwapchain then
 			self._swapchain = texture.swapchain
 		end
 		imageViews[i - 1] = view.handle
 
-		local initialLayout, finalLayout = image.passLayouts(view, isSwapchain, att.op)
-
-		attachmentDescs[#attachmentDescs + 1] = {
+		colorSpecs[i] = {
 			format = texture.format,
-			samples = vk.SampleCountFlagBits.COUNT_1,
 			loadOp = att.op.type == "clear" and vk.AttachmentLoadOp.CLEAR or vk.AttachmentLoadOp.LOAD,
-			storeOp = vk.AttachmentStoreOp.STORE,
-			stencilLoadOp = vk.AttachmentLoadOp.DONT_CARE,
-			stencilStoreOp = vk.AttachmentStoreOp.DONT_CARE,
 			initialLayout = initialLayout,
 			finalLayout = finalLayout,
+			sampled = finalLayout == vk.ImageLayout.SHADER_READ_ONLY_OPTIMAL,
 		}
 
-		colorRefs[#colorRefs + 1] = {
-			attachment = #attachmentDescs - 1,
-			layout = vk.ImageLayout.COLOR_ATTACHMENT_OPTIMAL,
-		}
+		-- A swapchain image is one of the ones the swapchain owns and turns over, so which one
+		-- a framebuffer holds is its index rather than the image.
+		handles[i] = isSwapchain and (texture.swapchainImageIdx or 0) or texture.handle
 
 		self._attachments[#self._attachments + 1] = { texture = texture, finalLayout = finalLayout }
+		width, height = texture.width, texture.height
 	end
 
-	local depthRef = nil
 	if depthAttachment then
 		local view = depthAttachment.texture --[[@as hood-vk.TextureView]]
 		local texture = view.texture
-		imageViews[totalAttachments - 1] = view.handle
-
 		local initialLayout, finalLayout = image.passLayouts(view, false, depthAttachment.op)
 
-		attachmentDescs[#attachmentDescs + 1] = {
+		imageViews[totalAttachments - 1] = view.handle
+		handles[totalAttachments] = texture.handle
+
+		depthSpec = {
 			format = texture.format,
-			samples = vk.SampleCountFlagBits.COUNT_1,
 			loadOp = depthAttachment.op.type == "clear" and vk.AttachmentLoadOp.CLEAR or vk.AttachmentLoadOp.LOAD,
-			storeOp = vk.AttachmentStoreOp.STORE,
-			stencilLoadOp = vk.AttachmentLoadOp.DONT_CARE,
-			stencilStoreOp = vk.AttachmentStoreOp.DONT_CARE,
 			initialLayout = initialLayout,
 			finalLayout = finalLayout,
+			sampled = finalLayout == vk.ImageLayout.SHADER_READ_ONLY_OPTIMAL,
 		}
 
 		-- A depth texture left in the layout a shader reads has its writes made visible after
@@ -309,107 +223,28 @@ function VKCommandEncoder:_beginRenderPass(pipeline, descriptor)
 		end
 
 		self._attachments[#self._attachments + 1] = { texture = texture, finalLayout = finalLayout }
-
-		depthRef = {
-			attachment = #attachmentDescs - 1,
-			layout = vk.ImageLayout.DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
-		}
+		width, height = width or texture.width, height or texture.height
 	end
 
-	local depthStageMask = 0
-	local depthAccessMask = 0
-	if depthAttachment then
-		depthStageMask = bit.bor(vk.PipelineStageFlagBits.EARLY_FRAGMENT_TESTS,
-			vk.PipelineStageFlagBits.LATE_FRAGMENT_TESTS)
-		depthAccessMask = bit.bor(vk.AccessFlags.DEPTH_STENCIL_ATTACHMENT_READ,
-			vk.AccessFlags.DEPTH_STENCIL_ATTACHMENT_WRITE)
-	end
+	local renderPass = pass.define(self.device, colorSpecs, depthSpec)
+	local swapchain = self._swapchain
 
-	-- Look up the render pass: for swapchain, store directly on the swapchain
-	-- (avoids building a string key every frame). For non-swapchain, use the
-	-- device-level cache with a string key.
-	local renderPass
-	if swapchainForFB then
-		renderPass = swapchainForFB._cachedRenderPass
-		if not renderPass then
-			renderPass = self.device.handle:createRenderPass({
-				attachments = attachmentDescs,
-				subpasses = {
-					{
-						pipelineBindPoint = vk.PipelineBindPoint.GRAPHICS,
-						colorAttachments = colorRefs,
-						depthStencilAttachment = depthRef,
-					},
-				},
-				dependencies = {
-					{
-						srcSubpass = vk.SUBPASS_EXTERNAL,
-						dstSubpass = 0,
-						srcStageMask = bit.bor(vk.PipelineStageFlagBits.COLOR_ATTACHMENT_OUTPUT, depthStageMask),
-						dstStageMask = bit.bor(vk.PipelineStageFlagBits.COLOR_ATTACHMENT_OUTPUT, depthStageMask),
-						dstAccessMask = bit.bor(vk.AccessFlags.COLOR_ATTACHMENT_WRITE, depthAccessMask),
-					},
-				},
-			})
-			swapchainForFB._cachedRenderPass = renderPass
-		end
-	else
-		-- Build a cache key from attachment properties for non-swapchain rendering
-		local cacheKey = ""
-		for attIdx = 1, #attachmentDescs do
-			local att = attachmentDescs[attIdx]
-			cacheKey = cacheKey .. "," .. att.format .. "," .. att.loadOp .. "," .. att.finalLayout
-		end
-		cacheKey = cacheKey .. ",d=" .. (depthAttachment and "1" or "0")
-
-		renderPass = self.device._renderPassCache[cacheKey]
-		if not renderPass then
-			renderPass = self.device.handle:createRenderPass({
-				attachments = attachmentDescs,
-				subpasses = {
-					{
-						pipelineBindPoint = vk.PipelineBindPoint.GRAPHICS,
-						colorAttachments = colorRefs,
-						depthStencilAttachment = depthRef,
-					},
-				},
-				dependencies = {
-					{
-						srcSubpass = vk.SUBPASS_EXTERNAL,
-						dstSubpass = 0,
-						srcStageMask = bit.bor(vk.PipelineStageFlagBits.COLOR_ATTACHMENT_OUTPUT, depthStageMask),
-						dstStageMask = bit.bor(vk.PipelineStageFlagBits.COLOR_ATTACHMENT_OUTPUT, depthStageMask),
-						dstAccessMask = bit.bor(vk.AccessFlags.COLOR_ATTACHMENT_WRITE, depthAccessMask),
-					},
-				},
-			})
-			self.device._renderPassCache[cacheKey] = renderPass
-		end
-	end
-
-	-- Use a cached framebuffer when rendering to a swapchain (the common case), and a
-	-- framebuffer of this pass's own otherwise.
 	local framebuffer
-	if swapchainForFB then
-		local depthView = nil
-		if depthAttachment then
-			depthView = depthAttachment.texture.handle
-		end
-		framebuffer = swapchainForFB:getFramebuffer(renderPass, width, height, depthView)
+	if swapchain and swapchain.currentVkImageIdx ~= nil then
+		-- A swapchain framebuffer is the one the swapchain already keeps for this pass, image and
+		-- size. Its depth view is passed through, since which depth texture a frame attaches can
+		-- change between frames.
+		framebuffer = swapchain:getFramebuffer(renderPass, width, height,
+			depthAttachment and depthAttachment.texture.handle or nil)
 	else
-		framebuffer = self.device.handle:createFramebuffer({
-			renderPass = renderPass,
-			attachmentCount = totalAttachments,
-			pAttachments = imageViews,
-			width = width,
-			height = height,
-			layers = 1,
-		})
+		framebuffer = pass.framebuffer(self.device, renderPass, imageViews, handles, width, height)
 	end
 
 	local clearValues
 	if totalAttachments == 1 then
 		clearValues = _reusableClearValues
+	elseif totalAttachments == 2 then
+		clearValues = _reusableClearValues2
 	else
 		clearValues = vk.ClearValueArray(totalAttachments)
 	end
@@ -418,16 +253,18 @@ function VKCommandEncoder:_beginRenderPass(pipeline, descriptor)
 		local att = colorAttachments[i]
 		if att.op.type == "clear" then
 			local c = att.op.color
-			clearValues[i - 1].color.float32[0] = c.r
-			clearValues[i - 1].color.float32[1] = c.g
-			clearValues[i - 1].color.float32[2] = c.b
-			clearValues[i - 1].color.float32[3] = c.a
+			local v = clearValues[i - 1].color.float32
+			v[0] = c.r
+			v[1] = c.g
+			v[2] = c.b
+			v[3] = c.a
 		end
 	end
 
 	if depthAttachment and depthAttachment.op.type == "clear" then
-		clearValues[totalAttachments - 1].depthStencil.depth = depthAttachment.op.depth
-		clearValues[totalAttachments - 1].depthStencil.stencil = 0
+		local ds = clearValues[totalAttachments - 1].depthStencil
+		ds.depth = depthAttachment.op.depth
+		ds.stencil = 0
 	end
 
 	local beginInfo = _reusableBeginInfo
@@ -439,6 +276,12 @@ function VKCommandEncoder:_beginRenderPass(pipeline, descriptor)
 	beginInfo.renderArea.extent.height = height
 	beginInfo.clearValueCount = totalAttachments
 	beginInfo.pClearValues = clearValues
+
+	-- The pass is recorded now, so the attachments it writes are where it leaves them: the
+	-- layouts it named are the ones the next pass or copy has to see.
+	for _, attachment in ipairs(self._attachments) do
+		attachment.texture.layout = attachment.finalLayout
+	end
 
 	self:_beginRenderPassRaw(beginInfo)
 end
@@ -579,14 +422,6 @@ function VKCommandEncoder:endRendering()
 
 	self.inRenderPass = false
 	self.device.handle:cmdEndRenderPass(self.buffer.handle)
-
-	-- Remember where the pass left each attachment, so the next pass or copy finds it there.
-	local attachments = self._attachments
-	for i = 1, #attachments do
-		local attachment = attachments[i]
-		attachment.texture.layout = attachment.finalLayout
-	end
-	self._attachments = {}
 
 	-- A depth attachment the frame goes on to sample was left by the pass in the layout a
 	-- shader reads, so what is left is to make its writes visible to those reads. The pass
