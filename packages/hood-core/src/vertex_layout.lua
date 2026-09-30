@@ -1,13 +1,10 @@
 local ffi = require("ffi")
 
 ---@alias hood.VertexLayout.AttributeType "f32" | "f16" | "i32" | "u32" | "i16" | "u16" | "i8" | "u8"
---- The shader location is the attribute's position in the layout unless it
---- names one, so a layout can be written in whatever order reads best.
+--- Location defaults to the attribute's position, and an attribute may name its own.
 ---@alias hood.VertexLayout.Attribute { type: hood.VertexLayout.AttributeType, size: number, offset: number, normalized: boolean, location: number? }
 
---- "vertex" advances one element per vertex, "instance" one element per
---- instance, which is what lets one draw reuse the same vertices for many
---- copies of them.
+--- "vertex" advances per vertex and "instance" per instance.
 ---@alias hood.VertexLayout.StepMode "vertex" | "instance"
 
 ---@class hood.VertexLayout.ResolvedAttribute
@@ -39,8 +36,7 @@ function VertexLayout:withAttribute(attribute)
 	return self
 end
 
---- Mark this layout as per-instance data: a draw advances through it once per
---- instance rather than once per vertex.
+--- Mark this layout as per-instance data.
 function VertexLayout:withInstanceRate()
 	self.stepMode = "instance"
 	return self
@@ -51,9 +47,9 @@ function VertexLayout:isInstanceRate()
 	return self.stepMode == "instance"
 end
 
---- Flatten several layouts into the vertex attributes a pipeline reads, in declaration
---- order. Locations run on across every layout, so a second layout does not start at 0,
---- and an attribute that names its own location does not consume a sequential one.
+--- Flatten several layouts into the attributes a pipeline reads, in declaration order.
+--- Locations run on across every layout, and an attribute that names its own does not
+--- consume a sequential one.
 ---@param buffers hood.VertexLayout[]
 ---@return hood.VertexLayout.ResolvedAttribute[]
 function VertexLayout.resolveLocations(buffers)

@@ -38,9 +38,8 @@ end
 ---@param oldSwapchain hood-vk.Swapchain?
 ---@return hood-vk.Swapchain? swapchain # Nothing where the surface has no size to make one for
 function VKSurface:configure(device, config, oldSwapchain)
-	-- The old swapchain is deliberately not torn down here: it is still needed
-	-- as the `oldSwapchain` argument below so the new one can take over its
-	-- images. It is destroyed in full once the replacement exists.
+	-- The old swapchain is not torn down here: it is the `oldSwapchain` argument below, and is
+	-- destroyed in full once its replacement exists.
 
 	local caps = vk.getPhysicalDeviceSurfaceCapabilitiesKHR(device.pd, self.handle)
 	local formats = vk.getPhysicalDeviceSurfaceFormatsKHR(device.pd, self.handle)
@@ -59,15 +58,9 @@ function VKSurface:configure(device, config, oldSwapchain)
 		extent.height = self.window.height
 	end
 
-	-- A surface with no size has no swapchain to make, and what is answered is nothing: the
-	-- caller keeps the swapchain it has and drops the frame.
-	--
-	-- A window that is minimized, or one being dragged, comes to nought by nought -- windows
-	-- answers an iconized window with an extent of 120x0 -- and a swapchain made for an extent
-	-- like that is one the presentation engine never gives an image back from, which an acquire
-	-- can only report as VK_TIMEOUT. There is nothing a frame can do about that, so it is not
-	-- made in the first place: the swapchain the window already had is a better thing to hold
-	-- on to, and the window has a size again the moment it is restored.
+	-- A minimized or dragged window has no size to make a swapchain for, and one made for a
+	-- degenerate extent is never given an image back. The caller keeps the swapchain it has and
+	-- drops the frame; the window has a size again when it is restored.
 	if extent.width == 0 or extent.height == 0 then
 		return nil
 	end
@@ -114,11 +107,9 @@ function VKSurface:configure(device, config, oldSwapchain)
 	newSwapchain.surface = self
 
 	if oldSwapchain then
-		-- Full teardown, not just the sync objects and command buffers: the
-		-- old swapchain's framebuffers and image views reference images that
-		-- destroySwapchainKHR is about to invalidate, so they have to go first.
-		-- This waits for the queue to go idle, which also makes it safe for the
-		-- caller to drop anything the old swapchain was rendering into.
+		-- Framebuffers and image views reference images destroySwapchainKHR is about to
+		-- invalidate, so they go first. This waits for the queue to go idle, which also makes it
+		-- safe for the caller to drop whatever the old swapchain was rendering into.
 		oldSwapchain:destroy()
 	end
 

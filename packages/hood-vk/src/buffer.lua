@@ -26,8 +26,7 @@ local usageFlags = {
 	MAP_READ = vk.BufferUsageFlagBits.TRANSFER_DST,
 }
 
---- Usages that need the CPU to reach this buffer's memory: MAP_READ because a readback
---- has to be mapped at some point, `mapped` because it is mapped for its whole life.
+--- Usages that need the CPU to reach this memory: a readback has to be mapped at some point.
 ---@type table<hood.BufferUsage, boolean>
 local hostVisibleUsages = {
 	MAP_READ = true,
@@ -62,8 +61,8 @@ function VKBuffer.new(device, descriptor)
 		and memory.HOST_VISIBLE_FLAGS
 		or vk.MemoryPropertyFlagBits.DEVICE_LOCAL
 
-	-- Device-local is worth asking for even when it is not required: a GPU reading a host
-	-- visible buffer out of device memory rather than over the bus is what makes uploads fast.
+	-- Worth asking for even when not required: a GPU reading host-visible memory out of device
+	-- memory rather than over the bus is what makes uploads fast.
 	local preferredFlags = hostVisible and vk.MemoryPropertyFlagBits.DEVICE_LOCAL or 0
 
 	local deviceMemory = memory.allocate(device, requirements, requiredFlags, preferredFlags, "buffer")
@@ -78,8 +77,7 @@ function VKBuffer.new(device, descriptor)
 		mappedBase = nil,
 	}, VKBuffer)
 
-	-- A mapped buffer stays mapped for its whole life: the memory is coherent, so there is
-	-- nothing to flush, and remapping per write would cost more than the write itself.
+	-- Coherent memory needs no flush, and remapping per write would cost more than the write.
 	if wantsMapped then
 		buffer.mappedBase = ffi.cast("uint8_t*", device.handle:mapMemory(deviceMemory, 0, descriptor.size))
 	end
@@ -116,12 +114,11 @@ function VKBuffer:assertWriteFits(size, offset, data)
 end
 
 function VKBuffer:mapAsync()
-	-- HOST_COHERENT memory needs no explicit flush; the caller must still make sure the GPU
-	-- has finished with the buffer before reading it back.
+	-- Coherent memory needs no flush; the caller must still wait for the GPU to finish.
 end
 
---- Range of the buffer visible to the CPU. A permanently mapped buffer already has a
---- pointer, so this offsets it rather than asking the driver for a second mapping.
+--- Range of the buffer visible to the CPU. A mapped buffer offsets its existing pointer
+--- rather than asking the driver for a second mapping.
 ---@param offset number?
 ---@param size number? only meaningful for an unmapped buffer
 ---@return ffi.cdata*

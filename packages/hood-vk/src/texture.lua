@@ -48,8 +48,7 @@ function VKTexture.new(device, descriptor)
 		error("Unsupported sample count: " .. tostring(descriptor.sampleCount))
 	end
 
-	-- An extents that names no count is one layer, which is what most textures are: reading the
-	-- count straight off it makes an image with no layers at all
+	-- An extents naming no count is one layer; reading it straight off makes an image with none.
 	local layers = descriptor.extents.dim ~= "3d" and (descriptor.extents.count or 1) or 1
 	local isDepth = layout.isDepthFormat(descriptor.format)
 
@@ -84,9 +83,7 @@ function VKTexture.new(device, descriptor)
 		initialLayout = vk.ImageLayout.UNDEFINED,
 	})
 
-	-- A texture is device-local memory, and the types beside that one are the same memory asked
-	-- for without it: an image the first heap has no room for lands in the next one rather than
-	-- nowhere.
+	-- Device-local, falling back to the types beside it if the first heap has no room.
 	local requirements = device.handle:getImageMemoryRequirements(handle)
 	local imageMemory = memory.allocate(device, requirements, vk.MemoryPropertyFlagBits.DEVICE_LOCAL, 0, "image")
 
@@ -137,10 +134,7 @@ end
 
 ---@param descriptor hood.TextureViewDescriptor?
 function VKTexture:createView(descriptor)
-	-- For swapchain textures, lazily create and cache a view per swapchain image.
-	-- The swapchain already has pre-created VkImageView handles, so we wrap one
-	-- without calling createImageView. Subsequent frames reuse the cached view,
-	-- eliminating the per-frame createImageView overhead.
+	-- A swapchain image already has a view, so one is wrapped and cached rather than created.
 	if self.isSwapchain and self.swapchain then
 		self._viewCache = self._viewCache or {}
 		local idx = self.swapchainImageIdx --[[@as integer]]

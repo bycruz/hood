@@ -11,8 +11,7 @@ VKSampler.__index = VKSampler
 ---@param desc hood.SamplerDescriptor
 function VKSampler.new(device, desc)
 	local handle = device.handle:createSampler({
-		magFilter = vkConvert.filterMode[desc.magFilter],
-		minFilter = vkConvert.filterMode[desc.minFilter],
+		magFilter = vkConvert.filterMode[desc.magFilter], minFilter = vkConvert.filterMode[desc.minFilter],
 		mipmapMode = vk.SamplerMipmapMode.LINEAR,
 		addressModeU = vkConvert.addressMode[desc.addressModeU],
 		addressModeV = vkConvert.addressMode[desc.addressModeV],

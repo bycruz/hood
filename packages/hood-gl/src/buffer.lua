@@ -45,16 +45,6 @@ function GLBuffer:setSlice(size, data, offset)
 	gl.namedBufferSubData(self.id, offset or 0, size, data)
 end
 
---- Reject a write that does not fit the allocation, before it reaches the
---- driver. namedBufferSubData does not bounds check its destination: an
---- oversized write lands in whatever the driver placed after the buffer and
---- only surfaces later as corrupted rendering, with nothing pointing back at
---- the offending call. Checking here keeps the error attached to the write
---- that caused it.
----
---- `data` is optional. When its size can be determined the source is checked
---- too, which catches a size computed from a count that disagrees with the
---- array it was derived from.
 ---@param size number bytes to write
 ---@param offset number? byte offset into the buffer, defaults to 0
 ---@param data ffi.cdata*? source data, checked when its size is knowable
@@ -84,8 +74,7 @@ function GLBuffer:assertWriteFits(size, offset, data)
 	end
 end
 
---- Signal that the buffer will be read back by the CPU.
---- Caller must ensure GPU work is complete (e.g. queue:waitIdle) before this.
+--- Signal that the CPU will read this back. The caller must still wait for the GPU first.
 function GLBuffer:mapAsync()
 	gl.finish()
 end

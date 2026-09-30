@@ -27,8 +27,7 @@ local signalSemaphores = ffi.new("VkSemaphore[1]")
 local waitStages = ffi.new("uint32_t[1]", vk.PipelineStageFlagBits.COLOR_ATTACHMENT_OUTPUT)
 local submitArray = vk.SubmitInfoArray(1)
 
--- Cold path: keep the message formatting out of the hot function so the trace
--- recorded for submit() stays small enough to compile.
+-- Cold path: formatting kept out of submit() so its trace stays small enough to compile.
 local function submitFailed(result)
 	error("Failed to submit to Vulkan queue, error code: " .. tostring(result))
 end
@@ -46,9 +45,8 @@ function VKQueue:submit(buffer)
 	local fence
 
 	if swapchain then
-		-- Both semaphores are indexed by currentFrame (per frame-in-flight).
-		-- This ensures each frame slot has a dedicated pair of semaphores,
-		-- avoiding index desync between currentFrame and currentVkImageIdx.
+		-- Indexed by frame slot, not by image: each slot gets its own semaphore pair, so
+		-- currentFrame and the acquired image index cannot desync.
 		local frame = swapchain.currentFrame
 		waitSemaphores[0] = swapchain.imageAvailableSemaphores[frame]
 		signalSemaphores[0] = swapchain.renderFinishedSemaphores[frame]
@@ -73,19 +71,16 @@ function VKQueue:submit(buffer)
 	end
 end
 
--- TODO: This currently uses a blocking wait for simplicity and to avoid a use after free (from lua's gc)
--- Should eventually use a form of garbage collection managed by the VKQueue
+-- TODO: a blocking wait, which avoids a use-after-free from Lua's GC. Should become a form of
+-- deferred collection managed by the queue.
 
 --- Helper method to write data to a buffer
 ---@param buffer hood-vk.Buffer
 ---@param size number
 ---@param data ffi.cdata*
 ---@param offset number?
---- The command buffer the queue's own uploads are recorded into: one per queue, recorded
---- again for each of them. Every caller waits for the queue to be idle before it is done,
---- so the recording that follows is free to be the same buffer -- which is what keeps an
---- upload from costing a command buffer, and the pool one would be allocated from, every
---- time it happens.
+--- The command buffer the queue's own uploads are recorded into, reused for each of them.
+--- Every caller waits for the queue to go idle first, so one buffer serves them all.
 ---@return hood-vk.CommandBuffer
 function VKQueue:transientBuffer()
 	if not self._transient then
@@ -107,8 +102,7 @@ function VKQueue:writeBuffer(buffer, size, data, offset)
 
 	buffer:assertWriteFits(size, offset, data)
 
-	-- A mapped buffer is written by the CPU directly, so there is nothing to record, submit
-	-- and wait for.
+	-- A mapped buffer is written by the CPU, so nothing is recorded or submitted.
 	if buffer.isMapped then
 		ffi.copy(buffer:mappedPointer(offset), data, size)
 		return
@@ -119,8 +113,7 @@ function VKQueue:writeBuffer(buffer, size, data, offset)
 	self:submit(cmd:finish())
 	self.device.handle:queueWaitIdle(self.handle)
 
-	-- The upload is done and waited for, so what staged it is not held: a buffer the size of
-	-- whatever was written, kept until the next command buffer of a frame that may never come.
+	-- The upload is done and waited for, so the buffer that staged it is not held.
 	self:transientBuffer():releaseStaging()
 end
 
@@ -134,22 +127,15 @@ function VKQueue:writeTexture(texture, descriptor, data)
 	self:submit(cmd:finish())
 	self.device.handle:queueWaitIdle(self.handle)
 
-	-- An upload is copied out of staging before this returns, so the staging it went through is
-	-- let go of here rather than kept: a texture of a photograph is a staging buffer of a
-	-- photograph, and holding it for the life of the process is holding it for nothing.
+	-- The upload is copied out of staging before this returns, so the staging is released.
 	self:transientBuffer():releaseStaging()
 end
 
---- Claim a freshly created texture's subresources so it can be drawn with.
+--- Claim a freshly created texture's subresources so it can be drawn with, at creation where
+--- the barrier is legal to record.
 ---
---- Sampling goes through a view and a descriptor covers the whole view, so a texture drawn
---- through it needs every layer in the layout the descriptor names even before anything has been
---- written to it. Doing this at creation keeps the barrier outside any render pass, which is
---- where barriers have to be.
----
---- The recording is finished even when nothing was claimed, which is most textures: a texture
---- with no barrier to record is still a texture that was asked for, and the command buffer the
---- queue records into is reused, so it cannot be left open.
+--- The recording is finished even when nothing was claimed, which is most textures: the command
+--- buffer the queue records into is reused and cannot be left open.
 ---@param texture hood-vk.Texture
 function VKQueue:claimTexture(texture)
 	local cmd = VKCommandEncoder.new(self.device, self:transientBuffer())

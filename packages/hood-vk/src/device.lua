@@ -31,11 +31,9 @@ function VKDevice.new(adapter)
 		extensions[#extensions + 1] = "VK_KHR_swapchain"
 	end
 
-	-- Features the renderer relies on rather than merely tolerates. Supporting a
-	-- feature is not the same as enabling it: leaving multiDrawIndirect off makes
-	-- a drawCount above 1 invalid, and leaving drawIndirectFirstInstance off makes
-	-- a nonzero firstInstance invalid, which is exactly what batched instanced
-	-- draws use to address a run partway into a shared instance buffer.
+	-- Relied on rather than merely tolerated: enabling a feature is separate from supporting it,
+	-- and without multiDrawIndirect a drawCount above 1 is invalid while without
+	-- drawIndirectFirstInstance a nonzero firstInstance is.
 	local supported = vk.getPhysicalDeviceFeatures(adapter.pd)
 	local enabledFeatures = {}
 	if supported.multiDrawIndirect ~= 0 then
@@ -52,11 +50,7 @@ function VKDevice.new(adapter)
 		enabledExtensionNames = extensions,
 		enabledFeatures = enabledFeatures,
 		queueCreateInfos = {
-			{
-				queueFamilyIndex = adapter.gfxQueueFamilyIdx,
-				queuePriorities = { 1.0 },
-				queueCount = 1,
-			},
+			{ queueFamilyIndex = adapter.gfxQueueFamilyIdx, queuePriorities = { 1.0 }, queueCount = 1 },
 		},
 	})
 
@@ -67,23 +61,21 @@ function VKDevice.new(adapter)
 	device.descriptorSetPools = {}
 	device.descriptorPool = device:createDescriptorPool()
 
-	-- Passes and framebuffers keyed by what they were made from: a frame that renders the same
-	-- way again reuses them rather than asking the driver for new ones.
+	-- Keyed by what they were made from, so a frame that renders the same way reuses them.
 	device._renderPassCache = {}
 	device._framebufferCache = {}
 
 	return device
 end
 
--- How many descriptor sets a pool holds, and how many of each kind of descriptor they may name.
--- A pool cannot hand out more than this, and one that has handed out all of them is joined by
--- another: a screen with a bind group per picture is a screen that outgrows one pool long before
--- it runs out of anything else.
+-- How many sets a pool holds and how many of each descriptor they may name. A full pool is
+-- joined by another, since an app with a bind group per picture outgrows one long before it runs
+-- out of anything else.
 local POOL_SETS = 512
 local POOL_DESCRIPTORS = 256
 
---- A pool for descriptor sets to be handed out of. A set goes back to the pool it came from when
---- it is freed, so a program that makes and drops them over and over reuses the room it has.
+--- A pool for descriptor sets to be handed out of. A freed set returns to its pool, so an app
+--- that makes and drops them reuses the room it has.
 ---@return vk.ffi.DescriptorPool
 function VKDevice:createDescriptorPool()
 	local types = {
@@ -110,9 +102,8 @@ function VKDevice:createDescriptorPool()
 	return pool
 end
 
---- Allocates a descriptor set from the layout, out of the pool that is open, and out of a new pool
---- when that one is full: what a pool has room for is fixed when it is made, so an app that makes
---- a bind group per picture would otherwise stop being able to draw one.
+--- Allocate a descriptor set from the open pool, or from a new one when that is full: a pool's
+--- capacity is fixed when it is made.
 ---@param layout vk.ffi.DescriptorSetLayout
 ---@return vk.ffi.DescriptorSet
 function VKDevice:createDescriptorSet(layout)
@@ -143,16 +134,15 @@ function VKDevice:tryDescriptorSet(pool, layout)
 		{ descriptorPool = pool, descriptorSetCount = 1, pSetLayouts = layouts })
 
 	if not ok then
-		-- The pool is out of sets or out of descriptors: an empty one is made for this one to
-		-- come out of, which is the caller's to do.
+		-- Out of sets or out of descriptors; the caller makes another pool.
 		return nil
 	end
 
 	return sets[1]
 end
 
---- Hands a descriptor set back to the pool it came from. The set is not to be used again after
---- this, and what it named -- a texture, a buffer, a sampler -- is not this call's to free.
+--- Hand a descriptor set back to its pool. The set is not usable afterwards, and what it named
+--- is not this call's to free.
 ---@param set vk.ffi.DescriptorSet
 function VKDevice:freeDescriptorSet(set)
 	local pool = self.descriptorSetPools[set]
@@ -179,12 +169,9 @@ function VKDevice:createCommandEncoder()
 	return VKCommandEncoder.new(self)
 end
 
---- The pool command buffers are allocated from, which belongs to the device rather
---- than to each of them. A command buffer is small; a pool is the driver's to size and
---- is hundreds of kilobytes, so an app that records a frame into a fresh buffer every
---- frame -- which is the obvious way to write one -- would grow by a pool a frame if
---- each buffer carried its own. Buffers are handed back to the pool instead: see
---- `VKCommandBuffer:destroy`.
+--- The pool command buffers are allocated from, which belongs to the device: a pool is hundreds
+--- of kilobytes, so a buffer carrying its own would grow the process by a pool per buffer.
+--- Buffers are handed back instead: see `VKCommandBuffer:destroy`.
 ---@return vk.ffi.CommandPool
 function VKDevice:commandPool()
 	if not self._commandPool then
@@ -197,12 +184,8 @@ function VKDevice:commandPool()
 	return self._commandPool
 end
 
---- Hands a command buffer back to the pool it came from, to be handed out again by the next
---- `commandPool` allocation rather than sitting in the pool doing nothing until the device goes.
----
---- It is the device that frees it because the pool is the device's: a buffer does not carry the
---- pool it was allocated from, and one that reached past itself for it would be reaching for a
---- pool it has no business knowing about.
+--- Hand a command buffer back to its pool, to be handed out again by the next allocation. The
+--- device does it because the pool is the device's.
 ---@param pool vk.ffi.CommandPool
 ---@param buffer vk.ffi.CommandBuffer
 function VKDevice:freeCommandBuffers(pool, buffer)
@@ -225,10 +208,8 @@ end
 function VKDevice:createTexture(descriptor)
 	local texture = VKTexture.new(self, descriptor)
 
-	-- A texture that can be sampled is put into the layout descriptors name for
-	-- it straight away, so binding it before anything has been written to it is
-	-- still valid. Textures that cannot be sampled are left alone: their layouts
-	-- belong to the passes and copies that use them.
+	-- A samplable texture goes into the layout its descriptors name straight away, so binding it
+	-- before anything was written to it is valid. The rest are left to the passes that use them.
 	self.queue:claimTexture(texture)
 
 	return texture

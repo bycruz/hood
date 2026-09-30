@@ -1,11 +1,7 @@
 -- Which backend an instance is made on.
 --
--- The backends are packages of their own and a program installs the one it runs on: an app
--- whose lde.json names hood with `"features": [ "vk" ]` is a vulkan program, "gl" is an
--- opengl one, and naming both is a program that picks at runtime. Neither is installed
--- unless it is named, because the backend a program does not run on is a graphics API's
--- worth of code sitting in its bundle for nothing -- so asking for one that is not here
--- says so, rather than failing somewhere inside a require.
+-- Each backend is a package of its own, installed only when the app names it in lde.json, so
+-- asking for one that is not here says which feature to name rather than failing in a require.
 local Instance = {}
 
 ---@type table<hood.InstanceBackend, string> # the package each backend lives in

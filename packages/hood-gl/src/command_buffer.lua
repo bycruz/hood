@@ -6,8 +6,8 @@ local core = require("hood-core")
 
 local GLVAO = require("hood-gl.vao")
 
--- Clip control's own tokens, which glapi's enum tables do not carry: which corner of the
--- framebuffer window coordinates are counted from, and which depth range z is measured in.
+-- Clip control's tokens, absent from glapi's enum tables: the corner window coordinates count
+-- from, and the range z is measured in.
 local LOWER_LEFT, UPPER_LEFT = 0x8CA1, 0x8CA2
 local NEGATIVE_ONE_TO_ONE = 0x935E
 
@@ -56,10 +56,8 @@ local computePipelines = setmetatable({}, {
 	__mode = "k",
 })
 
--- FBO cache, keyed first by context (weak) then by attachment signature.
--- FBOs cannot be shared across GL contexts, so the per-context inner table
--- keeps them separate. Outer weak keys let entries be collected when a
--- context is garbage-collected.
+-- FBOs cannot be shared across GL contexts, so the cache is keyed by context first (weakly, so
+-- entries go when the context does) and by attachment signature second.
 ---@type table<hood-gl.Context, table<string, number>>
 local fboCache = setmetatable({}, { __mode = "k" })
 
@@ -144,8 +142,7 @@ function GLCommandBuffer:execute(queueCtx, renderCtx)
 	local indexType = gl.UNSIGNED_INT
 	local indexSize = 4
 
-	-- Tracks whether a render pass is open, so a mismatched end is reported
-	-- rather than silently unbinding someone else's framebuffer.
+	-- So a mismatched end is reported rather than unbinding someone else's framebuffer.
 	local inRenderPass = false
 
 	for _, command in ipairs(self.commands) do
@@ -158,16 +155,13 @@ function GLCommandBuffer:execute(queueCtx, renderCtx)
 			local attachments = command.descriptor.colorAttachments
 			local depthStencilAttachment = command.descriptor.depthStencilAttachment
 
-			-- Determine which context to make current and whether we're targeting
-			-- the default (screen) framebuffer or an offscreen FBO.
-			-- Swapchain textures have no id and carry their own context;
-			-- offscreen textures use the queue's shared headless context.
+			-- Which context to make current, and whether this draws to the screen. A swapchain
+			-- texture has no id and carries its own context; offscreen ones use the queue's.
 			local ctx
 			local isBackbuffer = false			-- Offscreen rendering must use renderCtx (the window context) rather than
-			-- queueCtx (the headless context) when a surface has been configured.
-			-- Both contexts share the same GL objects, but creating FBOs in the
-			-- headless context causes NVIDIA to crash on the next window→headless
-			-- context switch due to the two contexts using different XDisplay connections.
+			-- Offscreen rendering uses the window context when there is one: the contexts share
+			-- GL objects, but creating FBOs in the headless one crashes NVIDIA on the next
+			-- window→headless switch, since they use different X displays.
 			local offscreenCtx = renderCtx or queueCtx
 			local firstColorView = #attachments > 0 and attachments[1].texture --[[@as hood-gl.TextureView?]]
 			if firstColorView then
@@ -196,16 +190,12 @@ function GLCommandBuffer:execute(queueCtx, renderCtx)
 				gl.bindFramebuffer(gl.FRAMEBUFFER, fbo)
 			end
 
-			-- OpenGL counts the rows of a framebuffer up from its bottom and Vulkan counts them
-			-- down from its top, so the same drawing ends up in opposite rows on the two: a
-			-- texture drawn into here and read back came out upside down against what Vulkan
-			-- read back, and a texture drawn into and then sampled by another pass was sampled
-			-- mirrored. This is the state OpenGL has for exactly that: with the origin at the
-			-- upper left the geometry is turned over inside the viewport, and a texture comes out
-			-- in the row order Vulkan leaves it in.
+			-- OpenGL counts framebuffer rows up from the bottom and Vulkan counts them down from
+			-- the top. With the origin at the upper left, geometry is turned over inside the
+			-- viewport and a texture comes out in the row order Vulkan leaves it in, so both
+			-- backends agree.
 			--
-			-- The window is left as it is. What is displayed from it is its bottom row, and the
-			-- image it shows is the one it has always shown.
+			-- The window is left alone: what it displays is its bottom row either way.
 			if isBackbuffer then
 				gl.clipControl(LOWER_LEFT, NEGATIVE_ONE_TO_ONE)
 			else
@@ -223,8 +213,8 @@ function GLCommandBuffer:execute(queueCtx, renderCtx)
 			-- todo: pipelines need to be fixed as they are created in the headless context atm
 			pipeline = command.pipeline
 
-			-- Where each of the pipeline's attributes reads from is a property of the pipeline,
-			-- so it is worked out once here rather than for every buffer binding.
+			-- Resolved once here, since where an attribute reads from is a property of the
+			-- pipeline rather than of the binding.
 			vertexAttributes = core.VertexLayout.resolveLocations(pipeline.vertex.buffers)
 
 			local rawPipeline = pipelines[pipeline]
@@ -346,23 +336,19 @@ function GLCommandBuffer:execute(queueCtx, renderCtx)
 				end
 			end
 		elseif command.type == "drawIndexed" then
-			-- Indices are addressed as a byte offset into the bound element
-			-- buffer, so firstIndex is scaled by the index size here.
+			-- firstIndex is scaled: indices address bytes into the element buffer.
 			local indices = ffi.cast("const void*", command.firstIndex * indexSize)
 
 			if command.firstInstance and command.firstInstance ~= 0 then
 				error("hood: the OpenGL backend has no firstInstance; offset the instance buffer instead")
 			end
 
-			-- One entry point covers both cases: an instance count of 1 is an
-			-- ordinary indexed draw.
+			-- An instance count of 1 is an ordinary indexed draw.
 			gl.drawElementsInstancedBaseVertex(gl.TRIANGLES, command.indexCount, indexType,
 				indices, command.instanceCount or 1, command.baseVertex)
 		elseif command.type == "drawIndexedIndirect" then
-			-- The commands live in a buffer, bound with the byte offset applied
-			-- here, and each one carries its own firstIndex and base vertex.
-			-- glDrawElementsIndirect issues exactly one draw and ignores the
-			-- count entirely, so the multi form is what actually issues them all.
+			-- glDrawElementsIndirect issues exactly one draw and ignores the count, so the multi
+			-- form is what issues them all. Each command carries its own firstIndex and vertex.
 			gl.bindBuffer(gl.DRAW_INDIRECT_BUFFER, command.buffer.id)
 			gl.multiDrawElementsIndirect(gl.TRIANGLES, indexType, ffi.cast("const void*", command.offset),
 				command.drawCount, command.stride)

@@ -18,10 +18,11 @@ function VKBindGroupLayout.new(device, entries)
 			stageFlags = bit.bor(stageFlags, vkConversions.shaderStage[stage])
 		end
 
-		bindings[i - 1].binding = entry.binding
-		bindings[i - 1].descriptorType = vkConversions.bindingType[entry.type]
-		bindings[i - 1].descriptorCount = 1
-		bindings[i - 1].stageFlags = stageFlags
+		local binding = bindings[i - 1]
+		binding.binding = entry.binding
+		binding.descriptorType = vkConversions.bindingType[entry.type]
+		binding.descriptorCount = 1
+		binding.stageFlags = stageFlags
 	end
 
 	local handle = device.handle:createDescriptorSetLayout({ bindingCount = #entries, pBindings = bindings })

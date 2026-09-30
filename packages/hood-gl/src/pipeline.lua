@@ -35,8 +35,7 @@ function GLRawPipeline.new(id)
 	return setmetatable({ id = id }, GLRawPipeline)
 end
 
---- GL Specific pipeline generation for the current context
---- This isn't done at pipeline creation time because contexts cannot share pipelines.
+--- Built for the current context rather than at creation: contexts cannot share pipelines.
 ---@return hood-gl.RawPipeline
 function GLPipeline:genForCurrentContext()
 	local pipeline = gl.genProgramPipelines(1)[1]
@@ -62,10 +61,8 @@ function GLRawPipeline:destroy()
 	gl.deleteProgramPipelines(1, ffi.new("GLuint[1]", self.id))
 end
 
---- A pipeline here is the descriptor it was made from: what GL has is a program pipeline per
---- context, made when the pipeline is first drawn with and freed with the context that made it --
---- which is what a caller that destroys a pipeline is asking for either way, and what a method
---- that was simply missing left it guessing about.
+--- A pipeline here is the descriptor it was made from. What GL has is a program pipeline per
+--- context, made when first drawn with and freed with that context.
 function GLPipeline:destroy()
 	self.vertex, self.fragment, self.depthStencil, self.primitive = nil, nil, nil, nil
 end

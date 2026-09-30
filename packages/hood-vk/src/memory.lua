@@ -2,14 +2,12 @@ local vk = require("vkapi")
 
 local M = {}
 
---- Every memory type index that satisfies `requiredFlags`, the ones that also satisfy
---- `preferredFlags` first.
+--- Every memory type index satisfying `requiredFlags`, those also satisfying `preferredFlags`
+--- first.
 ---
---- The preference is what the machine is asked for first, not what it can only give: host-visible
---- memory that is also device-local is a small window rather than the whole card, and that window
---- can be full of what every other program on the machine is holding. The types after the
---- preferred ones are the same memory asked for without it, so an allocation falls back to
---- system memory instead of failing.
+--- Host-visible memory that is also device-local is a small window rather than the whole card,
+--- and can be full of what every other program is holding. The types after the preferred ones
+--- are the same memory without it, so an allocation falls back to system memory.
 ---@param device hood-vk.Device
 ---@param typeBits number? from VkMemoryRequirements.memoryTypeBits
 ---@param requiredFlags number
@@ -44,9 +42,8 @@ function M.findTypes(device, typeBits, requiredFlags, preferredFlags)
 	return preferred
 end
 
---- Allocate device memory of the size `requirements` asks for, from the first type that has room
---- for it: a type being available is not the same as a type having space, so a failed allocation is
---- retried against the next usable type rather than reported straight away.
+--- Allocate device memory from the first type that has room: a type being available is not the
+--- same as it having space, so a failed allocation is retried against the next usable type.
 ---@param device hood-vk.Device
 ---@param requirements vk.ffi.MemoryRequirements
 ---@param requiredFlags number
@@ -77,8 +74,7 @@ function M.allocate(device, requirements, requiredFlags, preferredFlags, what)
 		tostring(requirements.size), tostring(failure)))
 end
 
---- Host-visible, coherent memory. Coherent means no explicit vkFlushMappedMemoryRanges is
---- ever needed, which is what lets a mapped buffer be written by the CPU at any time.
+--- Host-visible, coherent memory: coherent means no vkFlushMappedMemoryRanges is ever needed.
 M.HOST_VISIBLE_FLAGS = bit.bor(
 	vk.MemoryPropertyFlagBits.HOST_VISIBLE,
 	vk.MemoryPropertyFlagBits.HOST_COHERENT

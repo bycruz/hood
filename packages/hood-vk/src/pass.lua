@@ -2,10 +2,9 @@ local vk = require("vkapi")
 
 --- Render passes and framebuffers.
 ---
---- A graphics pipeline is created against a render pass, and a framebuffer pairs one with the
---- images a draw actually renders into. Both are described the same way either way, so the
---- definition lives here and the callers differ only in what they have: a pipeline knows the
---- formats it was made for, a frame knows the textures.
+--- A pipeline is created against a render pass and a framebuffer pairs one with the images a
+--- draw renders into. Both are described the same way by a pipeline, which knows the formats it
+--- was made for, and a frame, which knows the textures.
 local pass = {}
 
 ---@class hood-vk.AttachmentSpec
@@ -17,16 +16,14 @@ local pass = {}
 
 --- What makes two render passes interchangeable.
 ---
---- Vulkan pairs a pipeline with a framebuffer when the render pass is *compatible*: same
---- attachment count with the same formats and sample counts, and the same number of views.
---- Load and store ops are not part of it, so a pass defined for a format serves a pipeline made
---- for that format.
+--- Vulkan pairs a pipeline with a framebuffer when the pass is *compatible*: same attachment
+--- count, same formats and sample counts, same number of views. Load and store ops are not part
+--- of it, so a pass defined for a format serves a pipeline made for that format.
 ---
---- Which layouts a pass names *is* part of what it can be used with, though: a pass ending an
---- attachment in SHADER_READ_ONLY_OPTIMAL may only be used with an image created to be sampled
---- (VUID-vkCmdBeginRenderPass-initialLayout-00897), and one ending in an attachment layout is
---- not the same pass. So a pass is keyed by the attachments it was defined for and whether each
---- of them is sampled.
+--- The layouts a pass names are part of it, though: a pass ending an attachment in
+--- SHADER_READ_ONLY_OPTIMAL may only be used with an image created to be sampled
+--- (VUID-vkCmdBeginRenderPass-initialLayout-00897). So a pass is keyed by its attachments and
+--- whether each is sampled.
 ---@param colorAttachments hood-vk.AttachmentSpec[]
 ---@param depthAttachment hood-vk.AttachmentSpec?
 ---@return string
@@ -46,11 +43,8 @@ function pass.signature(colorAttachments, depthAttachment)
 	return table.concat(parts, ",")
 end
 
---- Define, or reuse, the render pass for a set of attachments.
----
---- Passes are cached on the device by signature: an app that renders every frame into the same
---- configuration defines one pass and reuses it, and the same pass serves a pipeline created
---- against the same formats.
+--- Define, or reuse, the render pass for a set of attachments. Passes are cached on the device
+--- by signature, so rendering the same configuration every frame defines one pass.
 ---@param device hood-vk.Device
 ---@param colorAttachments hood-vk.AttachmentSpec[]
 ---@param depthAttachment hood-vk.AttachmentSpec?
@@ -141,12 +135,9 @@ function pass.define(device, colorAttachments, depthAttachment)
 	return handle
 end
 
---- The framebuffer pairing a render pass with the images of one frame.
----
---- Cached on the device by the images it was made from: a frame that renders into the same
---- textures again reuses it, and one that renders into different textures gets its own rather
---- than a framebuffer pointing at images it no longer owns. Keying on the handles is what keeps
---- that safe without hood having to know when a texture goes away.
+--- The framebuffer pairing a render pass with one frame's images, cached by the images it was
+--- made from. Keying on the handles keeps a frame that renders into different textures from
+--- reusing a framebuffer pointing at images it no longer owns.
 ---@param device hood-vk.Device
 ---@param renderPass vk.ffi.RenderPass
 ---@param attachments vk.ffi.ImageView[] # one per attachment, in pass order
@@ -169,12 +160,8 @@ function pass.framebuffer(device, renderPass, attachments, handles, width, heigh
 	end
 
 	local framebuffer = device.handle:createFramebuffer({
-		renderPass = renderPass,
-		attachmentCount = #handles,
-		pAttachments = attachments,
-		width = width,
-		height = height,
-		layers = 1,
+		renderPass = renderPass, attachmentCount = #handles, pAttachments = attachments,
+		width = width, height = height, layers = 1,
 	})
 
 	device._framebufferCache[key] = framebuffer

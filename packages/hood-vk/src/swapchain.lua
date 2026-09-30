@@ -45,15 +45,13 @@ function VKSwapchain.new(device, format, info)
 		inFlightFences[i] = device.handle:createFence({ flags = vk.FenceCreateFlagBits.SIGNALED })
 	end
 
-	-- Pre-allocate command buffers (one per swapchain image) to avoid
-	-- creating and destroying pools every frame.
+	-- One per swapchain image, so a frame does not allocate a command buffer.
 	local commandBuffers = {}
 	for i = 1, #images do
 		commandBuffers[i] = VKCommandBuffer.new(device)
 	end
 
-	-- Pre-create image views for each swapchain image so we don't
-	-- create and destroy them every frame.
+	-- One per swapchain image, since they are bound on every frame.
 	local imageViews = {}
 
 	for i = 1, #images do
@@ -61,13 +59,8 @@ function VKSwapchain.new(device, format, info)
 			image = images[i],
 			viewType = vk.ImageViewType.TYPE_2D,
 			format = info.imageFormat,
-			subresourceRange = {
-				aspectMask = vk.ImageAspectFlagBits.COLOR,
-				baseMipLevel = 0,
-				levelCount = 1,
-				baseArrayLayer = 0,
-				layerCount = 1,
-			},
+			subresourceRange = { aspectMask = vk.ImageAspectFlagBits.COLOR, baseMipLevel = 0,
+				levelCount = 1, baseArrayLayer = 0, layerCount = 1 },
 			components = nil, --[[@type vk.ffi.ComponentMapping]]
 		})
 	end
@@ -97,16 +90,12 @@ end
 
 local fenceArray = vk.FenceArray(1)
 
--- How long an image is waited for, in nanoseconds.
+-- How long an acquire waits for an image, in nanoseconds.
 --
--- An endless timeout is what the spec is written for: an acquire asked for with one is
--- not allowed to come back without an image. What windows does instead is not that. A
--- swapchain whose window is not being presented -- one that is minimized, one behind
--- another window, one made for a window of no size -- does not get its images back from
--- the presentation engine, and what the acquire answers is VK_TIMEOUT rather than a wait
--- that nothing is ever going to end. A second is longer than a frame of any display is,
--- so a wait this long is only ever spent on a swapchain that is not going to hand an
--- image over at all.
+-- A swapchain whose window is not being presented -- minimized, hidden, or made for a window
+-- of no size -- never gets its images back from the presentation engine, so the acquire answers
+-- VK_TIMEOUT instead of waiting forever. A second is longer than any display's frame, so a wait
+-- this long is only spent on a swapchain that is not going to produce one.
 local ACQUIRE_TIMEOUT = 1000000000
 
 ---@return boolean
@@ -145,9 +134,8 @@ function VKSwapchain:getCurrentTexture()
 		error("Failed to acquire next image: " .. tostring(result))
 	end
 
-	-- SUBOPTIMAL_KHR still hands back a usable image, so it is a success: the
-	-- swapchain just no longer matches the surface exactly. Treating it as a
-	-- failure freezes apps on compositors that report it routinely.
+	-- SUBOPTIMAL_KHR hands back a usable image, and compositors report it routinely: treating
+	-- it as a failure freezes the app.
 
 	-- An image is held now, so this frame is committed to being submitted.
 	self.device.handle:resetFences(1, fenceArray)
@@ -156,8 +144,7 @@ function VKSwapchain:getCurrentTexture()
 
 	self.currentVkImageIdx = currentVkImageIdx
 
-	-- Reuse a single VKTexture to avoid per-frame table allocation and to
-	-- keep cached texture views (from createView) alive across frames.
+	-- One reused texture, so its cached views survive across frames.
 	if not self._currentTexture then
 		self._currentTexture = VKTexture.fromSwapchainImg(self.device, self, imageHandle,
 			self.imageFormat, self.width, self.height, currentVkImageIdx)
@@ -167,22 +154,15 @@ function VKSwapchain:getCurrentTexture()
 	return self._currentTexture
 end
 
---- Create a command encoder that reuses the pre-allocated command buffer
---- for the current frame slot. This avoids pool allocation/destruction per frame.
+--- A command encoder over the pre-allocated command buffer for the current frame slot.
 ---@return hood-vk.CommandEncoder
 function VKSwapchain:createCommandEncoder()
 	return VKCommandEncoder.new(self.device, self.commandBuffers[self.currentFrame])
 end
 
---- Look up or create a framebuffer for the given render pass and current swapchain image.
---- The framebuffer uses the pre-created image view for this swapchain image index.
---- Cached per (renderPass, imageIdx) with numeric dimensions, so the per-frame
---- lookup is a table read plus two number comparisons (no string keys).
----
---- When `depthView` is given the framebuffer also holds that depth attachment.
---- The view is part of the cache identity, so a depth-attached pass is cached
---- exactly like a colour-only one instead of creating and destroying a
---- VkFramebuffer every frame.
+--- The framebuffer for a render pass and the current swapchain image, cached by image index
+--- and dimensions. A `depthView` is part of the cache identity, so a depth-attached pass is
+--- cached like any other.
 ---@param renderPass vk.ffi.RenderPass
 ---@param width number
 ---@param height number
@@ -216,8 +196,7 @@ function VKSwapchain:getFramebuffer(renderPass, width, height, depthView)
 		layers = 1,
 	})
 
-	-- Retire (rather than destroy) a replaced framebuffer: it may still be
-	-- referenced by a command buffer the GPU has not finished executing.
+	-- Retired rather than destroyed: a command buffer may still reference it.
 	if entry and entry.framebuffer then
 		self._retiredFramebuffers[#self._retiredFramebuffers + 1] = entry.framebuffer
 	end

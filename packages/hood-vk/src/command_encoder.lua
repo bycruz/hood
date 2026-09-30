@@ -8,8 +8,7 @@ local pass = require("hood-vk.pass")
 local VKBuffer = require("hood-vk.buffer")
 local VKCommandBuffer = require("hood-vk.command_buffer")
 
---- Staging allocations start at this size and grow to fit what is written, so a frame
---- that uploads a few small uniform blocks does not allocate per write.
+--- Staging starts here and grows to fit, so small uploads do not allocate per write.
 local STAGING_MIN_SIZE = 256 * 1024
 
 ---@class hood-vk.CommandEncoder
@@ -34,32 +33,28 @@ VKCommandEncoder.__index = VKCommandEncoder
 
 local beginInfo = vk.CommandBufferBeginInfo({})
 
--- Pre-allocated working buffers for the common single-attachment case.
--- These are reused across frames to avoid per-frame FFI allocation.
+-- Reused across frames: allocating these per frame is FFI churn on the hot path.
 local _reusableClearValues = vk.ClearValueArray(1)
 local _reusableBeginInfo = vk.RenderPassBeginInfo()
 local _reusableImageViews = ffi.new("VkImageView[1]")
 
--- Same idea for the two-attachment case (colour + depth), which is what a
--- depth-tested 2D/3D pass uses.
+-- The colour + depth case, which is what a depth-tested pass uses.
 local _reusableClearValues2 = vk.ClearValueArray(2)
 
 ---@param device hood-vk.Device
----@param reuseBuffer hood-vk.CommandBuffer? If provided, the buffer is reset and reused instead of allocating a new one.
+---@param reuseBuffer hood-vk.CommandBuffer? reset and reused rather than allocating a new one
 ---@return hood-vk.CommandEncoder
 function VKCommandEncoder.new(device, reuseBuffer)
-	local buffer
+	local buffer = reuseBuffer or VKCommandBuffer.new(device)
+
 	if reuseBuffer then
-		buffer = reuseBuffer
 		buffer:reset()
-	else
-		buffer = VKCommandBuffer.new(device)
 	end
+
 	device.handle:beginCommandBuffer(buffer.handle, beginInfo)
 
-	-- Reuse the encoder owned by this command buffer. Command buffers are
-	-- pre-allocated per swapchain image, so the encoder and its tracking tables
-	-- live as long as the swapchain instead of being allocated every frame.
+	-- Swapchain command buffers are kept per frame slot, so the encoder's tables live as long
+	-- as the swapchain rather than being rebuilt every frame.
 	local encoder = buffer._encoder
 	if encoder then
 		encoder.pendingDescriptor = nil
@@ -70,9 +65,8 @@ function VKCommandEncoder.new(device, reuseBuffer)
 		encoder.sampleableDepth = nil
 		encoder.sampleableDepthLayers = nil
 
-		-- Bind groups are only consulted by compute passes and attachment layouts by the end of
-		-- a pass, so stale entries are dropped only where they were recorded. This costs
-		-- nothing on the render-only path.
+		-- Only compute passes consult bind groups, and only a pass that wrote an attachment
+		-- records one, so emptying them here costs nothing on the render-only path.
 		if next(encoder.bindGroups) ~= nil then
 			encoder.bindGroups = {}
 		end
@@ -102,12 +96,7 @@ function VKCommandEncoder.new(device, reuseBuffer)
 	return encoder
 end
 
---- Begin a render pass.
---- Two calling conventions:
----   1. Full descriptor table: encoder:beginRendering({ colorAttachments = {...} })
----   2. Simple single-attachment: encoder:beginRendering(textureView, clearColor?)
----       where textureView is a hood-vk.TextureView. The descriptor tables are
----       allocated once and reused internally, avoiding per-frame table churn.
+--- Begin a render pass, from a descriptor or from a single texture view and clear colour.
 ---@overload fun(self, textureView: hood-vk.TextureView, clearColor?: { r: number, g: number, b: number, a: number })
 ---@overload fun(self, descriptor: hood.RenderPassDescriptor)
 function VKCommandEncoder:beginRendering(descriptor, clearColor)
@@ -115,8 +104,7 @@ function VKCommandEncoder:beginRendering(descriptor, clearColor)
 		-- Full descriptor table (backward compatible)
 		self.pendingDescriptor = descriptor
 	else
-		-- Simple path: descriptor is a TextureView, clearColor is optional.
-		-- Use a reusable descriptor stored on the encoder to avoid allocation.
+		-- The descriptor table is built once and reused, so this path allocates nothing.
 		local d = self._reusableRpDesc
 		if not d then
 			local clear = { r = 0, g = 0, b = 0, a = 1 }
@@ -162,8 +150,7 @@ function VKCommandEncoder:_beginRenderPass(descriptor)
 	local depthAttachment = descriptor.depthStencilAttachment
 	local totalAttachments = #colorAttachments + (depthAttachment and 1 or 0)
 
-	-- The pass is defined once per attachment configuration and reused, so this describes the
-	-- attachments rather than creating anything; pass.define sorts out the rest.
+	-- This only describes the attachments; pass.define finds or creates the pass.
 	local colorSpecs = {}
 	local depthSpec = nil
 	local imageViews = totalAttachments == 1 and _reusableImageViews
@@ -191,8 +178,8 @@ function VKCommandEncoder:_beginRenderPass(descriptor)
 			sampled = finalLayout == vk.ImageLayout.SHADER_READ_ONLY_OPTIMAL,
 		}
 
-		-- A swapchain image is one of the ones the swapchain owns and turns over, so which one
-		-- a framebuffer holds is its index rather than the image.
+		-- A swapchain image is identified by its index, not its handle: the swapchain turns
+		-- them over.
 		handles[i] = isSwapchain and (texture.swapchainImageIdx or 0) or texture.handle
 
 		self._attachments[#self._attachments + 1] = { texture = texture, finalLayout = finalLayout }
@@ -215,8 +202,7 @@ function VKCommandEncoder:_beginRenderPass(descriptor)
 			sampled = finalLayout == vk.ImageLayout.SHADER_READ_ONLY_OPTIMAL,
 		}
 
-		-- A depth texture left in the layout a shader reads has its writes made visible after
-		-- the pass: a barrier cannot be recorded inside one.
+		-- This one's writes are made visible after the pass; see endRendering.
 		if finalLayout == vk.ImageLayout.SHADER_READ_ONLY_OPTIMAL then
 			self.sampleableDepth = texture
 			self.sampleableDepthLayers = view.layerCount
@@ -231,11 +217,9 @@ function VKCommandEncoder:_beginRenderPass(descriptor)
 
 	local framebuffer
 	if swapchain and swapchain.currentVkImageIdx ~= nil then
-		-- A swapchain framebuffer is the one the swapchain already keeps for this pass, image and
-		-- size. Its depth view is passed through, since which depth texture a frame attaches can
-		-- change between frames.
-		framebuffer = swapchain:getFramebuffer(renderPass, width, height,
-			depthAttachment and depthAttachment.texture.handle or nil)
+		-- The swapchain keeps its own framebuffers, and its depth view can change per frame.
+		local depthView = depthAttachment and depthAttachment.texture.handle or nil
+		framebuffer = swapchain:getFramebuffer(renderPass, width, height, depthView)
 	else
 		framebuffer = pass.framebuffer(self.device, renderPass, imageViews, handles, width, height)
 	end
@@ -277,8 +261,7 @@ function VKCommandEncoder:_beginRenderPass(descriptor)
 	beginInfo.clearValueCount = totalAttachments
 	beginInfo.pClearValues = clearValues
 
-	-- The pass is recorded now, so the attachments it writes are where it leaves them: the
-	-- layouts it named are the ones the next pass or copy has to see.
+	-- The pass is recorded now, so every attachment is where the pass leaves it.
 	for _, attachment in ipairs(self._attachments) do
 		attachment.texture.layout = attachment.finalLayout
 	end
@@ -330,8 +313,7 @@ end
 ---@param format hood.IndexFormat
 ---@param offset number?
 function VKCommandEncoder:setIndexBuffer(buffer, format, offset)
-	self.device.handle:cmdBindIndexBuffer(self.buffer.handle, buffer.handle, offset or 0,
-		vkConversions.indexFormat[format])
+	self.device.handle:cmdBindIndexBuffer(self.buffer.handle, buffer.handle, offset or 0, vkConversions.indexFormat[format])
 end
 
 ---@param indexCount number
@@ -340,8 +322,8 @@ end
 ---@param baseVertex number?
 ---@param firstInstance number?
 function VKCommandEncoder:drawIndexed(indexCount, instanceCount, firstIndex, baseVertex, firstInstance)
-	self.device.handle:cmdDrawIndexed(self.buffer.handle, indexCount, instanceCount or 1, firstIndex or 0,
-		baseVertex or 0, firstInstance or 0)
+	self.device.handle:cmdDrawIndexed(self.buffer.handle, indexCount, instanceCount or 1,
+		firstIndex or 0, baseVertex or 0, firstInstance or 0)
 end
 
 ---@param vertexCount number
@@ -349,36 +331,30 @@ end
 ---@param firstVertex number?
 ---@param firstInstance number?
 function VKCommandEncoder:draw(vertexCount, instanceCount, firstVertex, firstInstance)
-	self.device.handle:cmdDraw(self.buffer.handle, vertexCount, instanceCount or 1, firstVertex or 0,
-		firstInstance or 0)
+	self.device.handle:cmdDraw(self.buffer.handle, vertexCount, instanceCount or 1, firstVertex or 0, firstInstance or 0)
 end
 
 local descriptorSetArray = vk.DescriptorSetArray(1)
 
 ---@param index number
 ---@param bindGroup hood-vk.BindGroup
---- Move every subresource of a freshly created texture into one layout.
+--- Move a freshly created texture's subresources into the layout a descriptor names.
 ---
---- Sampling goes through a view and a descriptor covers the whole view, so every layer of a
---- sampled texture has to be in the layout the descriptor is written with -- even the ones
---- nothing was ever written to. A layer left in UNDEFINED reads as nothing, so writing layer 0
---- of an array would otherwise make every later layer sample as empty.
+--- A descriptor covers the whole view, so every layer has to be in that layout -- including the
+--- ones nothing was written to, which would otherwise sample as empty.
 ---
---- This belongs at creation, which is the only point with a command buffer of its own outside
---- a render pass: barriers cannot be recorded within one.
+--- Done at creation because that is the only point outside a render pass, where this barrier is
+--- legal to record.
 ---@param texture hood-vk.Texture
 ---@return boolean claimed
 function VKCommandEncoder:claimTexture(texture)
-	-- A depth texture is left alone: a depth image is moved into the layout a shader reads by
-	-- the pass that writes it, which is the only place that can put it there before it is
-	-- sampled.
+	-- A depth image is put in the layout a shader reads by the pass that writes it instead.
 	if texture.isDepth then
 		return false
 	end
 
-	-- Only a texture that can be sampled is moved into a shader read layout:
-	-- VUID-VkImageMemoryBarrier-oldLayout-01211 requires the SAMPLED usage for it, and render
-	-- attachment layouts are the render pass's business.
+	-- VUID-VkImageMemoryBarrier-oldLayout-01211: SHADER_READ_ONLY_OPTIMAL requires the SAMPLED
+	-- usage, and attachment layouts belong to the render pass.
 	if bit.band(texture.usage, vk.ImageUsageFlagBits.SAMPLED) == 0 then
 		return false
 	end
@@ -403,16 +379,14 @@ function VKCommandEncoder:setBindGroup(index, bindGroup)
 	self.bindGroups[index] = bindGroup
 	descriptorSetArray[0] = bindGroup.set
 
-	self.device.handle:cmdBindDescriptorSets(self.buffer.handle, bindPoint, layout, index, 1,
-		descriptorSetArray, 0)
+	self.device.handle:cmdBindDescriptorSets(self.buffer.handle, bindPoint, layout, index, 1, descriptorSetArray, 0)
 end
 
 --- End the open render pass.
 ---
---- A pass is only started when a pipeline is bound, so calling this without one
---- means the frame recorded an end with no matching begin. The driver does not
---- validate that: it executes a command buffer whose render pass never started,
---- which on at least one desktop driver is a segfault rather than an error.
+--- A pass only starts when a pipeline is bound, so an end without one means the frame never
+--- began a pass. Drivers do not validate that: they execute a command buffer whose pass never
+--- started, which is a segfault rather than an error.
 function VKCommandEncoder:endRendering()
 	if not self.inRenderPass then
 		error("hood: endRendering was called with no open render pass; a pass is "
@@ -423,9 +397,8 @@ function VKCommandEncoder:endRendering()
 	self.inRenderPass = false
 	self.device.handle:cmdEndRenderPass(self.buffer.handle)
 
-	-- A depth attachment the frame goes on to sample was left by the pass in the layout a
-	-- shader reads, so what is left is to make its writes visible to those reads. The pass
-	-- cannot record that barrier itself: barriers are not recordable within a render pass.
+	-- Make a sampled depth attachment's writes visible. The pass cannot record this itself:
+	-- barriers are not recordable within a render pass.
 	local depth = self.sampleableDepth
 	if depth then
 		image.barrier(self.device, self.buffer.handle, self.depthBarrier, depth,
@@ -442,11 +415,8 @@ function VKCommandEncoder:endRendering()
 	end
 end
 
---- Begin the pass, refusing to nest one inside another.
----
---- Vulkan rejects a second vkCmdBeginRenderPass before the matching end, and the
---- driver's response to the resulting command stream is a crash rather than an
---- error, so this is checked here where the offending call is identifiable.
+--- Begin the pass, refusing to nest one inside another: a second vkCmdBeginRenderPass before
+--- the matching end is a driver crash rather than a reportable error.
 ---@param beginInfo vk.ffi.RenderPassBeginInfo
 ---@private
 function VKCommandEncoder:_beginRenderPassRaw(beginInfo)
@@ -460,14 +430,10 @@ end
 
 --- Make staged uploads visible to the commands that read them.
 ---
---- A vkCmdCopyBuffer into a buffer that a later draw reads is a transfer write
---- followed by a read with no dependency between them, which is undefined
---- behaviour; sync validation reports it as SYNC-HAZARD-READ-AFTER-WRITE. The
---- previous vkCmdUpdateBuffer path had exactly the same hole, so this is a
---- pre-existing bug rather than one the staging rewrite introduced.
+--- A copy into a buffer a later draw reads is a transfer write followed by a read with no
+--- dependency between them: undefined behaviour, reported as SYNC-HAZARD-READ-AFTER-WRITE.
 ---
---- One barrier covers everything staged in this command buffer, emitted when
---- the reads are about to start rather than after every copy.
+--- One barrier covers everything staged so far, emitted when the reads are about to start.
 ---@private
 function VKCommandEncoder:_flushStagedWrites()
 	if not self.stagedWrites then
@@ -485,24 +451,21 @@ function VKCommandEncoder:_flushStagedWrites()
 		vk.AccessFlags.SHADER_READ,
 		vk.AccessFlags.INDIRECT_COMMAND_READ)
 
-	-- Not usable inside a render pass, where the stage masks have to stay within
-	-- the graphics stages; both call sites are outside one.
+	-- Only legal outside a render pass, where the stage masks may name any stage.
 	self.device.handle:cmdPipelineBarrier(self.buffer.handle, vk.PipelineStageFlagBits.TRANSFER,
 		vk.PipelineStageFlagBits.ALL_COMMANDS, 0, nil, 1, self.memoryBarrier)
 end
 
---- Hand out `size` bytes of host-visible staging memory for this command buffer, growing the
---- staging buffer as needed.
+--- Hand out `size` bytes of staging memory for this command buffer, growing the buffer as
+--- needed.
 ---
---- The staging buffer lives on the command buffer rather than the encoder, because the copies
---- recorded out of it finish only when the command buffer retires. Swapchain command buffers are
---- reused per frame slot and the slot waits its fence before being re-recorded, so the same
---- allocation is safely reused next frame; a command buffer used once frees it with everything
---- else.
+--- It lives on the command buffer rather than the encoder because the copies recorded out of it
+--- finish only when the command buffer retires. Swapchain command buffers are reused per frame
+--- slot and the slot waits its fence before re-recording, so the same allocation is safely
+--- reused; a one-shot buffer frees it with everything else.
 ---
---- It is made the size it has to be rather than the next power of two past it: an upload of a
---- picture is one of these, and doubling a four megabyte one to eight is memory asked of a driver
---- that may not have it to spare.
+--- Sized to fit rather than rounded up: an upload of a picture is one of these, and doubling a
+--- four megabyte one to eight is memory a driver may not have to spare.
 ---@param size number
 ---@return hood-vk.Buffer staging
 ---@private
@@ -514,8 +477,7 @@ function VKCommandEncoder:_staging(size)
 			return staging
 		end
 
-		-- Copies already recorded out of this one still reference it, so it is kept until the
-		-- command buffer is recycled rather than freed here.
+		-- Recorded copies still reference it, so it survives until the buffer is recycled.
 		self.buffer.stagingResources = self.buffer.stagingResources or {}
 		table.insert(self.buffer.stagingResources, staging)
 	end
@@ -534,13 +496,9 @@ end
 
 --- Upload CPU data into a buffer.
 ---
---- A mapped buffer is written directly by the CPU: no staging, no copy command, nothing submitted.
---- That is the path per-frame data should take, and what `VKQueue:writeBuffer` routes to for a
---- buffer it can write inline.
----
---- Everything else goes through host-visible staging memory and a vkCmdCopyBuffer, which is
---- intended for this unlike vkCmdUpdateBuffer: that one requires a dataSize that is a multiple of
---- 4 (VUID-vkCmdUpdateBuffer-dataSize-00038) and caps at 65536 bytes per call.
+--- A mapped buffer is written straight by the CPU with nothing submitted, which is the path
+--- per-frame data should take. Everything else goes through staging and vkCmdCopyBuffer, which
+--- has no alignment or size restrictions unlike vkCmdUpdateBuffer.
 ---@param buffer hood-vk.Buffer
 ---@param size number
 ---@param data ffi.cdata*
@@ -574,31 +532,25 @@ function VKCommandEncoder:writeBuffer(buffer, size, data, offset)
 	self.stagedWrites = true
 end
 
---- Issue `drawCount` indexed draws recorded in `buffer`, reading one command
---- every `stride` bytes from `offset`.
+--- Issue `drawCount` indexed draws recorded in `buffer`, one command every `stride` bytes from
+--- `offset`.
 ---
---- Every draw shares the bound vertex buffers and index buffer, so each command
---- selects its geometry through firstIndex and vertexOffset rather than by
---- rebinding. That is what lets a whole frame's instanced draws go out as one
---- call, and it costs one 20 byte record per draw instead of a draw command in
---- the command stream.
+--- Every draw shares the bound vertex and index buffers, selecting its geometry through
+--- firstIndex and vertexOffset, so a frame's instanced draws go out as one call for 20 bytes
+--- each instead of a command apiece.
 ---
---- The buffer needs the INDIRECT usage, and its commands need the
---- drawIndirectFirstInstance feature when firstInstance is nonzero.
+--- The buffer needs INDIRECT, and a nonzero firstInstance needs the drawIndirectFirstInstance
+--- feature.
 ---@param buffer hood-vk.Buffer
 ---@param offset number
 ---@param drawCount number
 ---@param stride number
 function VKCommandEncoder:drawIndexedIndirect(buffer, offset, drawCount, stride)
-	self.device.handle:cmdDrawIndexedIndirect(self.buffer.handle, buffer.handle,
-		offset or 0, drawCount, stride)
+	self.device.handle:cmdDrawIndexedIndirect(self.buffer.handle, buffer.handle, offset or 0, drawCount, stride)
 end
 
---- Copy bytes between two buffers on the GPU. The source needs COPY_SRC and
---- the destination COPY_DST.
----
---- Vulkan only for now: the OpenGL backend would need
---- glCopyNamedBufferSubData, which glapi does not expose yet.
+--- Copy bytes between two buffers on the GPU. The source needs COPY_SRC and the destination
+--- COPY_DST. Vulkan only: it would need glCopyNamedBufferSubData on the OpenGL backend.
 ---@param source hood-vk.Buffer
 ---@param destination hood-vk.Buffer
 ---@param size number
@@ -646,8 +598,7 @@ function VKCommandEncoder:writeTexture(texture, descriptor, data)
 	image.transition(self.device, self.buffer.handle, texture,
 		vk.ImageLayout.TRANSFER_DST_OPTIMAL, vk.PipelineStageFlagBits.TRANSFER, vk.AccessFlags.TRANSFER_WRITE)
 
-	-- The region points at this upload's slice of the staging allocation rather than assuming
-	-- the data starts at zero.
+	-- Points at this upload's slice of staging, not the start of it.
 	local region = vk.BufferImageCopyArray(1)
 	region[0].bufferOffset = stagingOffset
 	region[0].bufferRowLength = descriptor.bytesPerRow and (descriptor.bytesPerRow / 4) or 0
@@ -698,20 +649,17 @@ function VKCommandEncoder:copyTextureToBuffer(source, destination, copySize)
 	self.device.handle:cmdCopyImageToBuffer(self.buffer.handle, texture.handle,
 		vk.ImageLayout.TRANSFER_SRC_OPTIMAL, buffer.handle, 1, region)
 
-	-- Back to wherever this texture lives when nothing holds it: a readback target is not
-	-- necessarily one that can be sampled.
+	-- Back to this texture's resting layout: a readback target is not necessarily samplable.
 	image.transition(self.device, self.buffer.handle, texture, image.restingLayout(texture),
 		vk.PipelineStageFlagBits.FRAGMENT_SHADER, vk.AccessFlags.SHADER_READ)
 end
 
 ---@param descriptor hood.ComputePassDescriptor
 function VKCommandEncoder:beginComputePass(descriptor)
-	-- Same reasoning as the render pass: staged writes must be visible before the dispatch
-	-- reads them.
+	-- Staged writes have to be visible before the dispatch reads them.
 	self:_flushStagedWrites()
 
-	-- A storage texture is written through a descriptor, and a descriptor names one layout for
-	-- the whole view, so it has to be GENERAL for the dispatch.
+	-- A descriptor names one layout for the whole view, and a storage image needs GENERAL.
 	image.eachStorageTexture(self.bindGroups, function(texture)
 		image.transition(self.device, self.buffer.handle, texture,
 			vk.ImageLayout.GENERAL, vk.PipelineStageFlagBits.COMPUTE_SHADER, vk.AccessFlags.SHADER_WRITE)

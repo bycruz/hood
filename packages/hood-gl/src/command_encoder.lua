@@ -99,8 +99,8 @@ function GLCommandEncoder:drawIndexed(indexCount, instanceCount, firstIndex, bas
 	}
 end
 
---- Issue `drawCount` indexed draws recorded in `buffer`, one command every
---- `stride` bytes. GL reads the same five-uint32 command layout Vulkan does.
+--- Issue `drawCount` indexed draws from `buffer`, one command every `stride` bytes: the same
+--- five-uint32 layout Vulkan reads.
 ---@param buffer hood-gl.Buffer
 ---@param offset number
 ---@param drawCount number

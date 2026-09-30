@@ -1,15 +1,13 @@
 local vk = require("vkapi")
 
---- Image layout transitions for the Vulkan backend.
+--- Image layout transitions.
 ---
---- Vulkan requires an image to be in a layout that matches how it is about to be used, and
---- the barrier that moves it there must name the stage and access that produced the current
---- contents. Both halves follow from the layout alone, so they live here rather than being
---- spelled out at every call site.
+--- Moving an image to the layout its next use needs requires a barrier naming the stage and
+--- access that produced its current contents, and both follow from the layout alone.
 ---
---- Layouts are tracked one per texture. Every barrier below covers the image's whole
---- subresource range, which is what a descriptor does: a view bound to a shader covers all of
---- its layers, so a layer left in the wrong layout is a layer that reads as nothing.
+--- One layout is tracked per texture, and every barrier covers the whole subresource range: a
+--- descriptor covers all of a view's layers, so a layer left in the wrong layout reads as
+--- nothing.
 local image = {}
 
 --- VK_QUEUE_FAMILY_IGNORED: hood does not share images between queues.
@@ -55,9 +53,8 @@ end
 
 --- Record the barrier that moves `texture` into `newLayout`, and remember it.
 ---
---- A texture already in `newLayout` is left alone: the barrier would be a no-op, and matching
---- the old layout to the real one is what keeps the driver from discarding contents it is
---- about to read.
+--- A texture already there is left alone: the barrier would be a no-op, and naming the real old
+--- layout is what stops the driver discarding contents it is about to read.
 ---@param device hood-vk.Device
 ---@param commandBuffer vk.ffi.CommandBuffer
 ---@param texture hood-vk.Texture
@@ -90,20 +87,16 @@ function image.transition(device, commandBuffer, texture, newLayout, dstStage, d
 	barrier.subresourceRange.baseArrayLayer = 0
 	barrier.subresourceRange.layerCount = vk.REMAINING_ARRAY_LAYERS
 
-	device.handle.v1_0.vkCmdPipelineBarrier(commandBuffer, producer.stage, dstStage, 0,
-		0, nil, 0, nil, 1, barrier)
+	device.handle.v1_0.vkCmdPipelineBarrier(commandBuffer, producer.stage, dstStage,
+		0, 0, nil, 0, nil, 1, barrier)
 
 	texture.layout = newLayout
 
 	return true
 end
 
---- The layout a texture rests in when nothing is holding it: the one a shader reads if it can be
---- sampled, and the one an attachment is written in otherwise.
----
---- VUID-VkImageMemoryBarrier-oldLayout-01211: only a texture created with the SAMPLED usage may
---- be in SHADER_READ_ONLY_OPTIMAL, so a render target that is never sampled belongs in an
---- attachment layout.
+--- The layout a texture rests in when nothing holds it: what a shader reads if it can be
+--- sampled, an attachment layout otherwise (VUID-VkImageMemoryBarrier-oldLayout-01211).
 ---@param texture hood-vk.Texture
 ---@return vk.ImageLayout
 function image.restingLayout(texture)
@@ -118,13 +111,9 @@ function image.restingLayout(texture)
 	return vk.ImageLayout.COLOR_ATTACHMENT_OPTIMAL
 end
 
---- The layouts a render pass leaves its attachments in, so that later passes and copies find
---- them where the pass put them.
----
---- A pass that loads an attachment must say which layout it is loading from, and the layout a
---- descriptor names is the one it must have been written to in. So the attachment ends where the
---- next reader expects it: PRESENT_SRC for a swapchain image, and otherwise the layout the
---- texture rests in.
+--- The layouts a render pass leaves its attachments in. A pass that loads an attachment has to
+--- name the layout it loads from, and a descriptor names the layout its view must be in, so an
+--- attachment ends where its next reader expects it.
 ---@param view hood-vk.TextureView
 ---@param isSwapchain boolean
 ---@param op hood.LoadOp|hood.DepthOp
@@ -147,21 +136,16 @@ function image.passLayouts(view, isSwapchain, op)
 	local initial = vk.ImageLayout.UNDEFINED
 
 	if current ~= vk.ImageLayout.UNDEFINED then
-		-- Loading a depth texture gives the pass the layout it is already in to load from;
-		-- anything else is written from scratch.
+		-- Loading reuses whatever layout it is already in; anything else is written from scratch.
 		initial = op.type == "clear" and vk.ImageLayout.UNDEFINED or current
 	end
 
 	return initial, finalLayout
 end
 
---- Record a barrier over one image without moving it, so that writes on `srcStage` with
---- `srcAccess` are visible to `dstStage` with `dstAccess`.
----
---- A render pass leaves its depth attachment in the layout a shader reads, but the pass cannot
---- record that writes are visible: a barrier is not recordable within a render pass. This is for
---- that barrier and others like it, where the layout is already right and only the dependency is
---- missing.
+--- Record a barrier that makes writes visible without moving the image, for when the layout is
+--- already right and only the dependency is missing. A render pass cannot record this itself:
+--- barriers are not recordable within one.
 ---@param device hood-vk.Device
 ---@param commandBuffer vk.ffi.CommandBuffer
 ---@param scratch vk.ffi.ImageMemoryBarrier[] # A one-element array to fill in
@@ -193,10 +177,8 @@ function image.barrier(device, commandBuffer, scratch, texture, layout, srcStage
 	device.handle.v1_0.vkCmdPipelineBarrier(commandBuffer, srcStage, dstStage, 0, 0, nil, 0, nil, 1, scratch)
 end
 
---- Call `fn` once for every texture bound as a storage texture across the given bind groups.
----
---- A bind group that names a storage texture is the only place a dispatch states which image
---- it writes to, so the passes consult the bound groups rather than being told separately.
+--- Call `fn` for every texture bound as a storage texture across the given bind groups, which
+--- is the only place a dispatch states the images it writes.
 ---@param bindGroups table<number, hood-vk.BindGroup>
 ---@param fn fun(texture: hood-vk.Texture)
 function image.eachStorageTexture(bindGroups, fn)
