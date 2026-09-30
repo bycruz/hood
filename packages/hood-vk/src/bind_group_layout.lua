@@ -24,10 +24,7 @@ function VKBindGroupLayout.new(device, entries)
 		bindings[i - 1].stageFlags = stageFlags
 	end
 
-	local handle = device.handle:createDescriptorSetLayout({
-		bindingCount = #entries,
-		pBindings = bindings
-	})
+	local handle = device.handle:createDescriptorSetLayout({ bindingCount = #entries, pBindings = bindings })
 
 	return setmetatable({ device = device, handle = handle, entries = entries }, VKBindGroupLayout)
 end

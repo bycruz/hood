@@ -92,20 +92,18 @@ function GLTexture:writeData(desc, data)
 	gl.pixelStorei(gl.UNPACK_ROW_LENGTH, 0)
 end
 
----@param framebuffer number
----@param id number?
----@param context hood-gl.Context?
-function GLTexture.fromRaw(framebuffer, id, context)
-	return setmetatable({ framebuffer = framebuffer, id = id, context = context }, GLTexture)
-end
-
+--- The default framebuffer of a window's context, which is what a swapchain draws into. It is
+--- not a texture of the driver's: there is no name to free and the window owns the pixels.
 ---@param context hood-gl.Context
 function GLTexture.forContextViewport(context)
-	return GLTexture.fromRaw(0, nil, context)
+	return setmetatable({ framebuffer = 0, id = nil, context = context }, GLTexture)
 end
 
 function GLTexture:destroy()
-	gl.deleteTextures({ self.id })
+	-- A backbuffer has no name of its own: the window's context owns it.
+	if self.id then
+		gl.deleteTextures({ self.id })
+	end
 end
 
 ---@param descriptor hood.TextureViewDescriptor

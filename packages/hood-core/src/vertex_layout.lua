@@ -10,6 +10,11 @@ local ffi = require("ffi")
 --- copies of them.
 ---@alias hood.VertexLayout.StepMode "vertex" | "instance"
 
+---@class hood.VertexLayout.ResolvedAttribute
+---@field attribute hood.VertexLayout.Attribute
+---@field bufferIndex number
+---@field location number
+
 ---@class hood.VertexLayout
 ---@field attributes hood.VertexLayout.Attribute[]
 ---@field stride number?
@@ -50,7 +55,7 @@ end
 --- order. Locations run on across every layout, so a second layout does not start at 0,
 --- and an attribute that names its own location does not consume a sequential one.
 ---@param buffers hood.VertexLayout[]
----@return { attribute: hood.VertexLayout.Attribute, bufferIndex: number, location: number }[]
+---@return hood.VertexLayout.ResolvedAttribute[]
 function VertexLayout.resolveLocations(buffers)
 	local resolved = {}
 

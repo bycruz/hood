@@ -63,10 +63,8 @@ function M.allocate(device, requirements, requiredFlags, preferredFlags, what)
 	local failure
 
 	for _, index in ipairs(indices) do
-		local ok, memory = pcall(device.handle.allocateMemory, device.handle, {
-			allocationSize = requirements.size,
-			memoryTypeIndex = index,
-		})
+		local ok, memory = pcall(device.handle.allocateMemory, device.handle,
+			{ allocationSize = requirements.size, memoryTypeIndex = index })
 
 		if ok then
 			return memory

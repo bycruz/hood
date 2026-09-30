@@ -26,10 +26,7 @@ function VKComputePipeline.new(device, descriptor)
 		descriptorSetLayouts[0] = bgLayout.handle
 	end
 
-	local layout = device.handle:createPipelineLayout({
-		setLayoutCount = 1,
-		pSetLayouts = descriptorSetLayouts,
-	})
+	local layout = device.handle:createPipelineLayout({ setLayoutCount = 1, pSetLayouts = descriptorSetLayouts })
 
 	local handle = device.handle:createComputePipeline(nil, {
 		stage = {

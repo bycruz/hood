@@ -2,6 +2,8 @@ local gl = require("glapi")
 local glConversions = require("hood-gl.convert")
 local ffi = require("ffi")
 
+local core = require("hood-core")
+
 local GLVAO = require("hood-gl.vao")
 
 -- Clip control's own tokens, which glapi's enum tables do not carry: which corner of the
@@ -11,13 +13,12 @@ local NEGATIVE_ONE_TO_ONE = 0x935E
 
 ---@class hood-gl.CommandBuffer
 ---@field private commands hood-gl.Command[]
----@field private svbCache table # tbd
 local GLCommandBuffer = {}
 GLCommandBuffer.__index = GLCommandBuffer
 
 ---@param commands hood-gl.Command[]
 function GLCommandBuffer.new(commands)
-	return setmetatable({ svbCache = {}, commands = commands }, GLCommandBuffer)
+	return setmetatable({ commands = commands }, GLCommandBuffer)
 end
 
 ---@param op hood.LoadOp
@@ -137,6 +138,9 @@ function GLCommandBuffer:execute(queueCtx, renderCtx)
 	---@type hood-gl.VAO?
 	local vao
 
+	---@type hood.VertexLayout.ResolvedAttribute[]?
+	local vertexAttributes
+
 	local indexType = gl.UNSIGNED_INT
 	local indexSize = 4
 
@@ -219,6 +223,10 @@ function GLCommandBuffer:execute(queueCtx, renderCtx)
 			-- todo: pipelines need to be fixed as they are created in the headless context atm
 			pipeline = command.pipeline
 
+			-- Where each of the pipeline's attributes reads from is a property of the pipeline,
+			-- so it is worked out once here rather than for every buffer binding.
+			vertexAttributes = core.VertexLayout.resolveLocations(pipeline.vertex.buffers)
+
 			local rawPipeline = pipelines[pipeline]
 			if not rawPipeline then
 				rawPipeline = pipeline:genForCurrentContext()
@@ -277,16 +285,8 @@ function GLCommandBuffer:execute(queueCtx, renderCtx)
 				error("Pipeline must be set before setting vertex buffers")
 			end
 
-			local descriptor = pipeline.vertex.buffers[command.slot + 1]
-
-			-- Locations run across all of the pipeline's layouts in order, so
-			-- this layout starts where the previous ones left off.
-			local locationBase = 0
-			for i = 1, command.slot do
-				locationBase = locationBase + #pipeline.vertex.buffers[i].attributes
-			end
-
-			vao:setVertexBuffer(command.buffer, descriptor, command.slot, command.offset, locationBase)
+			vao:setVertexBuffer(command.buffer, pipeline.vertex.buffers[command.slot + 1], command.slot,
+				command.offset, vertexAttributes)
 		elseif command.type == "setIndexBuffer" then
 			vao:setIndexBuffer(command.buffer)
 			indexType = glConversions.indexFormat[command.format]
@@ -313,14 +313,9 @@ function GLCommandBuffer:execute(queueCtx, renderCtx)
 			gl.pixelStorei(gl.PACK_IMAGE_HEIGHT, destination.rowsPerImage or 0)
 
 			gl.bindBuffer(gl.PIXEL_PACK_BUFFER, buffer.id)
-			gl.getTextureSubImage(
-				texture.id, mipLevel,
-				origin.x or 0, origin.y or 0, origin.z or 0,
+			gl.getTextureSubImage(texture.id, mipLevel, origin.x or 0, origin.y or 0, origin.z or 0,
 				copySize.width, copySize.height, copySize.depthOrArrayLayers or 1,
-				format, dataType,
-				buffer.descriptor.size,
-				ffi.cast("void*", destination.offset or 0)
-			)
+				format, dataType, buffer.descriptor.size, ffi.cast("void*", destination.offset or 0))
 			gl.bindBuffer(gl.PIXEL_PACK_BUFFER, 0)
 
 			gl.pixelStorei(gl.PACK_ALIGNMENT, 4)
@@ -346,15 +341,8 @@ function GLCommandBuffer:execute(queueCtx, renderCtx)
 				elseif entry.type == "storageTexture" then
 					local texture = entry.texture --[[@as hood-gl.TextureView]]
 
-					gl.bindImageTexture(
-						entry.binding,
-						texture.id,
-						0,
-						entry.layer and 0 or 1,
-						entry.layer or 0,
-						glConversions.storageAccess[entry.access],
-						texture.format
-					)
+					gl.bindImageTexture(entry.binding, texture.id, 0, entry.layer and 0 or 1,
+						entry.layer or 0, glConversions.storageAccess[entry.access], texture.format)
 				end
 			end
 		elseif command.type == "drawIndexed" then
@@ -368,24 +356,23 @@ function GLCommandBuffer:execute(queueCtx, renderCtx)
 
 			-- One entry point covers both cases: an instance count of 1 is an
 			-- ordinary indexed draw.
-			gl.drawElementsInstancedBaseVertex(gl.TRIANGLES, command.indexCount,
-				indexType, indices, command.instanceCount or 1, command.baseVertex)
+			gl.drawElementsInstancedBaseVertex(gl.TRIANGLES, command.indexCount, indexType,
+				indices, command.instanceCount or 1, command.baseVertex)
 		elseif command.type == "drawIndexedIndirect" then
 			-- The commands live in a buffer, bound with the byte offset applied
 			-- here, and each one carries its own firstIndex and base vertex.
 			-- glDrawElementsIndirect issues exactly one draw and ignores the
 			-- count entirely, so the multi form is what actually issues them all.
 			gl.bindBuffer(gl.DRAW_INDIRECT_BUFFER, command.buffer.id)
-			gl.multiDrawElementsIndirect(gl.TRIANGLES, indexType,
-				ffi.cast("const void*", command.offset), command.drawCount, command.stride)
+			gl.multiDrawElementsIndirect(gl.TRIANGLES, indexType, ffi.cast("const void*", command.offset),
+				command.drawCount, command.stride)
 			gl.bindBuffer(gl.DRAW_INDIRECT_BUFFER, 0)
 		elseif command.type == "draw" then
 			if command.firstInstance and command.firstInstance ~= 0 then
 				error("hood: the OpenGL backend has no firstInstance; offset the instance buffer instead")
 			end
 
-			gl.drawArraysInstanced(gl.TRIANGLES, command.firstVertex, command.vertexCount,
-				command.instanceCount or 1)
+			gl.drawArraysInstanced(gl.TRIANGLES, command.firstVertex, command.vertexCount, command.instanceCount or 1)
 		elseif command.type == "beginComputePass" then
 			gl.bindVertexArray(0)
 		elseif command.type == "endComputePass" then

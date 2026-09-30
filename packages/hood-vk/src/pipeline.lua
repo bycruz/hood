@@ -201,10 +201,7 @@ function VKPipeline.new(device, descriptor)
 		descriptorSetLayouts[0] = layout.handle
 	end
 
-	local layout = device.handle:createPipelineLayout({
-		setLayoutCount = 1,
-		pSetLayouts = descriptorSetLayouts,
-	})
+	local layout = device.handle:createPipelineLayout({ setLayoutCount = 1, pSetLayouts = descriptorSetLayouts })
 
 	-- The pass the pipeline was made against: the formats it renders to are all it needs, and
 	-- a frame rendering into textures of those formats uses the same pass.

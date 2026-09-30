@@ -38,32 +38,29 @@ end
 ---@param descriptor hood.VertexLayout
 ---@param bindingIndex number?
 ---@param offset number? byte offset into the buffer
----@param locationBase number? first attribute location this layout owns
-function GLVAO:setVertexBuffer(buffer, descriptor, bindingIndex, offset, locationBase)
+---@param attributes hood.VertexLayout.ResolvedAttribute[]? every attribute of the pipeline, resolved
+function GLVAO:setVertexBuffer(buffer, descriptor, bindingIndex, offset, attributes)
 	bindingIndex = bindingIndex or 0
 	offset = offset or 0
 
 	gl.vertexArrayVertexBuffer(self.id, bindingIndex, buffer.id, offset, descriptor:getStride())
 
-	-- Attribute locations are assigned across every layout in the pipeline, in
-	-- order, so a second layout does not start at location 0. Deriving them from
-	-- the index within this layout alone made a two-buffer pipeline bind both
-	-- buffers to the same locations.
-	local location = locationBase or 0
+	-- Locations run across every layout in the pipeline and an attribute may name its own, so
+	-- they are resolved together rather than counted per layout; this binding takes the ones
+	-- that belong to it.
+	for _, resolved in ipairs(attributes or {}) do
+		if resolved.bufferIndex - 1 == bindingIndex then
+			local attr = resolved.attribute
+			local glType = glAttributeType[attr.type]
 
-	for _, attr in ipairs(descriptor.attributes) do
-		local glType = glAttributeType[attr.type]
-		local normalized = attr.normalized and 1 or 0
+			if not glType then
+				error("Unsupported attribute type: " .. tostring(attr.type))
+			end
 
-		if not glType then
-			error("Unsupported attribute type: " .. tostring(attr.type))
+			gl.enableVertexArrayAttrib(self.id, resolved.location)
+			gl.vertexArrayAttribFormat(self.id, resolved.location, attr.size, glType, attr.normalized and 1 or 0, attr.offset)
+			gl.vertexArrayAttribBinding(self.id, resolved.location, bindingIndex)
 		end
-
-		gl.enableVertexArrayAttrib(self.id, location)
-		gl.vertexArrayAttribFormat(self.id, location, attr.size, glType, normalized, attr.offset)
-		gl.vertexArrayAttribBinding(self.id, location, bindingIndex)
-
-		location = location + 1
 	end
 
 	-- Divisor 0 advances this binding once per vertex, 1 once per instance.

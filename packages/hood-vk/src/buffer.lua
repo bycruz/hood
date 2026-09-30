@@ -81,8 +81,7 @@ function VKBuffer.new(device, descriptor)
 	-- A mapped buffer stays mapped for its whole life: the memory is coherent, so there is
 	-- nothing to flush, and remapping per write would cost more than the write itself.
 	if wantsMapped then
-		buffer.mappedBase = ffi.cast("uint8_t*",
-			device.handle:mapMemory(deviceMemory, 0, descriptor.size))
+		buffer.mappedBase = ffi.cast("uint8_t*", device.handle:mapMemory(deviceMemory, 0, descriptor.size))
 	end
 
 	return buffer

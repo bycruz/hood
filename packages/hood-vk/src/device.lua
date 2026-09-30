@@ -102,9 +102,7 @@ function VKDevice:createDescriptorPool()
 
 	local pool = self.handle:createDescriptorPool({
 		flags = vk.DescriptorPoolCreateFlagBits.FREE_DESCRIPTOR_SET,
-		maxSets = POOL_SETS,
-		poolSizeCount = #types,
-		pPoolSizes = sizes,
+		maxSets = POOL_SETS, poolSizeCount = #types, pPoolSizes = sizes,
 	})
 
 	self.descriptorPools[#self.descriptorPools + 1] = pool
@@ -141,11 +139,8 @@ function VKDevice:tryDescriptorSet(pool, layout)
 	local layouts = vk.DescriptorSetLayoutArray(1)
 	layouts[0] = layout
 
-	local ok, sets = pcall(self.handle.allocateDescriptorSets, self.handle, {
-		descriptorPool = pool,
-		descriptorSetCount = 1,
-		pSetLayouts = layouts,
-	})
+	local ok, sets = pcall(self.handle.allocateDescriptorSets, self.handle,
+		{ descriptorPool = pool, descriptorSetCount = 1, pSetLayouts = layouts })
 
 	if not ok then
 		-- The pool is out of sets or out of descriptors: an empty one is made for this one to
