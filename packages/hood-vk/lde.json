@@ -1,14 +1,35 @@
 {
 	"name": "hood-vk",
 	"description": "The vulkan backend of hood",
-	"authors": ["David Cruz <david@bycruz.dev>"],
+	"authors": [
+		"David Cruz <david@bycruz.dev>"
+	],
 	"version": "0.1.0",
 	"dependencies": {
-		"hood-core": { "path": "../hood-core" },
-		"vkapi": { "version": "0.1" },
-		"winapi": { "version": "0.1", "optional": true }
+		"hood-core": {
+			"path": "../hood-core"
+		},
+		"vkapi": {
+			"version": "0.1"
+		},
+		"winapi": {
+			"version": "0.1"
+		}
 	},
 	"features": {
-		"windows": ["winapi"]
+		"windows": [
+			"winapi"
+		]
+	},
+	"devDependencies": {
+		"lde-test": {
+			"git": "https://github.com/lde-org/lde"
+		},
+		"winit": {
+			"version": "^0.1.7"
+		},
+		"winapi": {
+			"version": "^0.1.3"
+		}
 	}
 }

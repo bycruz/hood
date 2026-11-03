@@ -1,4 +1,4 @@
-local gl = require("glapi")
+local gl = require("glapi") ---@cast gl gl & hood-gl.GlConstants
 local ffi = require("ffi")
 
 --- The GL type each attribute type is read as. The integer and half float types
@@ -26,6 +26,7 @@ function GLVAO.new()
 	return setmetatable({ id = handle[0] }, GLVAO)
 end
 
+---@param self hood-gl.VAO
 function GLVAO:bind()
 	gl.bindVertexArray(self.id)
 end
@@ -39,6 +40,7 @@ end
 ---@param bindingIndex number?
 ---@param offset number? byte offset into the buffer
 ---@param attributes hood.VertexLayout.ResolvedAttribute[]? every attribute of the pipeline, resolved
+---@param self hood-gl.VAO
 function GLVAO:setVertexBuffer(buffer, descriptor, bindingIndex, offset, attributes)
 	bindingIndex = bindingIndex or 0
 	offset = offset or 0
@@ -68,6 +70,7 @@ function GLVAO:setVertexBuffer(buffer, descriptor, bindingIndex, offset, attribu
 end
 
 ---@param buffer hood-gl.Buffer
+---@param self hood-gl.VAO
 function GLVAO:setIndexBuffer(buffer)
 	gl.vertexArrayElementBuffer(self.id, buffer.id)
 end

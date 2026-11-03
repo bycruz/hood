@@ -6,13 +6,14 @@ local GLSwapchain = require("hood-gl.swapchain")
 local GLSurface = {}
 GLSurface.__index = GLSurface
 
----@param window winit.win32.Window
+---@param window winit-win32.Window
 function GLSurface.new(window)
 	return setmetatable({ window = window }, GLSurface)
 end
 
 ---@param device hood-gl.Device
 ---@param config hood.SurfaceConfig
+---@param self hood-gl.Surface
 function GLSurface:configure(device, config)
 	local context = GLContext.fromWindow(self.window, device.ctx)
 

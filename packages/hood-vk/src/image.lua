@@ -1,4 +1,4 @@
-local vk = require("vkapi")
+local vk = require("vkapi") ---@cast vk vk & hood-vk.VkExtras
 
 --- Image layout transitions.
 ---
@@ -46,7 +46,7 @@ local producers = {
 
 --- The layout a texture is in before anything has been recorded against it.
 ---@param texture hood-vk.Texture
----@return vk.ImageLayout
+---@return number
 function image.currentLayout(texture)
 	return texture.layout or vk.ImageLayout.UNDEFINED
 end
@@ -58,7 +58,7 @@ end
 ---@param device hood-vk.Device
 ---@param commandBuffer vk.ffi.CommandBuffer
 ---@param texture hood-vk.Texture
----@param newLayout vk.ImageLayout
+---@param newLayout number
 ---@param dstStage number # The stage that will next touch the image
 ---@param dstAccess number # What that stage will do with it
 ---@param aspect number? defaults to colour; depth attachments pass DEPTH
@@ -71,7 +71,7 @@ function image.transition(device, commandBuffer, texture, newLayout, dstStage, d
 	end
 
 	local producer = producers[oldLayout]
-	local barrier = vk.ImageMemoryBarrier({
+	local barrier = vk.ImageMemoryBarrier({ --[[@as vk.ffi.ImageMemoryBarrier ]]
 		srcAccessMask = producer.access,
 		dstAccessMask = dstAccess,
 		oldLayout = oldLayout,
@@ -98,7 +98,7 @@ end
 --- The layout a texture rests in when nothing holds it: what a shader reads if it can be
 --- sampled, an attachment layout otherwise (VUID-VkImageMemoryBarrier-oldLayout-01211).
 ---@param texture hood-vk.Texture
----@return vk.ImageLayout
+---@return number
 function image.restingLayout(texture)
 	if bit.band(texture.usage, vk.ImageUsageFlagBits.SAMPLED) ~= 0 then
 		return vk.ImageLayout.SHADER_READ_ONLY_OPTIMAL
@@ -117,7 +117,7 @@ end
 ---@param view hood-vk.TextureView
 ---@param isSwapchain boolean
 ---@param op hood.LoadOp|hood.DepthOp
----@return vk.ImageLayout initialLayout, vk.ImageLayout finalLayout
+---@return number initialLayout, number finalLayout
 function image.passLayouts(view, isSwapchain, op)
 	local texture = view.texture
 
@@ -150,7 +150,7 @@ end
 ---@param commandBuffer vk.ffi.CommandBuffer
 ---@param scratch vk.ffi.ImageMemoryBarrier[] # A one-element array to fill in
 ---@param texture hood-vk.Texture
----@param layout vk.ImageLayout
+---@param layout number
 ---@param srcStage number
 ---@param srcAccess number
 ---@param dstAccess number

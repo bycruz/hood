@@ -12,7 +12,7 @@ local test = require("lde-test")
 local core = require("hood-core")
 local gl = require("hood-gl")
 
-local contextOk, device = pcall(function()
+local contextOk, deviceOrErr = pcall(function()
 	local instance = gl.new({ backend = "opengl", flags = { "headless" } })
 	return instance:requestAdapter({}):requestDevice()
 end)
@@ -21,6 +21,7 @@ if not contextOk then
 	test.skip("opengl instancing: skipped, no headless GL context", function() end)
 	return
 end
+local device = deviceOrErr --[[@as hood.Device]]
 
 -- The entry point has to be redeclared for ARB_separate_shader_objects, which
 -- is how hood builds GL programs.

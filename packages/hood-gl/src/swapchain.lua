@@ -16,6 +16,7 @@ function GLSwapchain.new(ctx, width, height, window)
 	return setmetatable({ ctx = ctx, width = width, height = height, window = window }, GLSwapchain)
 end
 
+---@param self hood-gl.Swapchain
 function GLSwapchain:getCurrentTexture()
 	-- Sync dimensions with the window on every call, so the viewport is always
 	-- up-to-date after a resize. Unlike Vulkan, OpenGL's backbuffer is always
@@ -28,6 +29,7 @@ function GLSwapchain:getCurrentTexture()
 	return GLTexture.forContextViewport(self.ctx)
 end
 
+---@param self hood-gl.Swapchain
 function GLSwapchain:destroy()
 end
 

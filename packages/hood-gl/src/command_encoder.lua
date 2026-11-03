@@ -10,15 +10,14 @@ local GLCommandBuffer = require("hood-gl.command_buffer")
 ---| { type: "setPipeline", pipeline: hood-gl.Pipeline }
 ---| { type: "draw", vertexCount: number, instanceCount: number, firstVertex: number, firstInstance: number }
 ---| { type: "drawIndexed", indexCount: number, instanceCount: number, firstIndex: number, baseVertex: number, firstInstance: number }
+---| { type: "drawIndexedIndirect", buffer: hood-gl.Buffer, offset: number, drawCount: number, stride: number }
 ---| { type: "writeBuffer", buffer: hood-gl.Buffer, size: number, data: ffi.cdata*, offset: number }
 ---| { type: "writeTexture", texture: hood-gl.Texture, descriptor: hood.TextureWriteDescriptor, data: ffi.cdata* }
 ---| { type: "copyTextureToBuffer", source: hood.ImageCopyTexture, destination: hood.ImageCopyBuffer, copySize: hood.Extent3D }
---- # Compute
 ---| { type: "beginComputePass", descriptor: hood.ComputePassDescriptor }
 ---| { type: "endComputePass" }
 ---| { type: "dispatchWorkgroups", x: number, y: number, z: number }
 ---| { type: "setComputePipeline", pipeline: hood-gl.ComputePipeline }
-
 ---@class hood-gl.Encoder
 ---@field commands hood-gl.Command[]
 local GLCommandEncoder = {}
@@ -28,6 +27,7 @@ function GLCommandEncoder.new()
 	return setmetatable({ commands = {} }, GLCommandEncoder)
 end
 
+---@param self hood-gl.Encoder
 function GLCommandEncoder:beginRendering(descriptor)
 	self.commands[#self.commands + 1] = { type = "beginRendering", descriptor = descriptor }
 end
@@ -40,6 +40,7 @@ end
 ---@param y number
 ---@param width number
 ---@param height number
+---@param self hood-gl.Encoder
 function GLCommandEncoder:setViewport(x, y, width, height)
 	self.commands[#self.commands + 1] = { type = "setViewport", x = x, y = y, width = width, height = height }
 end
@@ -54,6 +55,7 @@ end
 ---@param buffer hood-gl.Buffer
 ---@param format hood.IndexFormat
 ---@param offset number?
+---@param self hood-gl.Encoder
 function GLCommandEncoder:setIndexBuffer(buffer, format, offset)
 	self.commands[#self.commands + 1] = { type = "setIndexBuffer", buffer = buffer, format = format, offset = offset or 0 }
 end
@@ -73,6 +75,7 @@ end
 ---@param instanceCount number
 ---@param firstVertex number?
 ---@param firstInstance number?
+---@param self hood-gl.Encoder
 function GLCommandEncoder:draw(vertexCount, instanceCount, firstVertex, firstInstance)
 	self.commands[#self.commands + 1] = {
 		type = "draw",
@@ -88,6 +91,7 @@ end
 ---@param firstIndex number?
 ---@param baseVertex number?
 ---@param firstInstance number?
+---@param self hood-gl.Encoder
 function GLCommandEncoder:drawIndexed(indexCount, instanceCount, firstIndex, baseVertex, firstInstance)
 	self.commands[#self.commands + 1] = {
 		type = "drawIndexed",
@@ -105,6 +109,7 @@ end
 ---@param offset number
 ---@param drawCount number
 ---@param stride number
+---@param self hood-gl.Encoder
 function GLCommandEncoder:drawIndexedIndirect(buffer, offset, drawCount, stride)
 	self.commands[#self.commands + 1] = {
 		type = "drawIndexedIndirect",
@@ -119,6 +124,7 @@ end
 ---@param size number
 ---@param data ffi.cdata*
 ---@param offset number?
+---@param self hood-gl.Encoder
 function GLCommandEncoder:writeBuffer(buffer, size, data, offset)
 	offset = offset or 0
 	buffer:assertWriteFits(size, offset, data)
@@ -135,6 +141,7 @@ end
 ---@param texture hood-gl.Texture
 ---@param descriptor hood.TextureWriteDescriptor
 ---@param data ffi.cdata*
+---@param self hood-gl.Encoder
 function GLCommandEncoder:writeTexture(texture, descriptor, data)
 	self.commands[#self.commands + 1] = {
 		type = "writeTexture",
@@ -147,6 +154,7 @@ end
 ---@param source hood.ImageCopyTexture
 ---@param destination hood.ImageCopyBuffer
 ---@param copySize hood.Extent3D
+---@param self hood-gl.Encoder
 function GLCommandEncoder:copyTextureToBuffer(source, destination, copySize)
 	self.commands[#self.commands + 1] = {
 		type = "copyTextureToBuffer",
@@ -161,6 +169,7 @@ end
 ]]
 
 ---@param descriptor hood.ComputePassDescriptor
+---@param self hood-gl.Encoder
 function GLCommandEncoder:beginComputePass(descriptor)
 	self.commands[#self.commands + 1] = { type = "beginComputePass", descriptor = descriptor }
 end
@@ -177,6 +186,7 @@ function GLCommandEncoder:dispatchWorkgroups(x, y, z)
 end
 
 ---@param pipeline hood-gl.ComputePipeline
+---@param self hood-gl.Encoder
 function GLCommandEncoder:setComputePipeline(pipeline)
 	self.commands[#self.commands + 1] = { type = "setComputePipeline", pipeline = pipeline }
 end

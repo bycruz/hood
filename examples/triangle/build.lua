@@ -1,7 +1,5 @@
-local sep = string.sub(package.config, 1, 1)
-
----@type string
-local dirName = debug.getinfo(1, "S").source:sub(2):match("(.*)" .. sep)
+local source = debug.getinfo(1, "S").source:sub(2)
+local dirName = assert(source:match("^(.*[/\\])")):sub(1, -2)
 
 ---@param stage "vert" | "frag"
 ---@param glslPath string

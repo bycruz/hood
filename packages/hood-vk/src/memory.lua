@@ -1,4 +1,4 @@
-local vk = require("vkapi")
+local vk = require("vkapi") ---@cast vk vk & hood-vk.VkExtras
 
 local M = {}
 

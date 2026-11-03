@@ -88,6 +88,7 @@
 --- | hood.Binding.StorageTexture
 
 ---@class hood.BindGroup
+---@field set number|ffi.cdata*
 ---@field entries hood.Binding[]
 ---@field destroy fun(self: hood.BindGroup)
 
@@ -154,7 +155,7 @@
 ---@class hood.ColorTargetState
 ---@field format hood.TextureFormat
 ---@field blend? hood.BlendState
----@field writeMask? hood.ColorWrites
+---@field writeMask? number
 
 ---@class hood.FragmentState
 ---@field module hood.ShaderModule
@@ -172,6 +173,7 @@
 ---@field depthStencil? hood.DepthStencilState
 
 ---@class hood.Pipeline
+---@field handle number|ffi.cdata*
 ---@field destroy fun(self: hood.Pipeline)
 
 ---@class hood.ComputePipelineDescriptor
@@ -179,4 +181,5 @@
 ---@field layout hood.BindGroupLayout
 
 ---@class hood.ComputePipeline
+---@field handle number|ffi.cdata*
 ---@field destroy fun(self: hood.ComputePipeline)

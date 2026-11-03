@@ -1,4 +1,4 @@
-local glx = require("x11api.glx")
+local glx = require("x11api.glx") ---@cast glx glx & hood-gl.GlxExtras
 local x11 = require("x11api")
 
 --- @class X11Context
@@ -10,7 +10,7 @@ X11Context.__index = X11Context
 
 ---@param display XDisplay
 ---@param sharedCtx X11Context?
----@param window winit.x11.Window?
+---@param window winit-x11.Window?
 function X11Context.new(display, sharedCtx, window)
 	local screen = x11.defaultScreen(display)
 
@@ -51,7 +51,7 @@ function X11Context.fromHeadless(sharedCtx)
 	return X11Context.new(display, sharedCtx)
 end
 
----@param window winit.x11.Window
+---@param window winit-x11.Window
 ---@param sharedCtx X11Context?
 function X11Context.fromWindow(window, sharedCtx)
 	return X11Context.new(window.display, sharedCtx, window)
@@ -72,9 +72,10 @@ function X11Context:swapBuffers()
 	end
 end
 
+---@param interval number
 function X11Context:setSwapInterval(interval)
 	if glx.swapIntervalEXT then
-		glx.swapIntervalEXT(self.display, self.window.id, interval)
+		glx.swapIntervalEXT(self.display --[[@as XDisplay]], self.window.id --[[@as number]], interval --[[@as number]])
 	end
 end
 

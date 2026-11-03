@@ -1,4 +1,4 @@
-local gl = require("glapi")
+local gl = require("glapi") ---@cast gl gl & hood-gl.GlConstants
 local glConversions = require("hood-gl.convert")
 local GLTextureView = require("hood-gl.texture_view")
 
@@ -49,6 +49,7 @@ end
 
 ---@param desc hood.TextureWriteDescriptor
 ---@param data ffi.cdata*
+---@param self hood-gl.Texture
 function GLTexture:writeData(desc, data)
 	local extents = self.descriptor.extents
 	local mip = desc.mip or 0
@@ -99,6 +100,7 @@ function GLTexture.forContextViewport(context)
 	return setmetatable({ framebuffer = 0, id = nil, context = context }, GLTexture)
 end
 
+---@param self hood-gl.Texture
 function GLTexture:destroy()
 	-- A backbuffer has no name of its own: the window's context owns it.
 	if self.id then
@@ -111,6 +113,7 @@ function GLTexture:createView(descriptor)
 	return GLTextureView.new(self, descriptor)
 end
 
+---@param self hood-gl.Texture
 function GLTexture:__tostring()
 	if self.context then
 		return "GLBackbuffer(" .. tostring(self.context) .. ")"

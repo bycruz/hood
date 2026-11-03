@@ -1,4 +1,4 @@
-local vk = require("vkapi")
+local vk = require("vkapi") ---@cast vk vk & hood-vk.VkExtras
 
 local VKBuffer = require("hood-vk.buffer")
 local VKQueue = require("hood-vk.queue")
@@ -9,9 +9,8 @@ local VKTexture = require("hood-vk.texture")
 local VKComputePipeline = require("hood-vk.compute_pipeline")
 local VKBindGroup = require("hood-vk.bind_group")
 local VKBindGroupLayout = require("hood-vk.bind_group_layout")
-local VKTextureView = require("hood-vk.texture_view")
 
----@class hood-vk.Device
+---@class hood-vk.Device: hood.Device
 ---@field public queue hood-vk.Queue
 ---@field handle vk.Device
 ---@field pd vk.ffi.PhysicalDevice
@@ -25,6 +24,7 @@ local VKDevice = {}
 VKDevice.__index = VKDevice
 
 ---@param adapter hood-vk.Adapter
+---@return hood-vk.Device
 function VKDevice.new(adapter)
 	local extensions = { "VK_KHR_maintenance1" }
 	if not adapter.headless then
@@ -77,6 +77,7 @@ local POOL_DESCRIPTORS = 256
 --- A pool for descriptor sets to be handed out of. A freed set returns to its pool, so an app
 --- that makes and drops them reuses the room it has.
 ---@return vk.ffi.DescriptorPool
+---@param self hood-vk.Device
 function VKDevice:createDescriptorPool()
 	local types = {
 		vk.DescriptorType.STORAGE_BUFFER,
@@ -106,6 +107,7 @@ end
 --- capacity is fixed when it is made.
 ---@param layout vk.ffi.DescriptorSetLayout
 ---@return vk.ffi.DescriptorSet
+---@param self hood-vk.Device
 function VKDevice:createDescriptorSet(layout)
 	local set = self:tryDescriptorSet(self.descriptorPool, layout)
 
@@ -126,6 +128,7 @@ end
 ---@param pool vk.ffi.DescriptorPool
 ---@param layout vk.ffi.DescriptorSetLayout
 ---@return vk.ffi.DescriptorSet? set # Nothing when the pool has no room for one
+---@param self hood-vk.Device
 function VKDevice:tryDescriptorSet(pool, layout)
 	local layouts = vk.DescriptorSetLayoutArray(1)
 	layouts[0] = layout
@@ -144,6 +147,7 @@ end
 --- Hand a descriptor set back to its pool. The set is not usable afterwards, and what it named
 --- is not this call's to free.
 ---@param set vk.ffi.DescriptorSet
+---@param self hood-vk.Device
 function VKDevice:freeDescriptorSet(set)
 	local pool = self.descriptorSetPools[set]
 
@@ -156,6 +160,7 @@ function VKDevice:freeDescriptorSet(set)
 end
 
 ---@param descriptor hood.BufferDescriptor
+---@param self hood-vk.Device
 function VKDevice:createBuffer(descriptor)
 	return VKBuffer.new(self, descriptor)
 end
@@ -173,6 +178,7 @@ end
 --- of kilobytes, so a buffer carrying its own would grow the process by a pool per buffer.
 --- Buffers are handed back instead: see `VKCommandBuffer:destroy`.
 ---@return vk.ffi.CommandPool
+---@param self hood-vk.Device
 function VKDevice:commandPool()
 	if not self._commandPool then
 		self._commandPool = self.handle:createCommandPool({
@@ -188,6 +194,7 @@ end
 --- device does it because the pool is the device's.
 ---@param pool vk.ffi.CommandPool
 ---@param buffer vk.ffi.CommandBuffer
+---@param self hood-vk.Device
 function VKDevice:freeCommandBuffers(pool, buffer)
 	self.handle:freeCommandBuffers(pool, buffer)
 end
@@ -200,6 +207,7 @@ end
 
 ---@param entries hood.BindingLayout[]
 ---@return hood.BindGroupLayout{ entries = entries }
+---@param self hood-vk.Device
 function VKDevice:createBindGroupLayout(entries)
 	return VKBindGroupLayout.new(self, entries)
 end
@@ -216,6 +224,7 @@ function VKDevice:createTexture(descriptor)
 end
 
 ---@param descriptor hood.SamplerDescriptor
+---@param self hood-vk.Device
 function VKDevice:createSampler(descriptor)
 	return VKSampler.new(self, descriptor)
 end

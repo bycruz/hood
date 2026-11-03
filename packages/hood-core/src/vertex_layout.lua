@@ -2,7 +2,7 @@ local ffi = require("ffi")
 
 ---@alias hood.VertexLayout.AttributeType "f32" | "f16" | "i32" | "u32" | "i16" | "u16" | "i8" | "u8"
 --- Location defaults to the attribute's position, and an attribute may name its own.
----@alias hood.VertexLayout.Attribute { type: hood.VertexLayout.AttributeType, size: number, offset: number, normalized: boolean, location: number? }
+---@alias hood.VertexLayout.Attribute { type: hood.VertexLayout.AttributeType, size: number, offset: number, normalized: boolean?, location: number? }
 
 --- "vertex" advances per vertex and "instance" per instance.
 ---@alias hood.VertexLayout.StepMode "vertex" | "instance"
@@ -13,6 +13,12 @@ local ffi = require("ffi")
 ---@field location number
 
 ---@class hood.VertexLayout
+---@field new fun(descriptor?: { stride: number?, stepMode: hood.VertexLayout.StepMode }): hood.VertexLayout
+---@field withAttribute fun(self: hood.VertexLayout, attribute: hood.VertexLayout.Attribute): hood.VertexLayout
+---@field withInstanceRate fun(self: hood.VertexLayout): hood.VertexLayout
+---@field isInstanceRate fun(self: hood.VertexLayout): boolean
+---@field getStride fun(self: hood.VertexLayout): number
+---@field resolveLocations fun(buffers: hood.VertexLayout[]): hood.VertexLayout.ResolvedAttribute[]
 ---@field attributes hood.VertexLayout.Attribute[]
 ---@field stride number?
 ---@field stepMode hood.VertexLayout.StepMode
@@ -20,6 +26,7 @@ local VertexLayout = {}
 VertexLayout.__index = VertexLayout
 
 ---@param descriptor { stride: number?, stepMode: hood.VertexLayout.StepMode }?
+---@return hood.VertexLayout
 function VertexLayout.new(descriptor)
 	descriptor = descriptor or {}
 
@@ -31,18 +38,23 @@ function VertexLayout.new(descriptor)
 end
 
 ---@param attribute hood.VertexLayout.Attribute
+---@param self hood.VertexLayout
+---@return hood.VertexLayout
 function VertexLayout:withAttribute(attribute)
 	table.insert(self.attributes, attribute)
 	return self
 end
 
 --- Mark this layout as per-instance data.
+---@param self hood.VertexLayout
+---@return hood.VertexLayout
 function VertexLayout:withInstanceRate()
 	self.stepMode = "instance"
 	return self
 end
 
 ---@return boolean
+---@param self hood.VertexLayout
 function VertexLayout:isInstanceRate()
 	return self.stepMode == "instance"
 end
@@ -80,6 +92,8 @@ local componentSize = {
 	u8 = 1,
 }
 
+---@param self hood.VertexLayout
+---@return number
 function VertexLayout:getStride()
 	if self.stride and self.stride > 0 then
 		return self.stride

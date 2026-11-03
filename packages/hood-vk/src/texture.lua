@@ -1,4 +1,4 @@
-local vk = require("vkapi")
+local vk = require("vkapi") ---@cast vk vk & hood-vk.VkExtras
 
 local layout = require("hood-core.layout")
 local vkConvert = require("hood-vk.convert")
@@ -6,20 +6,21 @@ local memory = require("hood-vk.memory")
 
 local VKTextureView = require("hood-vk.texture_view")
 
----@class hood-vk.Texture
+---@class hood-vk.Texture: hood.Texture
 ---@field handle vk.ffi.Image
 ---@field memory vk.ffi.DeviceMemory?
----@field format vk.Format
+---@field format number
 ---@field width number?
 ---@field height number?
----@field viewType vk.ImageViewType
+---@field viewType number
 ---@field isDepth boolean?
----@field usage vk.ImageUsageFlagBits
----@field layout vk.ImageLayout? # Where the image currently is, as recorded by hood-vk.image
+---@field usage number
+---@field layout number? # Where the image currently is, as recorded by hood-vk.image
 ---@field isSwapchain boolean?
 ---@field swapchain hood-vk.Swapchain?
 ---@field swapchainImageIdx integer? 0-based index into the swapchain images, set when isSwapchain is true
----@field private device hood-vk.Device
+---@field device hood-vk.Device
+---@field _viewCache table<integer, hood-vk.TextureView>?
 local VKTexture = {}
 VKTexture.__index = VKTexture
 
@@ -42,6 +43,7 @@ end
 
 ---@param device hood-vk.Device
 ---@param descriptor hood.TextureDescriptor
+---@return hood-vk.Texture
 function VKTexture.new(device, descriptor)
 	local samples = vkConvert.sampleCount[descriptor.sampleCount or 1]
 	if not samples then
@@ -52,7 +54,7 @@ function VKTexture.new(device, descriptor)
 	local layers = descriptor.extents.dim ~= "3d" and (descriptor.extents.count or 1) or 1
 	local isDepth = layout.isDepthFormat(descriptor.format)
 
-	---@type vk.ImageUsageFlagBits
+	---@type number
 	local vkUsage = 0
 	for _, usage in ipairs(descriptor.usages) do
 		local flag = vkConvert.textureUsage[usage]
@@ -106,7 +108,7 @@ end
 ---@param device hood-vk.Device
 ---@param swapchain hood-vk.Swapchain
 ---@param handle vk.ffi.Image
----@param format vk.Format
+---@param format number
 ---@param width number
 ---@param height number
 ---@param swapchainImageIdx integer 0-based index into the swapchain's images
@@ -124,6 +126,7 @@ function VKTexture.fromSwapchainImg(device, swapchain, handle, format, width, he
 	}, VKTexture)
 end
 
+---@param self hood-vk.Texture
 function VKTexture:destroy()
 	if self.isSwapchain then return end
 	self.device.handle:destroyImage(self.handle)

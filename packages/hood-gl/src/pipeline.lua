@@ -1,4 +1,4 @@
-local gl = require("glapi")
+local gl = require("glapi") ---@cast gl gl & hood-gl.GlConstants
 local ffi = require("ffi")
 
 local GLProgram = require("hood-gl.program")
@@ -37,6 +37,7 @@ end
 
 --- Built for the current context rather than at creation: contexts cannot share pipelines.
 ---@return hood-gl.RawPipeline
+---@param self hood-gl.Pipeline
 function GLPipeline:genForCurrentContext()
 	local pipeline = gl.genProgramPipelines(1)[1]
 
@@ -53,6 +54,7 @@ function GLPipeline:genForCurrentContext()
 	return GLRawPipeline.new(pipeline)
 end
 
+---@param self hood-gl.RawPipeline
 function GLRawPipeline:bind()
 	gl.bindProgramPipeline(self.id)
 end
@@ -64,9 +66,11 @@ end
 --- A pipeline here is the descriptor it was made from. What GL has is a program pipeline per
 --- context, made when first drawn with and freed with that context.
 function GLPipeline:destroy()
-	self.vertex, self.fragment, self.depthStencil, self.primitive = nil, nil, nil, nil
+	self.vertex, self.fragment = nil --[[@as hood.VertexState]], nil --[[@as hood.FragmentState]]
+	self.depthStencil, self.primitive = nil, nil
 end
 
+---@param self hood-gl.RawPipeline
 function GLRawPipeline:__tostring()
 	return "GLRawPipeline(" .. tostring(self.id) .. ")"
 end

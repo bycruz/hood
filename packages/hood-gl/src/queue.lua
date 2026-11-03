@@ -1,8 +1,8 @@
-local gl = require("glapi")
+local gl = require("glapi") ---@cast gl gl & hood-gl.GlConstants
 local GLCommandEncoder = require("hood-gl.command_encoder")
 
 ---@class hood-gl.Queue
----@field private ctx hood-gl.Context # The headless GL context (resource ops, compute)
+---@field ctx hood-gl.Context # The headless GL context (resource ops, compute)
 ---@field renderCtx hood-gl.Context?  # The window context; set by surface:configure
 local GLQueue = {}
 GLQueue.__index = GLQueue
@@ -13,6 +13,7 @@ function GLQueue.new(ctx)
 end
 
 ---@param buffer hood-gl.CommandBuffer
+---@param self hood-gl.Queue
 function GLQueue:submit(buffer)
 	self.ctx:makeCurrent()
 	buffer:execute(self.ctx, self.renderCtx)
@@ -34,6 +35,7 @@ end
 ---@param size number
 ---@param data ffi.cdata*
 ---@param offset number?
+---@param self hood-gl.Queue
 function GLQueue:writeBuffer(buffer, size, data, offset)
 	local cmd = GLCommandEncoder.new()
 	cmd:writeBuffer(buffer, size, data, offset)

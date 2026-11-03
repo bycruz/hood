@@ -1,16 +1,42 @@
 {
 	"name": "hood-gl",
 	"description": "The opengl backend of hood",
-	"authors": ["David Cruz <david@bycruz.dev>"],
+	"authors": [
+		"David Cruz <david@bycruz.dev>"
+	],
 	"version": "0.1.0",
 	"dependencies": {
-		"hood-core": { "path": "../hood-core" },
-		"glapi": { "version": "0.1" },
-		"x11api": { "version": "0.1", "optional": true },
-		"winapi": { "version": "0.1", "optional": true }
+		"hood-core": {
+			"path": "../hood-core"
+		},
+		"glapi": {
+			"version": "0.1"
+		},
+		"x11api": {
+			"version": "0.1",
+			"optional": true
+		},
+		"winapi": {
+			"version": "0.1"
+		}
 	},
 	"features": {
-		"windows": ["winapi"],
-		"linux": ["x11api"]
+		"windows": [
+			"winapi"
+		],
+		"linux": [
+			"x11api"
+		]
+	},
+	"devDependencies": {
+		"lde-test": {
+			"git": "https://github.com/lde-org/lde"
+		},
+		"winit": {
+			"version": "^0.1.7"
+		},
+		"winapi": {
+			"version": "^0.1.3"
+		}
 	}
 }

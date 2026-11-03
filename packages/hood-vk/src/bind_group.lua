@@ -1,12 +1,11 @@
-local ffi = require("ffi")
 
-local vk = require("vkapi")
+local vk = require("vkapi") ---@cast vk vk & hood-vk.VkExtras
 local vkConversions = require("hood-vk.convert")
 
 ---@class hood-vk.BindGroup: hood.BindGroup
 ---@field layout hood-vk.BindGroupLayout
----@field set vk.ffi.DescriptorSet
----@field private device hood-vk.Device
+---@field set vk.ffi.DescriptorSet?
+---@field device hood-vk.Device
 local BindGroup = {}
 BindGroup.__index = BindGroup
 
@@ -74,6 +73,7 @@ end
 --- The layout is not this group's to free: several groups are made with one layout, and a destroy
 --- that freed it would leave every other group holding nothing. A layout is freed by the caller
 --- that made it, once the groups that were made with it are gone.
+---@param self hood-vk.BindGroup
 function BindGroup:destroy()
 	self.device:freeDescriptorSet(self.set)
 	self.set = nil

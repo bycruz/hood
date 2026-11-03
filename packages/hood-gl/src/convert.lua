@@ -1,4 +1,4 @@
-local gl = require("glapi")
+local gl = require("glapi") ---@cast gl gl & hood-gl.GlConstants
 
 local glConversions = {}
 

@@ -1,5 +1,5 @@
 local ffi = require("ffi")
-local vk = require("vkapi")
+local vk = require("vkapi") ---@cast vk vk & hood-vk.VkExtras
 
 local VKTexture = require("hood-vk.texture")
 local VKCommandBuffer = require("hood-vk.command_buffer")
@@ -17,7 +17,7 @@ local VKCommandEncoder = require("hood-vk.command_encoder")
 ---@field renderFinishedSemaphores vk.ffi.Semaphore[]
 ---@field inFlightFences vk.ffi.Fence[]
 ---@field currentFrame integer
----@field imageFormat vk.Format
+---@field imageFormat number
 ---@field format hood.TextureFormat
 ---@field width number
 ---@field height number
@@ -32,6 +32,7 @@ VKSwapchain.__index = VKSwapchain
 ---@param device hood-vk.Device
 ---@param format hood.TextureFormat
 ---@param info vk.ffi.SwapchainCreateInfoKHR
+---@return hood-vk.Swapchain
 function VKSwapchain.new(device, format, info)
 	local handle = device.handle:createSwapchainKHR(info)
 	local images = device.handle:getSwapchainImagesKHR(handle)
@@ -99,6 +100,7 @@ local fenceArray = vk.FenceArray(1)
 local ACQUIRE_TIMEOUT = 1000000000
 
 ---@return boolean
+---@param self hood-vk.Swapchain
 function VKSwapchain:leftBehind()
 	local surface = self.surface
 	if surface == nil then
@@ -113,6 +115,7 @@ function VKSwapchain:leftBehind()
 	return window.width ~= self.width or window.height ~= self.height
 end
 
+---@param self hood-vk.Swapchain
 function VKSwapchain:getCurrentTexture()
 	if self.stale then
 		self.stale = false
@@ -156,6 +159,7 @@ end
 
 --- A command encoder over the pre-allocated command buffer for the current frame slot.
 ---@return hood-vk.CommandEncoder
+---@param self hood-vk.Swapchain
 function VKSwapchain:createCommandEncoder()
 	return VKCommandEncoder.new(self.device, self.commandBuffers[self.currentFrame])
 end
@@ -176,6 +180,7 @@ function VKSwapchain:getFramebuffer(renderPass, width, height, depthView)
 		self._framebufferCache[renderPass] = cache
 	end
 
+	---@type { framebuffer: vk.ffi.Framebuffer, width: number, height: number, depthView: vk.ffi.ImageView? }?
 	local entry = cache[imgIdx]
 	if entry and entry.width == width and entry.height == height and entry.depthView == depthView then
 		return entry.framebuffer
@@ -211,6 +216,7 @@ function VKSwapchain:getFramebuffer(renderPass, width, height, depthView)
 	return framebuffer
 end
 
+---@param self hood-vk.Swapchain
 function VKSwapchain:_destroySyncObjects()
 	self.device.handle:queueWaitIdle(self.device.queue.handle)
 	for i = 1, #self.images do

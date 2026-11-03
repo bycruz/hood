@@ -1,4 +1,4 @@
-local vk = require("vkapi")
+local vk = require("vkapi") ---@cast vk vk & hood-vk.VkExtras
 local vkConversions = require("hood-vk.convert")
 
 local VKSwapchain = require("hood-vk.swapchain")
@@ -16,14 +16,14 @@ VKSurface.__index = VKSurface
 ---@param window winit.Window
 function VKSurface.new(instance, window)
 	local handle ---@type vk.ffi.SurfaceKHR
-	if isWindows then ---@cast window winit.win32.Window
-		local kernel32 = require("winapi.kernel32")
+	if isWindows then ---@cast window winit-win32.Window
+local kernel32 = require("winapi.kernel32")
 
 		handle = instance.handle:createWin32SurfaceKHR({
 			hinstance = kernel32.getModuleHandle(nil),
 			hwnd = window.hwnd,
 		})
-	else ---@cast window winit.x11.Window
+	else ---@cast window winit-x11.Window
 		handle = instance.handle:createXlibSurfaceKHR({
 			dpy = window.display,
 			window = window.id,
@@ -37,6 +37,7 @@ end
 ---@param config hood.SurfaceConfig
 ---@param oldSwapchain hood-vk.Swapchain?
 ---@return hood-vk.Swapchain? swapchain # Nothing where the surface has no size to make one for
+---@param self hood-vk.Surface
 function VKSurface:configure(device, config, oldSwapchain)
 	-- The old swapchain is not torn down here: it is the `oldSwapchain` argument below, and is
 	-- destroyed in full once its replacement exists.

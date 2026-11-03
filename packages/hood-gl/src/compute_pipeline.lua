@@ -1,10 +1,11 @@
-local gl = require("glapi")
+local gl = require("glapi") ---@cast gl gl & hood-gl.GlConstants
 local ffi = require("ffi")
 
 local GLProgram = require("hood-gl.program")
 
 ---@class hood-gl.ComputePipeline
 ---@field module hood.ShaderModule
+---@field compute hood-gl.RawComputePipeline?
 local GLComputePipeline = {}
 GLComputePipeline.__index = GLComputePipeline
 
@@ -29,6 +30,7 @@ end
 
 --- GL Specific pipeline generation for the current context
 --- This isn't done at pipeline creation time because contexts cannot share pipelines.
+---@param self hood-gl.ComputePipeline
 function GLComputePipeline:genForCurrentContext()
 	local pipeline = gl.genProgramPipelines(1)[1]
 
@@ -45,6 +47,7 @@ end
 
 --- A compute pipeline here is the descriptor it was made from: what GL has is a program per
 --- context, made when it is first dispatched and freed with the context that made it.
+---@param self hood-gl.ComputePipeline
 function GLComputePipeline:destroy()
 	self.compute = nil
 end

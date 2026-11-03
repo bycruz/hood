@@ -1,12 +1,12 @@
 local ffi = require("ffi")
 local test = require("lde-test")
-local core = require("hood-core")
 local vk = require("hood-vk")
 local glslc = require("tests.fixtures.glslc")
 
 -- One device shared across all compute tests in this file.
 local instance = vk.new({ backend = "vulkan", flags = { "headless" } })
 local device = instance:requestAdapter({}):requestDevice()
+	---@cast device hood-vk.Device
 
 -- ─── Helpers ─────────────────────────────────────────────────────────────────
 

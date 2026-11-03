@@ -56,8 +56,8 @@
 ---@field setComputePipeline fun(self: hood.CommandEncoder, pipeline: hood.ComputePipeline)
 
 ---@class hood.Queue
----@field submit fun(self: hood.Queue, commandBuffer: hood.CommandBuffer)
----@field present fun(self: hood.Queue, swapchain: hood.Swapchain)
----@field writeBuffer fun(self: hood.Queue, buffer: hood.Buffer, size: number, data: ffi.cdata*, offset: number?)
----@field writeTexture fun(self: hood.Queue, texture: hood.Texture, descriptor: hood.TextureWriteDescriptor, data: ffi.cdata*)
----@field waitIdle fun(self: hood.Queue)
+---@field submit fun(self: hood.Queue, commandBuffer: hood.CommandBuffer): nil
+---@field present fun(self: hood.Queue, swapchain: hood.Swapchain): nil
+---@field writeBuffer fun(self: hood.Queue, buffer: hood.Buffer, size: number, data: ffi.cdata*, offset: number?): nil
+---@field writeTexture fun(self: hood.Queue, texture: hood.Texture, descriptor: hood.TextureWriteDescriptor, data: ffi.cdata*): nil
+---@field waitIdle fun(self: hood.Queue): nil

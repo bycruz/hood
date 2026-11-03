@@ -21,6 +21,7 @@ function GLDevice.new()
 end
 
 ---@param descriptor hood.BufferDescriptor
+---@param self hood-gl.Device
 function GLDevice:createBuffer(descriptor)
 	self.ctx:makeCurrent()
 	return GLBuffer.new(descriptor)
@@ -38,6 +39,7 @@ end
 
 ---@param descriptor hood.BindGroupDescriptor
 ---@return hood.BindGroup
+---@param self hood-gl.Device
 function GLDevice:createBindGroup(descriptor)
 	-- A group is the entries a draw binds and nothing else: what it names is bound when it is
 	-- set, so there is no driver object to free. `destroy` exists for callers that free theirs.
@@ -45,6 +47,7 @@ function GLDevice:createBindGroup(descriptor)
 		entries = descriptor.entries,
 
 		destroy = function(self)
+			---@cast self hood.BindGroup
 			self.entries = {}
 		end,
 	}
@@ -52,11 +55,13 @@ end
 
 ---@param entries hood.BindingLayout[]
 ---@return hood.BindGroupLayout
+---@param self hood-gl.Device
 function GLDevice:createBindGroupLayout(entries)
 	return {
 		entries = entries,
 
 		destroy = function(self)
+			---@cast self hood.BindGroup
 			self.entries = {}
 		end,
 	}
@@ -69,6 +74,7 @@ function GLDevice:createSampler(descriptor)
 end
 
 ---@param descriptor hood.TextureDescriptor
+---@param self hood-gl.Device
 function GLDevice:createTexture(descriptor)
 	self.ctx:makeCurrent()
 	return GLTexture.new(self, descriptor)

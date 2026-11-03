@@ -1,6 +1,6 @@
-local vk = require("vkapi")
+local vk = require("vkapi") ---@cast vk vk & hood-vk.VkExtras
 
----@class hood-vk.CommandBuffer
+---@class hood-vk.CommandBuffer: hood.CommandBuffer
 ---@field device hood-vk.Device
 ---@field pool vk.ffi.CommandPool
 ---@field handle vk.ffi.CommandBuffer
@@ -13,6 +13,7 @@ VKCommandBuffer.__index = VKCommandBuffer
 
 --- A command buffer, allocated from the pool the device keeps. `destroy` hands it back.
 ---@param device hood-vk.Device
+---@return hood-vk.CommandBuffer
 function VKCommandBuffer.new(device)
 	local pool = device:commandPool()
 
@@ -34,6 +35,7 @@ end
 --- No vkResetCommandPool: the pool was made with RESET_COMMAND_BUFFER and vkBeginCommandBuffer
 --- resets implicitly. The staging buffer is kept, since the copies recorded from it have
 --- finished by the time this buffer is recorded again.
+---@param self hood-vk.CommandBuffer
 function VKCommandBuffer:reset()
 	if self.stagingBuffer then
 		self.stagingBuffer.staging = { offset = 0 }
@@ -52,6 +54,7 @@ end
 
 --- Let go of the staging buffer, for an upload already submitted and waited for: what it
 --- holds is a buffer the size of whatever was uploaded, and nothing is about to reuse it.
+---@param self hood-vk.CommandBuffer
 function VKCommandBuffer:releaseStaging()
 	if self.stagingBuffer then
 		self.stagingBuffer:destroy()

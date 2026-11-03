@@ -4,7 +4,6 @@
 -- asking for one that is not here says which feature to name rather than failing in a require.
 local Instance = {}
 
----@type table<hood.InstanceBackend, string> # the package each backend lives in
 local PACKAGES = {
 	vulkan = "hood-vk",
 	opengl = "hood-gl",
@@ -17,13 +16,13 @@ function Instance.new(descriptor)
 	local backend = descriptor.backend
 
 	local package = PACKAGES[backend]
-
 	if not package then
 		error("No supported backends specified in instance descriptor.")
 	end
 
 	-- NOTE: This dynamically requires the backend specific module to avoid loading unnecessary code
 	local ok, instance = pcall(require, package)
+	---@cast instance hood.InstanceBackendModule
 
 	if not ok then
 		error("hood was installed without the " .. backend .. " backend: name it where hood "

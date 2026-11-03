@@ -1,4 +1,4 @@
-local gl = require("glapi")
+local gl = require("glapi") ---@cast gl gl & hood-gl.GlConstants
 
 ---@class hood-gl.Program
 ---@field id number
@@ -12,6 +12,7 @@ function Program.new(type, src)
 	return setmetatable({ id = id }, Program)
 end
 
+---@param self hood-gl.Program
 function Program:destroy()
 	gl.deleteProgram(self.id)
 end

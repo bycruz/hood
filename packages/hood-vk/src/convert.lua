@@ -1,4 +1,4 @@
-local vk = require("vkapi")
+local vk = require("vkapi") ---@cast vk vk & hood-vk.VkExtras
 
 local vkConversions = {}
 
@@ -28,7 +28,7 @@ vkConversions.textureViewType = {
 	["cube_array"] = vk.ImageViewType.CUBE_ARRAY,
 }
 
----@type table<hood.TextureFormat, vk.Format>
+---@type table<hood.TextureFormat, number>
 vkConversions.textureFormat = {
 	["rgba8unorm"] = vk.Format.R8G8B8A8_UNORM,
 	["rgba8unorm-srgb"] = vk.Format.R8G8B8A8_SRGB,
@@ -40,7 +40,7 @@ vkConversions.textureFormat = {
 	["bgra8unorm-srgb"] = vk.Format.B8G8R8A8_SRGB,
 }
 
----@type table<hood.TextureAspect, vk.ImageAspectFlagBits>
+---@type table<hood.TextureAspect, number>
 vkConversions.textureAspect = {
 	["color"] = vk.ImageAspectFlagBits.COLOR,
 	["depth"] = vk.ImageAspectFlagBits.DEPTH,
@@ -59,7 +59,7 @@ vkConversions.sampleCount = {
 	[64] = vk.SampleCountFlagBits.COUNT_64,
 }
 
----@type table<hood.TextureUsage, vk.ImageUsageFlagBits>
+---@type table<hood.TextureUsage, number>
 vkConversions.textureUsage = {
 	["COPY_SRC"] = vk.ImageUsageFlagBits.TRANSFER_SRC,
 	["COPY_DST"] = vk.ImageUsageFlagBits.TRANSFER_DST,
@@ -139,7 +139,7 @@ end
 
 --- Generics do not resolve through LuaLS, so these are typed by hand.
 vkConversions.from = {}
-vkConversions.from.textureFormat = invert(vkConversions.textureFormat) ---@type table<vk.Format, hood.TextureFormat>
+vkConversions.from.textureFormat = invert(vkConversions.textureFormat) ---@type table<number, hood.TextureFormat>
 
 --- The surface format a swapchain is made in.
 ---

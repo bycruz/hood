@@ -1,4 +1,4 @@
-local vk = require("vkapi")
+local vk = require("vkapi") ---@cast vk vk & hood-vk.VkExtras
 local vkConvert = require("hood-vk.convert")
 
 ---@class hood-vk.Sampler
@@ -30,6 +30,7 @@ function VKSampler.new(device, desc)
 	return setmetatable({ handle = handle, device = device }, VKSampler)
 end
 
+---@param self hood-vk.Sampler
 function VKSampler:destroy()
 	self.device.handle:destroySampler(self.handle)
 end

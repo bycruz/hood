@@ -1,6 +1,21 @@
 local ffi = require("ffi")
-local core = require("hood-core")
 local vk = require("hood-vk")
+
+---@class tests.Pixels
+---@field at fun(x: number, y: number): number, number, number, number
+
+---@class tests.FrameOptions
+---@field pipeline hood.Pipeline
+---@field clearColor { r: number, g: number, b: number, a: number }?
+---@field depthTexture hood.TextureView?
+---@field draw fun(encoder: hood.CommandEncoder)?
+
+---@class tests.Context
+---@field device hood-vk.Device
+---@field width number
+---@field height number
+---@field _tex hood.Texture
+---@field _rbuf hood.Buffer
 
 local M = {}
 local Context = {}
@@ -9,6 +24,7 @@ Context.__index = Context
 --- Create a headless Vulkan rendering context with a RGBA8 render target.
 ---@param w number? width (default 64)
 ---@param h number? height (default 64)
+---@return tests.Context
 function M.new(w, h)
 	w = w or 64
 	h = h or 64
@@ -16,25 +32,30 @@ function M.new(w, h)
 	local instance = vk.new({ backend = "vulkan", flags = { "headless" } })
 	local adapter = instance:requestAdapter({})
 	local device = adapter:requestDevice()
+	---@cast device hood-vk.Device
 
+	---@type hood.Texture
 	local renderTex = device:createTexture({
 		extents = { dim = "2d", width = w, height = h },
 		format = "rgba8unorm",
 		usages = { "RENDER_ATTACHMENT", "COPY_SRC" },
 	})
 
+	---@type hood.Buffer
 	local readbackBuf = device:createBuffer({
 		size = w * h * 4,
 		usages = { "MAP_READ" },
 	})
 
-	return setmetatable({
+	---@type tests.Context
+	local context = setmetatable({
 		device = device,
 		width = w,
 		height = h,
 		_tex = renderTex,
 		_rbuf = readbackBuf,
 	}, Context)
+	return context
 end
 
 --- Render a frame and synchronously return a pixel accessor.
@@ -45,7 +66,9 @@ end
 --- opts.clearColor  — { r, g, b, a }, defaults to opaque black
 --- opts.depthTexture — TextureView; enables a depth attachment cleared to 1.0
 --- opts.draw        — function(encoder) called after pipeline + viewport are set
----@return { at: fun(x: number, y: number): number, number, number, number }
+---@param opts tests.FrameOptions
+---@return tests.Pixels
+---@param self tests.Context
 function Context:frame(opts)
 	local encoder = self.device:createCommandEncoder()
 
@@ -84,6 +107,7 @@ function Context:frame(opts)
 	self._rbuf:unmap()
 
 	local w = self.width
+	---@type tests.Pixels
 	return {
 		at = function(x, y)
 			local i = (y * w + x) * 4 + 1

@@ -1,6 +1,6 @@
 local ffi = require("ffi")
 
-local vk = require("vkapi")
+local vk = require("vkapi") ---@cast vk vk & hood-vk.VkExtras
 local coreLayout = require("hood-core.layout")
 local pass = require("hood-vk.pass")
 local vkConversions = require("hood-vk.convert")
@@ -12,7 +12,7 @@ local vkConversions = require("hood-vk.convert")
 --- colour costs four as unsigned normalized rather than sixteen. Sizes without
 --- a format -- three components of anything smaller than 32 bits, since there is
 --- no 24 bit RGB vertex format -- are rejected by the lookup below.
----@type table<string, vk.Format[]>
+---@type table<string, number[]>
 local attributeFormatMap = {
 	f32 = {
 		[1] = vk.Format.R32_SFLOAT,
@@ -65,7 +65,7 @@ local attributeFormatMap = {
 --- The same formats with `normalized = true`, where the hardware scales each
 --- component into a float for the shader. Only integer types have anything to
 --- normalize: a float attribute is already a float.
----@type table<string, vk.Format[]>
+---@type table<string, number[]>
 local normalizedFormatMap = {
 	i16 = {
 		[1] = vk.Format.R16_SNORM,
@@ -93,18 +93,18 @@ local normalizedFormatMap = {
 
 --- The format one attribute's bytes are read as, or nil when nothing matches.
 ---@param attr hood.VertexLayout.Attribute
----@return vk.Format? format
+---@return number? format
 local function attributeFormat(attr)
 	local map = attr.normalized and normalizedFormatMap[attr.type] or attributeFormatMap[attr.type]
 	return map and map[attr.size] or nil
 end
 
----@class hood-vk.Pipeline
+---@class hood-vk.Pipeline: hood.Pipeline
 ---@field handle vk.ffi.Pipeline
 ---@field layout vk.ffi.PipelineLayout
 ---@field renderPass vk.ffi.RenderPass
 ---@field descriptor hood.PipelineDescriptor
----@field private device hood-vk.Device
+---@field device hood-vk.Device
 local VKPipeline = {}
 VKPipeline.__index = VKPipeline
 
@@ -312,6 +312,7 @@ end
 
 --- The render pass is not this pipeline's to free: it belongs to the device's cache and other
 --- pipelines and frames made against the same formats are still using it.
+---@param self hood-vk.Pipeline
 function VKPipeline:destroy()
 	self.device.handle:destroyPipeline(self.handle)
 	self.device.handle:destroyPipelineLayout(self.layout)

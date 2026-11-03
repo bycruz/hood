@@ -1,4 +1,4 @@
-local gl = require("glapi")
+local gl = require("glapi") ---@cast gl gl & hood-gl.GlConstants
 local glConversions = require("hood-gl.convert")
 local ffi = require("ffi")
 
@@ -12,7 +12,7 @@ local LOWER_LEFT, UPPER_LEFT = 0x8CA1, 0x8CA2
 local NEGATIVE_ONE_TO_ONE = 0x935E
 
 ---@class hood-gl.CommandBuffer
----@field private commands hood-gl.Command[]
+---@field commands hood-gl.Command[]
 local GLCommandBuffer = {}
 GLCommandBuffer.__index = GLCommandBuffer
 
@@ -62,7 +62,6 @@ local computePipelines = setmetatable({}, {
 local fboCache = setmetatable({}, { __mode = "k" })
 
 ---@param descriptor hood.RenderPassDescriptor
----@return string
 local function makeAttachmentKey(descriptor)
 	local parts = {}
 	for i, att in ipairs(descriptor.colorAttachments) do
@@ -126,6 +125,7 @@ end
 
 ---@param queueCtx hood-gl.Context  # The headless context (resource ops, compute)
 ---@param renderCtx hood-gl.Context? # The window context for rendering; nil in headless-only setups
+---@param self hood-gl.CommandBuffer
 function GLCommandBuffer:execute(queueCtx, renderCtx)
 	---@type hood-gl.ComputePipeline?
 	local computePipeline
@@ -163,7 +163,7 @@ function GLCommandBuffer:execute(queueCtx, renderCtx)
 			-- GL objects, but creating FBOs in the headless one crashes NVIDIA on the next
 			-- window→headless switch, since they use different X displays.
 			local offscreenCtx = renderCtx or queueCtx
-			local firstColorView = #attachments > 0 and attachments[1].texture --[[@as hood-gl.TextureView?]]
+			local firstColorView = #attachments > 0 and (attachments[1].texture --[[@as hood-gl.TextureView]]) or nil
 			if firstColorView then
 				isBackbuffer = firstColorView.id == nil
 				ctx = isBackbuffer and firstColorView.context or offscreenCtx
@@ -251,7 +251,7 @@ function GLCommandBuffer:execute(queueCtx, renderCtx)
 				gl.disable(gl.CULL_FACE)
 			end
 
-			for _, target in ipairs(pipeline.fragment.targets) do
+			for _, target in ipairs(pipeline.fragment.targets or {}) do
 				if target.blend == "alpha-blending" then
 					gl.enable(gl.BLEND)
 					gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA)

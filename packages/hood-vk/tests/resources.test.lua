@@ -1,11 +1,11 @@
 local ffi = require("ffi")
 local test = require("lde-test")
-local core = require("hood-core")
 local vk = require("hood-vk")
 local vkConversions = require("hood-vk.convert")
 
 local instance = vk.new({ backend = "vulkan", flags = { "headless" } })
 local device = instance:requestAdapter({}):requestDevice()
+	---@cast device hood-vk.Device
 
 -- ─── Buffer ───────────────────────────────────────────────────────────────────
 
@@ -302,6 +302,7 @@ test.it("bind group: hundreds of groups held at once", function()
 		{ binding = 0, visibility = { "VERTEX", "FRAGMENT" }, type = "uniform-buffer" },
 	})
 	local buf = device:createBuffer({ size = 64, usages = { "UNIFORM", "COPY_DST" } })
+	---@type hood-vk.BindGroup[]
 	local groups = {}
 
 	for index = 1, 900 do

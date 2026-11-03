@@ -1,5 +1,5 @@
 local ffi = require("ffi")
-local vk = require("vkapi")
+local vk = require("vkapi") ---@cast vk vk & hood-vk.VkExtras
 
 ---@class hood-vk.ComputePipeline
 ---@field handle vk.ffi.Pipeline
@@ -44,6 +44,7 @@ function VKComputePipeline.new(device, descriptor)
 	return setmetatable({ handle = handle, layout = layout, device = device }, VKComputePipeline)
 end
 
+---@param self hood-vk.ComputePipeline
 function VKComputePipeline:destroy()
 	self.device.handle:destroyPipeline(self.handle)
 	self.device.handle:destroyPipelineLayout(self.layout)

@@ -35,8 +35,9 @@ end
 
 --- A view is not an object of the driver's here: the texture is what was created, and its own
 --- destroy is what deletes it.
+---@param self hood-gl.TextureView
 function GLTextureView:destroy()
-	self.texture = nil
+	self.texture = nil --[[@as hood-gl.Texture]]
 end
 
 return GLTextureView

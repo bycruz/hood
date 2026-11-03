@@ -1,7 +1,6 @@
 local ffi = require("ffi")
 local test = require("lde-test")
 local core = require("hood-core")
-local vk = require("hood-vk")
 local glslc = require("tests.fixtures.glslc")
 local makeCtx = require("tests.fixtures.context")
 
@@ -33,8 +32,10 @@ local vertexLayout = core.VertexLayout.new()
 	:withAttribute({ type = "f32", size = 3, offset = 0 })
 	:withAttribute({ type = "f32", size = 4, offset = 12 })
 
+---@param depthStencil hood.DepthStencilState?
 local function makePipeline(depthStencil)
-	return ctx.device:createPipeline({
+	---@type hood.PipelineDescriptor
+	local descriptor = {
 		layout = ctx.device:createBindGroupLayout({}),
 		vertex = {
 			module = { type = "spirv", source = vertSpv },
@@ -49,7 +50,8 @@ local function makePipeline(depthStencil)
 			} },
 		},
 		depthStencil = depthStencil,
-	})
+	}
+	return ctx.device:createPipeline(descriptor)
 end
 
 local pipeline = makePipeline()
@@ -73,6 +75,7 @@ local triIbuf = ctx.device:createBuffer({
 ctx.device.queue:writeBuffer(triVbuf, ffi.sizeof(triVerts), triVerts)
 ctx.device.queue:writeBuffer(triIbuf, ffi.sizeof(triIndices), triIndices)
 
+---@param enc hood.CommandEncoder
 local function drawTri(enc)
 	enc:setVertexBuffer(0, triVbuf)
 	enc:setIndexBuffer(triIbuf, "u32")
@@ -89,6 +92,7 @@ end
 -- ─── Clear colour ────────────────────────────────────────────────────────────
 
 test.it("render: clear to opaque black by default", function()
+	---@type tests.Pixels
 	local px = ctx:frame({ pipeline = pipeline })
 	local r, g, b, a = px.at(0, 0)
 	test.equal(r, 0) test.equal(g, 0) test.equal(b, 0) test.equal(a, 255)
@@ -98,6 +102,7 @@ test.it("render: clear to opaque black by default", function()
 end)
 
 test.it("render: clear to red fills every sampled pixel", function()
+	---@type tests.Pixels
 	local px = ctx:frame({ pipeline = pipeline, clearColor = { r = 1, g = 0, b = 0, a = 1 } })
 	for _, xy in ipairs({ { 0, 0 }, { W - 1, 0 }, { 0, H - 1 }, { W - 1, H - 1 }, { W / 2, H / 2 } }) do
 		local r, g, b = px.at(xy[1], xy[2])
@@ -106,12 +111,14 @@ test.it("render: clear to red fills every sampled pixel", function()
 end)
 
 test.it("render: clear to green fills every sampled pixel", function()
+	---@type tests.Pixels
 	local px = ctx:frame({ pipeline = pipeline, clearColor = { r = 0, g = 1, b = 0, a = 1 } })
 	local r, g, b = px.at(W / 2, H / 2)
 	test.less(r, 10) test.greater(g, 200) test.less(b, 10)
 end)
 
 test.it("render: clear to white produces full-intensity RGBA", function()
+	---@type tests.Pixels
 	local px = ctx:frame({ pipeline = pipeline, clearColor = { r = 1, g = 1, b = 1, a = 1 } })
 	local r, g, b, a = px.at(W / 2, H / 2)
 	test.greater(r, 200) test.greater(g, 200) test.greater(b, 200) test.equal(a, 255)
@@ -120,6 +127,7 @@ end)
 -- ─── Triangle colours ─────────────────────────────────────────────────────────
 
 test.it("render: top vertex of triangle is red", function()
+	---@type tests.Pixels
 	local px = ctx:frame({ pipeline = pipeline, draw = drawTri })
 	-- Sample just below the apex at screen (32, 16)
 	local r, g, b = px.at(32, 18)
@@ -127,6 +135,7 @@ test.it("render: top vertex of triangle is red", function()
 end)
 
 test.it("render: bottom-left vertex of triangle is green", function()
+	---@type tests.Pixels
 	local px = ctx:frame({ pipeline = pipeline, draw = drawTri })
 	-- One pixel inside the BL vertex at screen (16, 48)
 	local r, g, b = px.at(17, 47)
@@ -134,12 +143,14 @@ test.it("render: bottom-left vertex of triangle is green", function()
 end)
 
 test.it("render: bottom-right vertex of triangle is blue", function()
+	---@type tests.Pixels
 	local px = ctx:frame({ pipeline = pipeline, draw = drawTri })
 	local r, g, b = px.at(47, 47)
 	test.less(r, 100) test.less(g, 100) test.greater(b, 150)
 end)
 
 test.it("render: pixels outside the triangle retain the clear colour", function()
+	---@type tests.Pixels
 	local px = ctx:frame({ pipeline = pipeline, clearColor = { r = 0, g = 0, b = 0, a = 1 }, draw = drawTri })
 	local r, g, b, a = px.at(0, 0)
 	test.equal(r, 0) test.equal(g, 0) test.equal(b, 0) test.equal(a, 255)
@@ -154,9 +165,12 @@ test.it("render: u16 index buffer produces the same triangle", function()
 	})
 	ctx.device.queue:writeBuffer(ibuf16, ffi.sizeof("uint16_t") * 3, ffi.new("uint16_t[3]", { 0, 1, 2 }))
 
+	---@type tests.Pixels
 	local px = ctx:frame({
 		pipeline = pipeline,
-		draw = function(enc)
+		---@param enc hood.CommandEncoder
+	draw = function(enc)
+		---@cast enc hood.CommandEncoder
 			enc:setVertexBuffer(0, triVbuf)
 			enc:setIndexBuffer(ibuf16, "u16")
 			enc:drawIndexed(3, 1)
@@ -179,9 +193,12 @@ test.it("render: firstIndex offset skips leading indices", function()
 	ctx.device.queue:writeBuffer(vbuf4, ffi.sizeof(verts4), verts4)
 	ctx.device.queue:writeBuffer(ibuf4, ffi.sizeof("uint32_t") * 4, ffi.new("uint32_t[4]", { 0, 1, 2, 3 }))
 
+	---@type tests.Pixels
 	local px = ctx:frame({
 		pipeline = pipeline,
-		draw = function(enc)
+		---@param enc hood.CommandEncoder
+	draw = function(enc)
+		---@cast enc hood.CommandEncoder
 			enc:setVertexBuffer(0, vbuf4)
 			enc:setIndexBuffer(ibuf4, "u32")
 			enc:drawIndexed(3, 1, 1)  -- firstIndex = 1 → uses verts 1,2,3
@@ -196,6 +213,7 @@ end)
 test.it("render: second frame fully overwrites contents of the first", function()
 	ctx:frame({ pipeline = pipeline, clearColor = { r = 1, g = 0, b = 0, a = 1 } })  -- all red
 
+	---@type tests.Pixels
 	local px = ctx:frame({ pipeline = pipeline, clearColor = { r = 0, g = 0, b = 1, a = 1 } })  -- all blue
 	local r, g, b = px.at(0, 0)
 	test.less(r, 10) test.less(g, 10) test.greater(b, 200)
@@ -237,10 +255,13 @@ test.it("render: depth test (less) keeps the closer triangle", function()
 	ctx.device.queue:writeBuffer(farVbuf,  ffi.sizeof(farVerts),  farVerts)
 	ctx.device.queue:writeBuffer(nearVbuf, ffi.sizeof(nearVerts), nearVerts)
 
+	---@type tests.Pixels
 	local px = ctx:frame({
 		pipeline = depthPipeline,
 		depthTexture = depthView,
-		draw = function(enc)
+		---@param enc hood.CommandEncoder
+	draw = function(enc)
+		---@cast enc hood.CommandEncoder
 			-- green (far) drawn first, red (near) second
 			enc:setVertexBuffer(0, farVbuf)
 			enc:setIndexBuffer(triIbuf, "u32")
@@ -252,14 +273,15 @@ test.it("render: depth test (less) keeps the closer triangle", function()
 	})
 
 	-- Centre of the triangle at screen (32, 32): red must dominate
-	local r, g, b = px.at(32, 32)
+	local r, g = px.at(32, 32)
 	test.greater(r, 100) test.less(g, 100)
 end)
 
 -- ─── writeMask ───────────────────────────────────────────────────────────────
 
 test.it("render: writeMask Color suppresses the alpha channel", function()
-	local maskPipeline = ctx.device:createPipeline({
+	---@type hood.PipelineDescriptor
+	local maskDescriptor = {
 		layout = ctx.device:createBindGroupLayout({}),
 		vertex = {
 			module = { type = "spirv", source = vertSpv },
@@ -272,10 +294,12 @@ test.it("render: writeMask Color suppresses the alpha channel", function()
 				writeMask = core.ColorWrites.Color,  -- RGB only, no alpha write
 			} },
 		},
-	})
+	}
+	local maskPipeline = ctx.device:createPipeline(maskDescriptor)
 
 	-- Clear to transparent black, draw a solid red triangle.
 	-- With writeMask = Color the alpha channel must remain at the cleared value (0).
+	---@type tests.Pixels
 	local px = ctx:frame({
 		pipeline = maskPipeline,
 		clearColor = { r = 0, g = 0, b = 0, a = 0 },
@@ -366,9 +390,12 @@ local instBuf = ctx.device:createBuffer({
 ctx.device.queue:writeBuffer(instBuf, ffi.sizeof(instances), instances)
 
 test.it("render: one draw call places two instances from per-instance data", function()
+	---@type tests.Pixels
 	local px = ctx:frame({
 		pipeline = instPipeline,
-		draw = function(enc)
+		---@param enc hood.CommandEncoder
+	draw = function(enc)
+		---@cast enc hood.CommandEncoder
 			enc:setVertexBuffer(0, instVbuf)
 			enc:setVertexBuffer(1, instBuf)
 			enc:draw(3, 2)
@@ -390,9 +417,12 @@ test.it("render: instance buffer offset selects which instance is drawn", functi
 	-- Only the second instance, addressed by offsetting the instance buffer.
 	-- This is how a run starting partway through a packed instance array is
 	-- drawn, since a nonzero firstInstance needs a device feature.
+	---@type tests.Pixels
 	local px = ctx:frame({
 		pipeline = instPipeline,
-		draw = function(enc)
+		---@param enc hood.CommandEncoder
+	draw = function(enc)
+		---@cast enc hood.CommandEncoder
 			enc:setVertexBuffer(0, instVbuf)
 			enc:setVertexBuffer(1, instBuf, INSTANCE_STRIDE)
 			enc:draw(3, 1)
@@ -475,6 +505,7 @@ local indirectBuffer = ctx.device:createBuffer({
 	usages = { "INDIRECT", "COPY_DST" },
 })
 
+---@type vk
 local vk = require("vkapi")
 local indirectCommands = vk.DrawIndexedIndirectCommandArray(2)
 
@@ -492,6 +523,8 @@ indirectCommands[1].firstInstance = 1
 
 -- Screen positions: instance centres are NDC x = +/-0.5 -> screen x 16 / 48, and
 -- the mesh centres are NDC y = -0.3 / +0.3 -> screen y 42 / 22.
+---@param enc hood.CommandEncoder
+---@param drawCount number
 local function drawIndirect(enc, drawCount)
 	enc:setVertexBuffer(0, abVbuf)
 	enc:setVertexBuffer(1, abInstanceBuf)
@@ -502,9 +535,10 @@ end
 test.it("render: one indirect call draws two meshes", function()
 	ctx.device.queue:writeBuffer(indirectBuffer, 2 * 20, indirectCommands)
 
+	---@type tests.Pixels
 	local px = ctx:frame({
 		pipeline = indirectPipeline,
-		draw = function(enc) drawIndirect(enc, 2) end,
+		draw = function(enc) drawIndirect(enc --[[@as hood.CommandEncoder]], 2) end,
 	})
 
 	-- Mesh A with instance 0: red, lower left.
@@ -528,9 +562,10 @@ test.it("render: indirect draw count controls how many are issued", function()
 	ctx.device.queue:writeBuffer(indirectBuffer, 2 * 20, indirectCommands)
 
 	-- Only the first command: mesh A appears and mesh B does not.
+	---@type tests.Pixels
 	local px = ctx:frame({
 		pipeline = indirectPipeline,
-		draw = function(enc) drawIndirect(enc, 1) end,
+		draw = function(enc) drawIndirect(enc --[[@as hood.CommandEncoder]], 1) end,
 	})
 
 	local ar, ag = px.at(16, 42)
@@ -595,6 +630,7 @@ end)
 test.it("render pass: an empty frame clears and presents", function()
 	-- The case that used to crash: nothing drawn, so no pipeline was ever bound.
 	-- Binding it is what starts the pass, and this is the shape lupa now uses.
+	---@type tests.Pixels
 	local px = ctx:frame({
 		pipeline = pipeline,
 		clearColor = { r = 0, g = 0, b = 1, a = 1 },

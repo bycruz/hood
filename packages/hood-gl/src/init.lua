@@ -1,3 +1,70 @@
+---@class hood-gl.GlxExtras
+---@field RENDER_TYPE integer
+---@field RGBA_BIT integer
+---@field DRAWABLE_TYPE integer
+---@field WINDOW_BIT integer
+---@field DOUBLEBUFFER integer
+---@field DEPTH_SIZE integer
+---@field CONTEXT_MAJOR_VERSION_ARB integer
+---@field CONTEXT_MINOR_VERSION_ARB integer
+---@field CONTEXT_PROFILE_MASK_ARB integer
+---@field CONTEXT_CORE_PROFILE_BIT_ARB integer
+---@field swapIntervalEXT fun(display: ffi.ptr<ffi.cdata*>, drawable: number, interval: integer)
+
+---@class hood-gl.GlConstants
+---@field ALL_BARRIER_BITS integer
+---@field BLEND integer
+---@field BYTE integer
+---@field COLOR_ATTACHMENT0 integer
+---@field COLOR_BUFFER_BIT integer
+---@field COMPARE_REF_TO_TEXTURE integer
+---@field COMPUTE_SHADER_BIT integer
+---@field CULL_FACE integer
+---@field DEPTH_ATTACHMENT integer
+---@field DEPTH_BUFFER_BIT integer
+---@field DEPTH_TEST integer
+---@field DRAW_INDIRECT_BUFFER integer
+---@field DYNAMIC_DRAW integer
+---@field FLOAT integer
+---@field FRAGMENT_SHADER_BIT integer
+---@field FRAMEBUFFER integer
+---@field HALF_FLOAT integer
+---@field INT integer
+---@field NONE integer
+---@field ONE_MINUS_SRC_ALPHA integer
+---@field PACK_ALIGNMENT integer
+---@field PACK_IMAGE_HEIGHT integer
+---@field PACK_ROW_LENGTH integer
+---@field PIXEL_PACK_BUFFER integer
+---@field SHADER_STORAGE_BUFFER integer
+---@field SHORT integer
+---@field SRC_ALPHA integer
+---@field TEXTURE_1D integer
+---@field TEXTURE_1D_ARRAY integer
+---@field TEXTURE_2D integer
+---@field TEXTURE_2D_ARRAY integer
+---@field TEXTURE_3D integer
+---@field TEXTURE_COMPARE_FUNC integer
+---@field TEXTURE_COMPARE_MODE integer
+---@field TEXTURE_MAG_FILTER integer
+---@field TEXTURE_MAX_ANISOTROPY integer
+---@field TEXTURE_MAX_LOD integer
+---@field TEXTURE_MIN_FILTER integer
+---@field TEXTURE_MIN_LOD integer
+---@field TEXTURE_WRAP_R integer
+---@field TEXTURE_WRAP_S integer
+---@field TEXTURE_WRAP_T integer
+---@field TRIANGLES integer
+---@field UNIFORM_BUFFER integer
+---@field UNPACK_ALIGNMENT integer
+---@field UNPACK_IMAGE_HEIGHT integer
+---@field UNPACK_ROW_LENGTH integer
+---@field UNSIGNED_BYTE integer
+---@field UNSIGNED_INT integer
+---@field UNSIGNED_SHORT integer
+---@field VAO integer
+---@field VERTEX_SHADER_BIT integer
+
 -- The opengl backend, as hood asks for it: an instance, made from a descriptor. What is
 -- behind that is everything an opengl program needs, and nothing a program on the other
 -- backend would be carrying around.

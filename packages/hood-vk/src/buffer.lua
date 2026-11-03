@@ -1,5 +1,5 @@
 local ffi = require("ffi")
-local vk = require("vkapi")
+local vk = require("vkapi") ---@cast vk vk & hood-vk.VkExtras
 
 local layout = require("hood-core.layout")
 local memory = require("hood-vk.memory")
@@ -9,8 +9,9 @@ local memory = require("hood-vk.memory")
 ---@field memory vk.ffi.DeviceMemory
 ---@field device hood-vk.Device
 ---@field descriptor hood.BufferDescriptor
----@field private mappedBase ffi.cdata*? # Present exactly when the memory is permanently mapped
----@field staging table? # Bump cursor into this buffer when it serves as upload staging
+---@field mappedBase ffi.cdata*? # Present exactly when the memory is permanently mapped
+---@field staging { offset: number }? # Bump cursor into this buffer when it serves as upload staging
+---@field stagingResources hood-vk.Buffer[]?
 local VKBuffer = {}
 VKBuffer.__index = VKBuffer
 
@@ -34,6 +35,7 @@ local hostVisibleUsages = {
 
 ---@param device hood-vk.Device
 ---@param descriptor hood.BufferDescriptor
+---@return hood-vk.Buffer
 function VKBuffer.new(device, descriptor)
 	local wantsMapped = descriptor.mapped == true
 	local vkUsage = 0
@@ -46,7 +48,7 @@ function VKBuffer.new(device, descriptor)
 			error("Invalid buffer usage: " .. tostring(usage))
 		end
 
-		vkUsage = bit.bor(vkUsage, flag)
+		vkUsage = tonumber(bit.bor(vkUsage, flag)) or vkUsage
 		hostVisible = hostVisible or hostVisibleUsages[usage] == true
 	end
 
@@ -58,12 +60,12 @@ function VKBuffer.new(device, descriptor)
 	local requirements = device.handle:getBufferMemoryRequirements(handle)
 
 	local requiredFlags = hostVisible
-		and memory.HOST_VISIBLE_FLAGS
-		or vk.MemoryPropertyFlagBits.DEVICE_LOCAL
+		and (tonumber(memory.HOST_VISIBLE_FLAGS) or 0)
+		or (tonumber(vk.MemoryPropertyFlagBits.DEVICE_LOCAL) or 0)
 
 	-- Worth asking for even when not required: a GPU reading host-visible memory out of device
 	-- memory rather than over the bus is what makes uploads fast.
-	local preferredFlags = hostVisible and vk.MemoryPropertyFlagBits.DEVICE_LOCAL or 0
+	local preferredFlags = hostVisible and (tonumber(vk.MemoryPropertyFlagBits.DEVICE_LOCAL) or 0) or 0
 
 	local deviceMemory = memory.allocate(device, requirements, requiredFlags, preferredFlags, "buffer")
 	device.handle:bindBufferMemory(handle, deviceMemory, 0)
@@ -88,6 +90,7 @@ end
 --- Pointer to `offset` bytes into a mapped buffer, for direct CPU writes.
 ---@param offset number?
 ---@return ffi.cdata*
+---@param self hood-vk.Buffer
 function VKBuffer:mappedPointer(offset)
 	if not self.mappedBase then
 		error("hood: buffer is not mapped; create it with { mapped = true }")
@@ -109,6 +112,7 @@ end
 ---@param size number bytes to write
 ---@param offset number? byte offset into the buffer, defaults to 0
 ---@param data ffi.cdata*? source data, checked when its size is knowable
+---@param self hood-vk.Buffer
 function VKBuffer:assertWriteFits(size, offset, data)
 	layout.assertWriteFits(self, size, offset, data)
 end
@@ -122,6 +126,7 @@ end
 ---@param offset number?
 ---@param size number? only meaningful for an unmapped buffer
 ---@return ffi.cdata*
+---@param self hood-vk.Buffer
 function VKBuffer:getMappedRange(offset, size)
 	if self.mappedBase then
 		return self.mappedBase + (offset or 0)
@@ -138,6 +143,7 @@ function VKBuffer:unmap()
 	self.device.handle:unmapMemory(self.memory)
 end
 
+---@param self hood-vk.Buffer
 function VKBuffer:__tostring()
 	return "VKBuffer(" .. tostring(self.handle) .. ")"
 end

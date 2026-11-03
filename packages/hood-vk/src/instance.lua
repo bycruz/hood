@@ -1,4 +1,4 @@
-local vk = require("vkapi")
+local vk = require("vkapi") ---@cast vk vk & hood-vk.VkExtras
 
 local VKAdapter = require("hood-vk.adapter")
 local VKSurface = require("hood-vk.surface")
@@ -6,6 +6,7 @@ local VKSurface = require("hood-vk.surface")
 local isWindows = jit.os == "Windows"
 
 ---@class hood-vk.Instance: hood.Instance
+---@field headless boolean
 ---@field handle vk.Instance
 local VKInstance = {}
 VKInstance.__index = VKInstance
@@ -48,7 +49,10 @@ function VKInstance.new(descriptor)
 end
 
 ---@param config hood.AdapterConfig
+---@param self hood-vk.Instance
+---@return hood-vk.Adapter?
 function VKInstance:requestAdapter(config)
+	config = config or {}
 	local deviceOrdering = {
 		[vk.PhysicalDeviceType.DISCRETE_GPU] = 4,
 		[vk.PhysicalDeviceType.INTEGRATED_GPU] = 3,
@@ -80,6 +84,8 @@ function VKInstance:requestAdapter(config)
 end
 
 ---@param window winit.Window
+---@param self hood-vk.Instance
+---@return hood-vk.Surface
 function VKInstance:createSurface(window)
 	return VKSurface.new(self, window)
 end

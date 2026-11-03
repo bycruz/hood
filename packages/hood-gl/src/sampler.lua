@@ -1,4 +1,4 @@
-local gl = require("glapi")
+local gl = require("glapi") ---@cast gl gl & hood-gl.GlConstants
 local glConversions = require("hood-gl.convert")
 
 local ffi = require("ffi")
@@ -41,6 +41,7 @@ function GLSampler.new(desc)
 	return setmetatable({ id = id }, GLSampler)
 end
 
+---@param self hood-gl.Sampler
 function GLSampler:destroy()
 	gl.deleteSamplers(1, ffi.new("GLuint[1]", self.id))
 end

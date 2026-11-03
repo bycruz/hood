@@ -1,5 +1,3 @@
-local ffi = require("ffi")
-
 ---@class hood-gl.Context
 ---@field fromHeadless fun(sharedCtx: hood-gl.Context?): hood-gl.Context
 ---@field fromWindow fun(window: winit.Window, sharedCtx: hood-gl.Context?): hood-gl.Context

@@ -1,6 +1,16 @@
 {
 	"name": "hood-core",
 	"description": "What both of hood's backends are made of",
-	"authors": ["David Cruz <david@bycruz.dev>"],
-	"version": "0.1.0"
+	"authors": [
+		"David Cruz <david@bycruz.dev>"
+	],
+	"version": "0.1.0",
+	"devDependencies": {
+		"lde-test": {
+			"git": "https://github.com/lde-org/lde"
+		},
+		"winit": {
+			"version": "^0.1.7"
+		}
+	}
 }

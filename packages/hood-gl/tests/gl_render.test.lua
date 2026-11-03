@@ -15,7 +15,7 @@ local test = require("lde-test")
 local core = require("hood-core")
 local gl = require("hood-gl")
 
-local contextOk, device = pcall(function()
+local contextOk, deviceOrErr = pcall(function()
 	local instance = gl.new({ backend = "opengl", flags = { "headless" } })
 	return instance:requestAdapter({}):requestDevice()
 end)
@@ -24,6 +24,7 @@ if not contextOk then
 	test.skip("opengl rows: skipped, no headless GL context", function() end)
 	return
 end
+local device = deviceOrErr --[[@as hood.Device]]
 
 -- The entry point has to be redeclared for ARB_separate_shader_objects, which is how hood builds
 -- GL programs.
@@ -130,7 +131,7 @@ end
 -- Row zero is the top of the texture, which is the row a texture is written from and read back
 -- to, and the row the top of the screen is drawn in.
 test.it("opengl rows: NDC +y is drawn up the screen, as it is through Vulkan", function()
-	local px = frame()
+	local px = frame() --[[@as fun(x: number, y: number): number, number, number]]
 
 	-- Above the apex there is nothing but the clear colour, and the row the apex is in is red:
 	-- read the other way round, that red would be at the bottom.

@@ -1,4 +1,4 @@
-local vk = require("vkapi")
+local vk = require("vkapi") ---@cast vk vk & hood-vk.VkExtras
 local ffi = require("ffi")
 
 local VKCommandBuffer = require("hood-vk.command_buffer")
@@ -16,6 +16,7 @@ VKQueue.__index = VKQueue
 ---@param device hood-vk.Device
 ---@param familyIdx number
 ---@param idx number
+---@return hood-vk.Queue
 function VKQueue.new(device, familyIdx, idx)
 	local handle = device.handle:getDeviceQueue(familyIdx, idx)
 	return setmetatable({ device = device, handle = handle, familyIdx = familyIdx, idx = idx }, VKQueue)
@@ -33,6 +34,7 @@ local function submitFailed(result)
 end
 
 ---@param buffer hood-vk.CommandBuffer
+---@param self hood-vk.Queue
 function VKQueue:submit(buffer)
 	commandBuffers[0] = buffer.handle
 
@@ -74,14 +76,10 @@ end
 -- TODO: a blocking wait, which avoids a use-after-free from Lua's GC. Should become a form of
 -- deferred collection managed by the queue.
 
---- Helper method to write data to a buffer
----@param buffer hood-vk.Buffer
----@param size number
----@param data ffi.cdata*
----@param offset number?
 --- The command buffer the queue's own uploads are recorded into, reused for each of them.
 --- Every caller waits for the queue to go idle first, so one buffer serves them all.
 ---@return hood-vk.CommandBuffer
+---@param self hood-vk.Queue
 function VKQueue:transientBuffer()
 	if not self._transient then
 		self._transient = VKCommandBuffer.new(self.device)
@@ -94,6 +92,7 @@ end
 ---@param size number
 ---@param data ffi.cdata*
 ---@param offset number?
+---@param self hood-vk.Queue
 function VKQueue:writeBuffer(buffer, size, data, offset)
 	offset = offset or 0
 	if size == 0 then
@@ -121,7 +120,9 @@ end
 ---@param texture hood-vk.Texture
 ---@param descriptor hood.TextureWriteDescriptor
 ---@param data ffi.cdata*
+---@param self hood-vk.Queue
 function VKQueue:writeTexture(texture, descriptor, data)
+	---@type hood-vk.CommandEncoder
 	local cmd = VKCommandEncoder.new(self.device, self:transientBuffer())
 	cmd:writeTexture(texture, descriptor, data)
 	self:submit(cmd:finish())
@@ -137,6 +138,7 @@ end
 --- The recording is finished even when nothing was claimed, which is most textures: the command
 --- buffer the queue records into is reused and cannot be left open.
 ---@param texture hood-vk.Texture
+---@param self hood-vk.Queue
 function VKQueue:claimTexture(texture)
 	local cmd = VKCommandEncoder.new(self.device, self:transientBuffer())
 	cmd:claimTexture(texture)
@@ -150,6 +152,7 @@ function VKQueue:waitIdle()
 end
 
 ---@param swapchain hood-vk.Swapchain
+---@param self hood-vk.Queue
 function VKQueue:present(swapchain)
 	assert(swapchain.currentVkImageIdx ~= nil, "present() called without a successful getCurrentTexture()")
 	-- Use the same per-frame renderFinished semaphore as submit

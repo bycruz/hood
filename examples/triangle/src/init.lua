@@ -1,15 +1,26 @@
 local ffi = require("ffi")
 local winit = require("winit")
-local hood = require("hood")
+local function loadHood()
+	local module = require("hood")
+	---@cast module hood
+	return module
+end
+local hood = loadHood()
 
 ---@type hood.InstanceBackend
 local backend = os.getenv("VULKAN") and "vulkan" or "opengl"
 print("Using backend:", backend)
 
 local pathSep = string.sub(package.config, 1, 1)
-
----@type string
-local dirName = debug.getinfo(1, "S").source:sub(2):match("(.*)" .. pathSep)
+local entry = debug.getinfo(1, "S").source:sub(2)
+---@param text string
+local function directoryOf(text)
+	local found = text:match("^(.*)" .. pathSep)
+	if not found then error("cannot find the example directory") end
+	---@cast found string
+	return found
+end
+local dirName = directoryOf(entry)
 
 -- Create event loop and window
 local eventLoop = winit.EventLoop.new()
@@ -19,7 +30,8 @@ window:setTitle("Triangle - Running on " .. backend .. " backend")
 
 -- Create hood instance, adapter, and device
 local instance = hood.Instance.new({ backend = backend, flags = {} })
-local adapter = instance:requestAdapter({ powerPreference = "high-performance" })
+local adapter = instance:requestAdapter({ powerPreference = "high-performance" }) or
+	error("no graphics adapter is available")
 local device = adapter:requestDevice()
 
 -- Create surface and swapchain
@@ -32,12 +44,16 @@ local device = adapter:requestDevice()
 local surfaceConfig = { presentMode = "immediate" }
 
 local surface = instance:createSurface(window)
-local swapchain = surface:configure(device, surfaceConfig)
+local swapchain = surface:configure(device, surfaceConfig) or
+	error("the driver gave the surface no size to make a swapchain for")
+local currentSwapchain = swapchain
 
 -- Define vertex layout: position (vec3) + color (vec4)
+local position = { type = "f32", size = 3, offset = 0 } --[[@as hood.VertexLayout.Attribute]]
+local color = { type = "f32", size = 4, offset = 12 } --[[@as hood.VertexLayout.Attribute]]
 local vertexLayout = hood.VertexLayout.new()
-	:withAttribute({ type = "f32", size = 3, offset = 0 }) -- position
-	:withAttribute({ type = "f32", size = 4, offset = 12 }) -- color
+	:withAttribute(position)
+	:withAttribute(color)
 
 -- Triangle vertices (centered on screen in NDC coordinates)
 -- Format: x, y, z, r, g, b, a
@@ -77,6 +93,7 @@ device.queue:writeBuffer(
 )
 
 local shaderType = backend == "opengl" and "glsl" or "spirv"
+---@type string
 local shaderExt = backend == "opengl" and "glsl" or "spv"
 
 -- None needed for this example.
@@ -84,19 +101,27 @@ local shaderExt = backend == "opengl" and "glsl" or "spv"
 local bindGroupLayout = device:createBindGroupLayout({})
 
 -- Create pipeline
+---@param path string
+local function readFile(path)
+	local handle = assert(io.open(path, "r"))
+	local text = handle:read("*a")
+	handle:close()
+	return text
+end
+
 local pipeline = device:createPipeline({
 	layout = bindGroupLayout,
 	vertex = {
 		module = {
 			type = shaderType,
-			source = io.open(dirName .. "/../../shaders/triangle.vert." .. shaderExt, "rb"):read("*a"),
+			source = readFile(dirName .. "/../../shaders/triangle.vert." .. shaderExt),
 		},
 		buffers = { vertexLayout },
 	},
 	fragment = {
 		module = {
 			type = shaderType,
-			source = io.open(dirName .. "/../../shaders/triangle.frag." .. shaderExt, "rb"):read("*a"),
+			source = readFile(dirName .. "/../../shaders/triangle.frag." .. shaderExt),
 		},
 		targets = {
 			{
@@ -109,23 +134,26 @@ local pipeline = device:createPipeline({
 })
 
 -- Main render loop
-eventLoop:run(function(event, handler)
+---@param event winit.Event
+---@param handler winit.EventManager
+local function onEvent(event, handler)
 	if event.name == "windowClose" then
 		handler:exit()
 	elseif event.name == "redraw" then
-		local texture = swapchain:getCurrentTexture()
+		local texture = currentSwapchain:getCurrentTexture()
 
 		-- Resize handling
 		if not texture then
-			swapchain = surface:configure(device, surfaceConfig, swapchain)
-			texture = swapchain:getCurrentTexture()
+			currentSwapchain = surface:configure(device, surfaceConfig, currentSwapchain) or
+				error("the driver gave the surface no size to make a swapchain for")
+			texture = currentSwapchain:getCurrentTexture()
 
 			if not texture then
 				return
 			end
 		end
 
-		local encoder = swapchain:createCommandEncoder()
+		local encoder = currentSwapchain:createCommandEncoder()
 
 		encoder:beginRendering({
 			colorAttachments = {
@@ -140,7 +168,7 @@ eventLoop:run(function(event, handler)
 		})
 
 		encoder:setPipeline(pipeline)
-		encoder:setViewport(0, 0, swapchain.width, swapchain.height)
+		encoder:setViewport(0, 0, currentSwapchain.width, currentSwapchain.height)
 		encoder:setVertexBuffer(0, vertexBuffer)
 		encoder:setIndexBuffer(indexBuffer, "u32")
 		encoder:drawIndexed(3, 1)
@@ -148,8 +176,10 @@ eventLoop:run(function(event, handler)
 
 		local commandBuffer = encoder:finish()
 		device.queue:submit(commandBuffer)
-		device.queue:present(swapchain)
+		device.queue:present(currentSwapchain)
 	elseif event.name == "aboutToWait" then
 		handler:requestRedraw(window)
 	end
-end)
+end
+
+eventLoop:run(onEvent)

@@ -1,4 +1,5 @@
 ---@class hood.Device
+---@field handle number|ffi.cdata*
 ---@field queue hood.Queue
 ---@field createPipeline fun(self: hood.Device, descriptor: hood.PipelineDescriptor): hood.Pipeline
 ---@field createBuffer fun(self: hood.Device, descriptor: hood.BufferDescriptor): hood.Buffer
@@ -33,6 +34,7 @@
 ---@class hood.Swapchain
 ---@field width number
 ---@field height number
+---@field format hood.TextureFormat
 ---@field present fun(self: hood.Swapchain)
 ---@field getCurrentTexture fun(self: hood.Swapchain): hood.Texture?
 ---@field createCommandEncoder fun(self: hood.Swapchain): hood.CommandEncoder # one per image, free to record into

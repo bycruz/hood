@@ -1,3 +1,10 @@
+local ffi = require("ffi")
+---@alias user32.HDC winapi.user32.ffi.HDC
+---@alias user32.HWND winapi.user32.ffi.HWND
+---@alias user32.HMODULE winapi.kernel32.ffi.HMODULE
+---@alias wgl.HGLRC winapi.wgl.ffi.HGLRC
+---@alias wgl.HDC winapi.wgl.ffi.HDC
+
 local user32 = require("winapi.user32")
 local kernel32 = require("winapi.kernel32")
 local wgl = require("winapi.wgl")
@@ -14,7 +21,6 @@ Win32Context.__index = Win32Context
 local headlessClassCount = 0
 
 ---Register a window class for a headless OpenGL context.
----@return string, user32.HMODULE
 local function registerHeadlessClass()
 	headlessClassCount = headlessClassCount + 1
 	local className = "Hood_Headless_GL_" .. tostring(headlessClassCount)
@@ -22,10 +28,10 @@ local function registerHeadlessClass()
 	local hInstance = kernel32.getModuleHandle(nil)
 
 	local wc = user32.WndClassEx()
-	wc.style = bit.bor(user32.CS.HREDRAW, user32.CS.VREDRAW)
-	wc.lpfnWndProc = user32.WndProc(user32.defWindowProc)
+	wc.style = assert(tonumber(bit.bor(user32.CS.HREDRAW, user32.CS.VREDRAW)))
+	wc.lpfnWndProc = ffi.cast("void*", user32.defWindowProc)
 	wc.hInstance = hInstance
-	wc.hCursor = user32.loadCursor(nil, user32.IDC.ARROW)
+	wc.hCursor = user32.loadCursor(nil, ffi.cast("const char*", user32.IDC.ARROW))
 	wc.lpszClassName = className
 	wc.hbrBackground = user32.getSysColorBrush(user32.COLOR.WINDOW)
 
@@ -50,7 +56,7 @@ function Win32Context.fromHeadless(sharedCtx)
 		0, 0, 1, 1,   -- x, y, width, height
 		nil,          -- hWndParent
 		nil,          -- hMenu
-		hInstance,    -- hInstance
+		ffi.cast("void*", hInstance), -- hInstance
 		nil           -- lpParam
 	)
 
@@ -63,25 +69,25 @@ function Win32Context.fromHeadless(sharedCtx)
 	local pfDescriptor = gdi.NewPFD()
 	local pf = gdi.choosePixelFormat(hdc, pfDescriptor)
 	if pf == 0 then
-		user32.destroyWindow(hwnd)
+		user32.destroyWindow(ffi.cast("void*", hwnd))
 		error("Failed to choose pixel format: " .. tostring(kernel32.getLastErrorMessage()))
 	end
 
 	if gdi.setPixelFormat(hdc, pf, pfDescriptor) == 0 then
-		user32.destroyWindow(hwnd)
+		user32.destroyWindow(ffi.cast("void*", hwnd))
 		error("Failed to set pixel format: " .. tostring(kernel32.getLastErrorMessage()))
 	end
 
 	local hglrc = wgl.createContext(hdc)
 	if not hglrc then
-		user32.destroyWindow(hwnd)
+		user32.destroyWindow(ffi.cast("void*", hwnd))
 		error("Failed to create OpenGL context: " .. tostring(kernel32.getLastErrorMessage()))
 	end
 
 	if sharedCtx then
 		if not wgl.shareLists(sharedCtx.ctx, hglrc) then
 			wgl.deleteContext(hglrc)
-			user32.destroyWindow(hwnd)
+			user32.destroyWindow(ffi.cast("void*", hwnd))
 			error("Failed to share OpenGL lists: " .. tostring(kernel32.getLastErrorMessage()))
 		end
 	end
@@ -94,7 +100,7 @@ function Win32Context.fromHeadless(sharedCtx)
 	}, Win32Context)
 end
 
----@param window winit.win32.Window
+---@param window winit-win32.Window
 ---@param sharedCtx Win32Context?
 function Win32Context.fromWindow(window, sharedCtx)
 	local hdc = user32.getDC(window.hwnd)
@@ -125,13 +131,13 @@ function Win32Context.fromWindow(window, sharedCtx)
 end
 
 function Win32Context:makeCurrent()
-	if wgl.makeCurrent(self.display, self.ctx) == 0 then
+	if wgl.makeCurrent(self.display --[[@as winapi.wgl.ffi.HDC]], self.ctx) == 0 then
 		error("Failed to make OpenGL context current: " .. tostring(kernel32.getLastErrorMessage()))
 	end
 end
 
 function Win32Context:swapBuffers()
-	gdi.swapBuffers(self.display)
+	gdi.swapBuffers(ffi.cast("void*", self.display))
 end
 
 function Win32Context:setSwapInterval(interval)
@@ -144,7 +150,7 @@ function Win32Context:destroy()
 	wgl.deleteContext(self.ctx)
 
 	if self._hwnd then
-		user32.destroyWindow(self._hwnd)
+		user32.destroyWindow(ffi.cast("void*", self._hwnd))
 		if self._class then
 			user32.unregisterClass(self._class, kernel32.getModuleHandle(nil))
 		end

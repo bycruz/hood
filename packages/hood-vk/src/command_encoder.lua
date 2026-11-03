@@ -1,6 +1,6 @@
 local ffi = require("ffi")
 
-local vk = require("vkapi")
+local vk = require("vkapi") ---@cast vk vk & hood-vk.VkExtras
 local vkConversions = require("hood-vk.convert")
 
 local image = require("hood-vk.image")
@@ -11,14 +11,14 @@ local VKCommandBuffer = require("hood-vk.command_buffer")
 --- Staging starts here and grows to fit, so small uploads do not allocate per write.
 local STAGING_MIN_SIZE = 256 * 1024
 
----@class hood-vk.CommandEncoder
+---@class hood-vk.CommandEncoder: hood.CommandEncoder
 ---@field buffer hood-vk.CommandBuffer
 ---@field device hood-vk.Device
----@field pendingDescriptor any
+---@field pendingDescriptor (hood.RenderPassDescriptor|hood-vk.ReusablePass)?
 ---@field pipeline hood-vk.Pipeline?
 ---@field computePipeline hood-vk.ComputePipeline?
 ---@field bindGroups table<number, hood-vk.BindGroup>
----@field _attachments { texture: hood-vk.Texture, finalLayout: vk.ImageLayout }[] # Where the pass leaves each attachment
+---@field _attachments { texture: hood-vk.Texture, finalLayout: number }[] # Where the pass leaves each attachment
 ---@field bufferCopy vk.ffi.BufferCopy[] scratch for vkCmdCopyBuffer regions
 ---@field memoryBarrier vk.ffi.MemoryBarrier[] scratch for _flushStagedWrites
 ---@field depthBarrier vk.ffi.ImageMemoryBarrier[] scratch for endRendering
@@ -27,7 +27,7 @@ local STAGING_MIN_SIZE = 256 * 1024
 ---@field sampleableDepth hood-vk.Texture?
 ---@field sampleableDepthLayers number?
 ---@field _swapchain hood-vk.Swapchain?
----@field _reusableRpDesc table?
+---@field _reusableRpDesc hood-vk.ReusablePass?
 local VKCommandEncoder = {}
 VKCommandEncoder.__index = VKCommandEncoder
 
@@ -97,13 +97,18 @@ function VKCommandEncoder.new(device, reuseBuffer)
 end
 
 --- Begin a render pass, from a descriptor or from a single texture view and clear colour.
----@overload fun(self, textureView: hood-vk.TextureView, clearColor?: { r: number, g: number, b: number, a: number })
----@overload fun(self, descriptor: hood.RenderPassDescriptor)
+---@overload fun(self: hood-vk.CommandEncoder, textureView: hood-vk.TextureView, clearColor?: { r: number, g: number, b: number, a: number })
+---@overload fun(self: hood-vk.CommandEncoder, descriptor: hood.RenderPassDescriptor)
+---@param self hood-vk.CommandEncoder
+---@param descriptor hood.RenderPassDescriptor
+---@param clearColor { r: number, g: number, b: number, a: number }?
 function VKCommandEncoder:beginRendering(descriptor, clearColor)
-	if descriptor and descriptor.colorAttachments then
+	local fullDescriptor = descriptor --[[@as hood.RenderPassDescriptor]]
+	if fullDescriptor and fullDescriptor.colorAttachments then
 		-- Full descriptor table (backward compatible)
-		self.pendingDescriptor = descriptor
+		self.pendingDescriptor = fullDescriptor
 	else
+		---@cast descriptor hood-vk.TextureView
 		-- The descriptor table is built once and reused, so this path allocates nothing.
 		local d = self._reusableRpDesc
 		if not d then
@@ -130,6 +135,7 @@ function VKCommandEncoder:beginRendering(descriptor, clearColor)
 end
 
 ---@param pipeline hood-vk.Pipeline
+---@param self hood-vk.CommandEncoder
 function VKCommandEncoder:setPipeline(pipeline)
 	if self.pendingDescriptor then
 		self:_beginRenderPass(self.pendingDescriptor)
@@ -140,8 +146,8 @@ function VKCommandEncoder:setPipeline(pipeline)
 	self.device.handle:cmdBindPipeline(self.buffer.handle, vk.PipelineBindPoint.GRAPHICS, pipeline.handle)
 end
 
----@param pipeline hood-vk.Pipeline
----@param descriptor hood.RenderPassDescriptor
+---@param descriptor hood.RenderPassDescriptor|hood-vk.ReusablePass
+---@param self hood-vk.CommandEncoder
 function VKCommandEncoder:_beginRenderPass(descriptor)
 	-- Anything staged earlier has to be visible before the first draw reads it.
 	self:_flushStagedWrites()
@@ -212,13 +218,15 @@ function VKCommandEncoder:_beginRenderPass(descriptor)
 		width, height = width or texture.width, height or texture.height
 	end
 
+	assert(width ~= nil)
+	assert(height ~= nil)
 	local renderPass = pass.define(self.device, colorSpecs, depthSpec)
 	local swapchain = self._swapchain
 
 	local framebuffer
 	if swapchain and swapchain.currentVkImageIdx ~= nil then
 		-- The swapchain keeps its own framebuffers, and its depth view can change per frame.
-		local depthView = depthAttachment and depthAttachment.texture.handle or nil
+		local depthView = depthAttachment and (depthAttachment.texture --[[@as hood-vk.TextureView]]).handle or nil
 		framebuffer = swapchain:getFramebuffer(renderPass, width, height, depthView)
 	else
 		framebuffer = pass.framebuffer(self.device, renderPass, imageViews, handles, width, height)
@@ -277,6 +285,7 @@ do
 	---@param y number
 	---@param width number
 	---@param height number
+---@param self hood-vk.CommandEncoder
 	function VKCommandEncoder:setViewport(x, y, width, height)
 		viewport.x = x
 		viewport.y = y + height
@@ -302,6 +311,7 @@ do
 	---@param slot number
 	---@param buffer hood-vk.Buffer
 	---@param offset number?
+---@param self hood-vk.CommandEncoder
 	function VKCommandEncoder:setVertexBuffer(slot, buffer, offset)
 		buffers[0] = buffer.handle
 		offsets[0] = offset or 0
@@ -321,6 +331,7 @@ end
 ---@param firstIndex number?
 ---@param baseVertex number?
 ---@param firstInstance number?
+---@param self hood-vk.CommandEncoder
 function VKCommandEncoder:drawIndexed(indexCount, instanceCount, firstIndex, baseVertex, firstInstance)
 	self.device.handle:cmdDrawIndexed(self.buffer.handle, indexCount, instanceCount or 1,
 		firstIndex or 0, baseVertex or 0, firstInstance or 0)
@@ -336,8 +347,6 @@ end
 
 local descriptorSetArray = vk.DescriptorSetArray(1)
 
----@param index number
----@param bindGroup hood-vk.BindGroup
 --- Move a freshly created texture's subresources into the layout a descriptor names.
 ---
 --- A descriptor covers the whole view, so every layer has to be in that layout -- including the
@@ -347,6 +356,7 @@ local descriptorSetArray = vk.DescriptorSetArray(1)
 --- legal to record.
 ---@param texture hood-vk.Texture
 ---@return boolean claimed
+---@param self hood-vk.CommandEncoder
 function VKCommandEncoder:claimTexture(texture)
 	-- A depth image is put in the layout a shader reads by the pass that writes it instead.
 	if texture.isDepth then
@@ -364,6 +374,9 @@ function VKCommandEncoder:claimTexture(texture)
 		vk.AccessFlags.SHADER_READ)
 end
 
+---@param index number
+---@param bindGroup hood-vk.BindGroup
+---@param self hood-vk.CommandEncoder
 function VKCommandEncoder:setBindGroup(index, bindGroup)
 	local bindPoint, layout
 	if self.pipeline then
@@ -387,6 +400,7 @@ end
 --- A pass only starts when a pipeline is bound, so an end without one means the frame never
 --- began a pass. Drivers do not validate that: they execute a command buffer whose pass never
 --- started, which is a segfault rather than an error.
+---@param self hood-vk.CommandEncoder
 function VKCommandEncoder:endRendering()
 	if not self.inRenderPass then
 		error("hood: endRendering was called with no open render pass; a pass is "
@@ -419,6 +433,7 @@ end
 --- the matching end is a driver crash rather than a reportable error.
 ---@param beginInfo vk.ffi.RenderPassBeginInfo
 ---@private
+---@param self hood-vk.CommandEncoder
 function VKCommandEncoder:_beginRenderPassRaw(beginInfo)
 	if self.inRenderPass then
 		error("hood: beginRendering was called while a render pass is already open")
@@ -435,6 +450,7 @@ end
 ---
 --- One barrier covers everything staged so far, emitted when the reads are about to start.
 ---@private
+---@param self hood-vk.CommandEncoder
 function VKCommandEncoder:_flushStagedWrites()
 	if not self.stagedWrites then
 		return
@@ -443,13 +459,13 @@ function VKCommandEncoder:_flushStagedWrites()
 
 	local barrier = self.memoryBarrier[0]
 	barrier.srcAccessMask = vk.AccessFlags.TRANSFER_WRITE
-	barrier.dstAccessMask = bit.bor(
+	barrier.dstAccessMask = assert(tonumber(bit.bor(
 		vk.AccessFlags.MEMORY_READ,
 		vk.AccessFlags.INDEX_READ,
 		vk.AccessFlags.VERTEX_ATTRIBUTE_READ,
 		vk.AccessFlags.UNIFORM_READ,
 		vk.AccessFlags.SHADER_READ,
-		vk.AccessFlags.INDIRECT_COMMAND_READ)
+		vk.AccessFlags.INDIRECT_COMMAND_READ)))
 
 	-- Only legal outside a render pass, where the stage masks may name any stage.
 	self.device.handle:cmdPipelineBarrier(self.buffer.handle, vk.PipelineStageFlagBits.TRANSFER,
@@ -469,20 +485,22 @@ end
 ---@param size number
 ---@return hood-vk.Buffer staging
 ---@private
+---@param self hood-vk.CommandEncoder
 function VKCommandEncoder:_staging(size)
 	local staging = self.buffer.stagingBuffer
 
 	if staging then
-		if staging.staging.offset + size <= staging.descriptor.size then
+		if staging.staging ~= nil and staging.staging.offset + size <= staging.descriptor.size then
 			return staging
 		end
 
 		-- Recorded copies still reference it, so it survives until the buffer is recycled.
-		self.buffer.stagingResources = self.buffer.stagingResources or {}
-		table.insert(self.buffer.stagingResources, staging)
+		local resources = self.buffer.stagingResources or {}
+		self.buffer.stagingResources = resources
+		table.insert(resources, staging)
 	end
 
-	local capacity = math.max(STAGING_MIN_SIZE, (staging and staging.staging.offset or 0) + size)
+	local capacity = math.max(STAGING_MIN_SIZE, (staging and staging.staging and staging.staging.offset or 0) + size)
 	staging = VKBuffer.new(self.device, {
 		size = capacity,
 		usages = { "COPY_SRC" },
@@ -503,6 +521,7 @@ end
 ---@param size number
 ---@param data ffi.cdata*
 ---@param offset number?
+---@param self hood-vk.CommandEncoder
 function VKCommandEncoder:writeBuffer(buffer, size, data, offset)
 	offset = offset or 0
 	if size == 0 then
@@ -545,6 +564,7 @@ end
 ---@param offset number
 ---@param drawCount number
 ---@param stride number
+---@param self hood-vk.CommandEncoder
 function VKCommandEncoder:drawIndexedIndirect(buffer, offset, drawCount, stride)
 	self.device.handle:cmdDrawIndexedIndirect(self.buffer.handle, buffer.handle, offset or 0, drawCount, stride)
 end
@@ -579,6 +599,7 @@ end
 ---@param texture hood-vk.Texture
 ---@param descriptor hood.TextureWriteDescriptor
 ---@param data ffi.cdata*
+---@param self hood-vk.CommandEncoder
 function VKCommandEncoder:writeTexture(texture, descriptor, data)
 	local width = descriptor.width
 	local height = descriptor.height
@@ -621,6 +642,7 @@ end
 ---@param source hood.ImageCopyTexture
 ---@param destination hood.ImageCopyBuffer
 ---@param copySize hood.Extent3D
+---@param self hood-vk.CommandEncoder
 function VKCommandEncoder:copyTextureToBuffer(source, destination, copySize)
 	local texture = source.texture --[[@as hood-vk.Texture]]
 	local buffer = destination.buffer --[[@as hood-vk.Buffer]]
@@ -655,6 +677,7 @@ function VKCommandEncoder:copyTextureToBuffer(source, destination, copySize)
 end
 
 ---@param descriptor hood.ComputePassDescriptor
+---@param self hood-vk.CommandEncoder
 function VKCommandEncoder:beginComputePass(descriptor)
 	-- Staged writes have to be visible before the dispatch reads them.
 	self:_flushStagedWrites()
@@ -667,7 +690,9 @@ function VKCommandEncoder:beginComputePass(descriptor)
 end
 
 ---@param pipeline hood-vk.ComputePipeline
+---@param self hood-vk.CommandEncoder
 function VKCommandEncoder:setComputePipeline(pipeline)
+	---@cast pipeline hood-vk.ComputePipeline
 	self.computePipeline = pipeline
 	self.pipeline = nil
 	self.device.handle:cmdBindPipeline(self.buffer.handle, vk.PipelineBindPoint.COMPUTE, pipeline.handle)
@@ -680,6 +705,7 @@ function VKCommandEncoder:dispatchWorkgroups(x, y, z)
 	self.device.handle:cmdDispatch(self.buffer.handle, x, y, z)
 end
 
+---@param self hood-vk.CommandEncoder
 function VKCommandEncoder:endComputePass()
 	-- Back to the layout a render pass samples from, so the same texture can be drawn with.
 	image.eachStorageTexture(self.bindGroups, function(texture)

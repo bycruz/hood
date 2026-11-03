@@ -1,4 +1,4 @@
-local vk = require("vkapi")
+local vk = require("vkapi") ---@cast vk vk & hood-vk.VkExtras
 
 --- Render passes and framebuffers.
 ---
@@ -8,10 +8,10 @@ local vk = require("vkapi")
 local pass = {}
 
 ---@class hood-vk.AttachmentSpec
----@field format number # vk.Format
+---@field format number # number
 ---@field loadOp number # vk.AttachmentLoadOp
----@field initialLayout number # vk.ImageLayout
----@field finalLayout number # vk.ImageLayout
+---@field initialLayout number # number
+---@field finalLayout number # number
 ---@field sampled boolean # Whether the attachment can be sampled, which decides the layout it ends in
 
 --- What makes two render passes interchangeable.

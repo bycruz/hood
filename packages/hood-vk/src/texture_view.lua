@@ -1,13 +1,13 @@
-local vk = require("vkapi")
+local vk = require("vkapi") ---@cast vk vk & hood-vk.VkExtras
 local vkConversions = require("hood-vk.convert")
 
----@class hood-vk.TextureView
+---@class hood-vk.TextureView: hood.TextureView
 ---@field handle vk.ffi.ImageView
 ---@field texture hood-vk.Texture
 ---@field baseArrayLayer integer
 ---@field layerCount integer
----@field private _fromSwapchain boolean
----@field private device hood-vk.Device
+---@field _fromSwapchain boolean
+---@field device hood-vk.Device
 local VKTextureView = {}
 VKTextureView.__index = VKTextureView
 
@@ -15,21 +15,21 @@ VKTextureView.__index = VKTextureView
 ---@param texture hood-vk.Texture
 ---@param descriptor hood.TextureViewDescriptor
 function VKTextureView.new(device, texture, descriptor)
-	local viewType ---@type vk.ImageViewType
+	local viewType ---@type number
 	if descriptor.dimension then
 		viewType = vkConversions.textureViewType[descriptor.dimension]
 	else -- Infer from texture type
 		viewType = texture.viewType
 	end
 
-	local format ---@type vk.Format
+	local format ---@type number
 	if descriptor.format then
 		format = vkConversions.textureFormat[descriptor.format]
 	else -- Infer from texture format
 		format = texture.format
 	end
 
-	local aspect ---@type vk.ImageAspectFlagBits
+	local aspect ---@type number
 	if descriptor.aspect then
 		aspect = vkConversions.textureAspect[descriptor.aspect]
 	else -- Infer from texture format
@@ -70,7 +70,7 @@ end
 ---@param device hood-vk.Device
 ---@param texture hood-vk.Texture
 ---@param handle vk.ffi.ImageView
----@param descriptor hood.TextureViewDescriptor
+---@param descriptor hood.TextureViewDescriptor?
 ---@return hood-vk.TextureView
 function VKTextureView.fromHandle(device, texture, handle, descriptor)
 	return setmetatable({
@@ -83,6 +83,7 @@ function VKTextureView.fromHandle(device, texture, handle, descriptor)
 	}, VKTextureView)
 end
 
+---@param self hood-vk.TextureView
 function VKTextureView:destroy()
 	if self._fromSwapchain then return end
 	self.device.handle:destroyImageView(self.handle)

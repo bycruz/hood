@@ -24,9 +24,12 @@ end)
 
 -- Every component size the layout knows, at one component each.
 test.it("VertexLayout: stride is the component size times the count", function()
+	---@type table<string, number>
 	local expected = { f32 = 4, i32 = 4, u32 = 4, f16 = 2, i16 = 2, u16 = 2, i8 = 1, u8 = 1 }
 
 	for type, size in pairs(expected) do
+		---@cast type string
+		---@cast size number
 		for count = 1, 4 do
 			local layout = core.VertexLayout.new()
 				:withAttribute({ type = type, size = count, offset = 0 })

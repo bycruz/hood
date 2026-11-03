@@ -9,6 +9,7 @@ function GLAdapter.new(config)
 	return setmetatable({ config = config }, GLAdapter)
 end
 
+---@param self hood-gl.Adapter
 function GLAdapter:requestDevice()
 	return GLDevice.new()
 end

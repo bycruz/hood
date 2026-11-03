@@ -1,8 +1,9 @@
-local vk = require("vkapi")
+local vk = require("vkapi") ---@cast vk vk & hood-vk.VkExtras
 
 local VKDevice = require("hood-vk.device")
 
----@class hood-vk.Adapter
+---@class hood-vk.Adapter: hood.Adapter
+---@field headless boolean
 ---@field instance hood-vk.Instance
 ---@field pd vk.ffi.PhysicalDevice
 ---@field gfxQueueFamilyIdx number
@@ -11,6 +12,7 @@ VKAdapter.__index = VKAdapter
 
 ---@param instance hood-vk.Instance
 ---@param physicalDevice vk.ffi.PhysicalDevice
+---@return hood-vk.Adapter
 function VKAdapter.new(instance, physicalDevice)
 	local queueFamilies = vk.getPhysicalDeviceQueueFamilyProperties(physicalDevice)
 
@@ -34,6 +36,8 @@ function VKAdapter.new(instance, physicalDevice)
 	}, VKAdapter)
 end
 
+---@param self hood-vk.Adapter
+---@return hood-vk.Device
 function VKAdapter:requestDevice()
 	return VKDevice.new(self)
 end

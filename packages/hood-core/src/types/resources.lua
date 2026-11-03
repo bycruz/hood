@@ -20,6 +20,7 @@
 ---@field mapped boolean?
 
 ---@class hood.Buffer
+---@field handle number|ffi.cdata*
 ---@field descriptor hood.BufferDescriptor
 --- True when the CPU can write straight into the buffer's memory.
 ---@field isMapped boolean
@@ -79,6 +80,7 @@
 ---@field sampleCount number?
 
 ---@class hood.Texture
+---@field handle number|ffi.cdata*
 ---@field new fun(device: hood.Device, descriptor: hood.TextureDescriptor): hood.Texture
 ---@field destroy fun(self: hood.Texture)
 ---@field createView fun(self: hood.Texture, descriptor: hood.TextureViewDescriptor): hood.TextureView

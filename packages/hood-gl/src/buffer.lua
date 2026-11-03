@@ -1,4 +1,4 @@
-local gl = require("glapi")
+local gl = require("glapi") ---@cast gl gl & hood-gl.GlConstants
 local ffi = require("ffi")
 
 ---@class hood-gl.Buffer
@@ -6,6 +6,7 @@ local ffi = require("ffi")
 ---@field isUniform boolean
 ---@field isStorage boolean
 ---@field descriptor hood.BufferDescriptor
+---@field _mappedPtr ffi.cdata*?
 local GLBuffer = {}
 GLBuffer.__index = GLBuffer
 
@@ -41,6 +42,7 @@ end
 ---@param size number
 ---@param data ffi.cdata*
 ---@param offset number?
+---@param self hood-gl.Buffer
 function GLBuffer:setSlice(size, data, offset)
 	gl.namedBufferSubData(self.id, offset or 0, size, data)
 end
@@ -75,6 +77,7 @@ function GLBuffer:assertWriteFits(size, offset, data)
 end
 
 --- Signal that the CPU will read this back. The caller must still wait for the GPU first.
+---@param self hood-gl.Buffer
 function GLBuffer:mapAsync()
 	gl.finish()
 end
@@ -92,6 +95,7 @@ function GLBuffer:getMappedRange(offset, size)
 	return self._mappedPtr
 end
 
+---@param self hood-gl.Buffer
 function GLBuffer:unmap()
 	if self._mappedPtr then
 		gl.unmapNamedBuffer(self.id)
@@ -104,6 +108,7 @@ function GLBuffer:destroy()
 	gl.deleteBuffers(1, ffi.new("GLuint[1]", self.id))
 end
 
+---@param self hood-gl.Buffer
 function GLBuffer:__tostring()
 	if not gl.isBuffer(self.id) then
 		return "GLBuffer(NULL)"
