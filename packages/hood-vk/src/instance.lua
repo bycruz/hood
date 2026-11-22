@@ -4,6 +4,7 @@ local VKAdapter = require("hood-vk.adapter")
 local VKSurface = require("hood-vk.surface")
 
 local isWindows = jit.os == "Windows"
+local isAndroid = jit.android == true
 
 ---@class hood-vk.Instance: hood.Instance
 ---@field headless boolean
@@ -41,7 +42,9 @@ function VKInstance.new(descriptor)
 		enabledLayerNames = layers,
 		enabledExtensionNames = hasHeadless and {} or {
 			"VK_KHR_surface",
-			isWindows and "VK_KHR_win32_surface" or "VK_KHR_xlib_surface",
+			isAndroid and "VK_KHR_android_surface"
+				or isWindows and "VK_KHR_win32_surface"
+				or "VK_KHR_xlib_surface",
 		}
 	})
 

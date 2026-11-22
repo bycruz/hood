@@ -258,7 +258,7 @@ function VKPipeline.new(device, descriptor)
 		end
 	end
 
-	local pipelines = device.handle:createGraphicsPipelines(0, {
+	local pipelines = device.handle:createGraphicsPipelines(nil, {
 		{
 			stages = {
 				{ stage = vk.ShaderStageFlagBits.VERTEX,   module = vertModule },

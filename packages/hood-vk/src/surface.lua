@@ -4,6 +4,7 @@ local vkConversions = require("hood-vk.convert")
 local VKSwapchain = require("hood-vk.swapchain")
 
 local isWindows = jit.os == "Windows"
+local isAndroid = jit.android == true
 
 ---@class hood-vk.Surface
 ---@field window winit.Window
@@ -16,8 +17,14 @@ VKSurface.__index = VKSurface
 ---@param window winit.Window
 function VKSurface.new(instance, window)
 	local handle ---@type vk.ffi.SurfaceKHR
-	if isWindows then ---@cast window winit-win32.Window
-local kernel32 = require("winapi.kernel32")
+	if isAndroid then ---@cast window winit-android.Window
+		local native = window.nativeWindow
+		if native == nil then
+			error("hood-vk: the Android window has no native surface yet")
+		end
+		handle = instance.handle:createAndroidSurfaceKHR({ window = native })
+	elseif isWindows then ---@cast window winit-win32.Window
+		local kernel32 = require("winapi.kernel32")
 
 		handle = instance.handle:createWin32SurfaceKHR({
 			hinstance = kernel32.getModuleHandle(nil),
@@ -78,6 +85,14 @@ function VKSurface:configure(device, config, oldSwapchain)
 		end
 	end
 
+    if not presentMode then -- Fall back to FIFO as IMMEDIATE is not guaranteed on android
+        for _, mode in ipairs(presentModes) do
+            if mode == vk.PresentModeKHR.FIFO then
+                presentMode = mode
+                break
+            end
+        end
+    end
     if not presentMode then
         error("Requested present mode not supported: " .. tostring(config.presentMode))
     end
