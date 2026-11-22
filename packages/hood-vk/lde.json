@@ -8,7 +8,7 @@
 			"path": "../hood-core"
 		},
 		"vkapi": {
-			"path": "^0.1.3"
+			"version": "^0.1.3"
 		},
 		"winapi": {
 			"version": "^0.1.0"
