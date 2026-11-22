@@ -30,6 +30,7 @@
 ---@class hood.Surface
 ---@field new fun(window: winit.Window): hood.Surface
 ---@field configure fun(self: hood.Surface, device: hood.Device, config: hood.SurfaceConfig, oldSwapchain: hood.Swapchain?): hood.Swapchain? # Nothing where the window has no size to make one for, which is what a minimized one is
+---@field destroy fun(self: hood.Surface) # Lets go of the window's surface; a swapchain made for it is destroyed first
 
 ---@class hood.Swapchain
 ---@field width number

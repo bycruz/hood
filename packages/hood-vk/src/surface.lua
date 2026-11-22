@@ -127,4 +127,10 @@ function VKSurface:configure(device, config, oldSwapchain)
 	return newSwapchain
 end
 
+--- Gives the surface back. Android takes a window's surface away whenever the app goes to the
+--- background, and the one it hands back on return is a new one this has to be made for again.
+function VKSurface:destroy()
+	self.instance.handle:destroySurfaceKHR(self.handle)
+end
+
 return VKSurface

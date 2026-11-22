@@ -29,4 +29,8 @@ function GLSurface:configure(device, config)
 	return GLSwapchain.new(context, self.window.width, self.window.height, self.window)
 end
 
+--- Nothing is held for the window between configures: the context is made from it each time.
+function GLSurface:destroy()
+end
+
 return GLSurface
