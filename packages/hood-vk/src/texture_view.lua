@@ -85,8 +85,14 @@ end
 
 ---@param self hood-vk.TextureView
 function VKTextureView:destroy()
-	if self._fromSwapchain then return end
-	self.device.handle:destroyImageView(self.handle)
+	if self._fromSwapchain or self.destroyed then return end
+	self.destroyed = true
+
+	local device, handle = self.device, self.handle
+
+	self.device.queue:defer(function()
+		device.handle:destroyImageView(handle)
+	end)
 end
 
 return VKTextureView

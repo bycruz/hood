@@ -128,11 +128,18 @@ end
 
 ---@param self hood-vk.Texture
 function VKTexture:destroy()
-	if self.isSwapchain then return end
-	self.device.handle:destroyImage(self.handle)
-	if self.memory then
-		self.device.handle:freeMemory(self.memory)
-	end
+	if self.isSwapchain or self.destroyed then return end
+	self.destroyed = true
+
+	local device, handle, memory = self.device, self.handle, self.memory
+
+	-- A frame that is still drawing with this image must finish before the driver lets it go.
+	self.device.queue:defer(function()
+		device.handle:destroyImage(handle)
+		if memory then
+			device.handle:freeMemory(memory)
+		end
+	end)
 end
 
 ---@param descriptor hood.TextureViewDescriptor?

@@ -32,7 +32,14 @@ end
 
 ---@param self hood-vk.Sampler
 function VKSampler:destroy()
-	self.device.handle:destroySampler(self.handle)
+	if self.destroyed then return end
+	self.destroyed = true
+
+	local device, handle = self.device, self.handle
+
+	self.device.queue:defer(function()
+		device.handle:destroySampler(handle)
+	end)
 end
 
 return VKSampler

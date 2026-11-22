@@ -23,7 +23,10 @@ test.it("buffer: float round-trip via queue:writeBuffer + getMappedRange", funct
 	local src = ffi.new("float[8]", { 1.5, -2.0, 3.14, 0.0, -1.0, 100.0, 0.001, 42.0 })
 	local buf = device:createBuffer({ size = N * ffi.sizeof("float"), usages = { "MAP_READ" } })
 
+	-- A queue write is staged now and executed by the next submission, so waiting idle is what
+	-- makes it the gpu's before it is read back.
 	device.queue:writeBuffer(buf, ffi.sizeof(src), src)
+	device.queue:waitIdle()
 
 	buf:mapAsync()
 	local dst = ffi.cast("float*", buf:getMappedRange())
@@ -41,6 +44,7 @@ test.it("buffer: uint32 round-trip via queue:writeBuffer", function()
 
 	local buf = device:createBuffer({ size = N * ffi.sizeof("uint32_t"), usages = { "MAP_READ" } })
 	device.queue:writeBuffer(buf, ffi.sizeof(src), src)
+	device.queue:waitIdle()
 
 	buf:mapAsync()
 	local dst = ffi.cast("uint32_t*", buf:getMappedRange())
@@ -74,6 +78,7 @@ test.it("buffer: exact-fit write still succeeds", function()
 	local size = N * ffi.sizeof("uint32_t")
 	local buf = device:createBuffer({ size = size, usages = { "MAP_READ" } })
 	device.queue:writeBuffer(buf, size, src)
+	device.queue:waitIdle()
 
 	buf:mapAsync()
 	local dst = ffi.cast("uint32_t*", buf:getMappedRange())
@@ -97,6 +102,33 @@ test.it("buffer: mapped buffer is writable directly by the CPU", function()
 	local dst = ffi.cast("uint32_t*", buf:getMappedRange())
 	test.equal(tonumber(dst[0]), 3)
 	test.equal(tonumber(dst[N - 1]), tonumber(src[N - 1]))
+end)
+
+test.it("buffer: a queue write is executed by the next submit", function()
+	-- The bytes are staged now but the copy is only recorded, so nothing is in the buffer until
+	-- the submission that follows carries the pending writes before its own commands.
+	local N = 16
+	local size = N * ffi.sizeof("uint32_t")
+	local src = ffi.new("uint32_t[?]", N)
+	for i = 0, N - 1 do src[i] = 700 + i end
+
+	local buffer = device:createBuffer({ size = size, usages = { "COPY_SRC", "COPY_DST" } })
+	device.queue:writeBuffer(buffer, size, src)
+
+	local readback = device:createBuffer({ size = size, usages = { "MAP_READ", "COPY_DST" } })
+	local encoder = device:createCommandEncoder()
+	encoder:copyBuffer(buffer, readback, size)
+	device.queue:submit(encoder:finish())
+	device.queue:waitIdle()
+
+	readback:mapAsync()
+	local dst = ffi.cast("uint32_t*", readback:getMappedRange())
+	test.equal(tonumber(dst[0]), 700)
+	test.equal(tonumber(dst[N - 1]), 700 + N - 1)
+	readback:unmap()
+
+	buffer:destroy()
+	readback:destroy()
 end)
 
 test.it("buffer: mapped write is visible to the GPU", function()
@@ -165,6 +197,7 @@ test.it("buffer: upload bigger than the staging buffer still round-trips", funct
 
 	local dst = device:createBuffer({ size = BYTES, usages = { "MAP_READ", "COPY_DST" } })
 	device.queue:writeBuffer(dst, BYTES, src)
+	device.queue:waitIdle()
 
 	dst:mapAsync()
 	local got = ffi.cast("uint32_t*", dst:getMappedRange())
@@ -413,6 +446,43 @@ test.it("texture: destroy does not error", function()
 	})
 	tex:destroy()
 	test.equal(true, true)
+end)
+
+test.it("texture: destroy waits for the submission still reading it", function()
+	-- The frame below copies the texture out; the texture is given back before that submission
+	-- has finished, so its image and memory may only be freed after the queue says so. A driver
+	-- notices a use-after-free here as a lost device rather than an error.
+	local W, H = 4, 4
+	local tex = device:createTexture({
+		extents = { dim = "2d", width = W, height = H },
+		format = "rgba8unorm",
+		usages = { "COPY_DST", "COPY_SRC", "TEXTURE_BINDING" },
+	})
+
+	local src = ffi.new("uint8_t[64]")
+	for i = 0, 63 do src[i] = 255 - i end
+
+	device.queue:writeTexture(tex, { width = W, height = H, bytesPerRow = W * 4 }, src)
+
+	local readback = device:createBuffer({ size = W * H * 4, usages = { "MAP_READ" } })
+	local encoder = device:createCommandEncoder()
+	encoder:copyTextureToBuffer(
+		{ texture = tex },
+		{ buffer = readback, bytesPerRow = W * 4 },
+		{ width = W, height = H }
+	)
+	device.queue:submit(encoder:finish())
+
+	tex:destroy()
+	device.queue:waitIdle()
+
+	readback:mapAsync()
+	local dst = ffi.cast("uint8_t*", readback:getMappedRange())
+	test.equal(tonumber(dst[0]), 255)
+	test.equal(tonumber(dst[63]), 192)
+	readback:unmap()
+
+	readback:destroy()
 end)
 
 -- ─── Sampler ─────────────────────────────────────────────────────────────────

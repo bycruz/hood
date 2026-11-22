@@ -100,13 +100,22 @@ function VKBuffer:mappedPointer(offset)
 end
 
 function VKBuffer:destroy()
+	if self.destroyed then return end
+	self.destroyed = true
+
+	-- Unmapping is the host's, and is safe while the gpu still reads the memory; the buffer and
+	-- the memory behind it wait for the last submission that named it.
 	if self.mappedBase then
 		self.mappedBase = nil
 		self.device.handle:unmapMemory(self.memory)
 	end
 
-	self.device.handle:destroyBuffer(self.handle)
-	self.device.handle:freeMemory(self.memory)
+	local device, handle, memory = self.device, self.handle, self.memory
+
+	self.device.queue:defer(function()
+		device.handle:destroyBuffer(handle)
+		device.handle:freeMemory(memory)
+	end)
 end
 
 ---@param size number bytes to write

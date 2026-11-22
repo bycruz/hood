@@ -75,8 +75,21 @@ end
 --- that made it, once the groups that were made with it are gone.
 ---@param self hood-vk.BindGroup
 function BindGroup:destroy()
-	self.device:freeDescriptorSet(self.set)
+	local set = self.set
+
+	if set == nil then
+		return
+	end
+
 	self.set = nil
+
+	local device = self.device
+
+	-- A command buffer in flight may still name this set: the pool it came from takes it back
+	-- once nothing can be reading it.
+	self.device.queue:defer(function()
+		device:freeDescriptorSet(set)
+	end)
 end
 
 return BindGroup

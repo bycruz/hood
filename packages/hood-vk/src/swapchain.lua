@@ -15,7 +15,7 @@ local VKCommandEncoder = require("hood-vk.command_encoder")
 ---@field currentVkImageIdx integer
 ---@field imageAvailableSemaphores vk.ffi.Semaphore[]
 ---@field renderFinishedSemaphores vk.ffi.Semaphore[]
----@field inFlightFences vk.ffi.Fence[]
+---@field _slotSerial table<number, number> # The submission that last drew into each frame slot
 ---@field currentFrame integer
 ---@field imageFormat number
 ---@field format hood.TextureFormat
@@ -39,11 +39,9 @@ function VKSwapchain.new(device, format, info)
 
 	local imageAvailableSemaphores = {}
 	local renderFinishedSemaphores = {}
-	local inFlightFences = {}
 	for i = 1, #images do
 		imageAvailableSemaphores[i] = device.handle:createSemaphore({})
 		renderFinishedSemaphores[i] = device.handle:createSemaphore({})
-		inFlightFences[i] = device.handle:createFence({ flags = vk.FenceCreateFlagBits.SIGNALED })
 	end
 
 	-- One per swapchain image, so a frame does not allocate a command buffer.
@@ -77,9 +75,9 @@ function VKSwapchain.new(device, format, info)
 		handle = handle,
 		imageAvailableSemaphores = imageAvailableSemaphores,
 		renderFinishedSemaphores = renderFinishedSemaphores,
-		inFlightFences = inFlightFences,
 		commandBuffers = commandBuffers,
 		currentFrame = 1,
+		_slotSerial = {},
 		_framebufferCache = framebufferCache,
 		_retiredFramebuffers = {},
 		imageFormat = info.imageFormat,
@@ -88,8 +86,6 @@ function VKSwapchain.new(device, format, info)
 		height = info.imageExtent.height,
 	}, VKSwapchain)
 end
-
-local fenceArray = vk.FenceArray(1)
 
 -- How long an acquire waits for an image, in nanoseconds.
 --
@@ -122,11 +118,9 @@ function VKSwapchain:getCurrentTexture()
 		return nil
 	end
 
-	local fence = self.inFlightFences[self.currentFrame]
-	fenceArray[0] = fence
-
-	-- Wait for this frame's previous work to complete before reusing its semaphores
-	self.device.handle:waitForFences(1, fenceArray, true, math.huge)
+	-- Wait for the submission that last drew into this image slot before handing it out again:
+	-- the slot's semaphores and its image are free only once that submission has finished.
+	self.device.queue:waitSerial(self._slotSerial[self.currentFrame] or 0)
 
 	local sem = self.imageAvailableSemaphores[self.currentFrame]
 	local result, currentVkImageIdx = self.device.handle:acquireNextImageKHR(self.handle, ACQUIRE_TIMEOUT, sem)
@@ -139,9 +133,6 @@ function VKSwapchain:getCurrentTexture()
 
 	-- SUBOPTIMAL_KHR hands back a usable image, and compositors report it routinely: treating
 	-- it as a failure freezes the app.
-
-	-- An image is held now, so this frame is committed to being submitted.
-	self.device.handle:resetFences(1, fenceArray)
 
 	local imageHandle = self.images[currentVkImageIdx + 1]
 
@@ -218,11 +209,12 @@ end
 
 ---@param self hood-vk.Swapchain
 function VKSwapchain:_destroySyncObjects()
-	self.device.handle:queueWaitIdle(self.device.queue.handle)
+	-- Everything this swapchain's frames were drawn with is done before its semaphores go, which
+	-- also drains the queue's pending writes and deferred destructions.
+	self.device.queue:waitIdle()
 	for i = 1, #self.images do
 		self.device.handle:destroySemaphore(self.imageAvailableSemaphores[i])
 		self.device.handle:destroySemaphore(self.renderFinishedSemaphores[i])
-		self.device.handle:destroyFence(self.inFlightFences[i])
 	end
 end
 

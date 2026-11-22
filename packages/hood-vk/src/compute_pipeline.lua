@@ -46,8 +46,15 @@ end
 
 ---@param self hood-vk.ComputePipeline
 function VKComputePipeline:destroy()
-	self.device.handle:destroyPipeline(self.handle)
-	self.device.handle:destroyPipelineLayout(self.layout)
+	if self.destroyed then return end
+	self.destroyed = true
+
+	local device, handle, layout = self.device, self.handle, self.layout
+
+	self.device.queue:defer(function()
+		device.handle:destroyPipeline(handle)
+		device.handle:destroyPipelineLayout(layout)
+	end)
 end
 
 return VKComputePipeline

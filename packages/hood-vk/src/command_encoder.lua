@@ -88,6 +88,7 @@ function VKCommandEncoder.new(device, reuseBuffer)
 		depthBarrier = vk.ImageMemoryBarrierArray(1),
 		inRenderPass = false,
 		stagedWrites = false,
+		readsOrdered = false,
 		sampleableDepth = nil,
 		sampleableDepthLayers = nil,
 		_swapchain = nil,
@@ -535,6 +536,20 @@ function VKCommandEncoder:writeBuffer(buffer, size, data, offset)
 		return
 	end
 
+	-- A buffer that already holds data may still be read by a submission before this one -- the
+	-- frame in flight that drew with it -- and a copy has no dependency on that read: a
+	-- write-after-read hazard. Previously submitted work is in the first scope of a barrier, so
+	-- one execution dependency per command buffer, from every stage that reads a buffer to the
+	-- copies, orders them all. No memory barrier is needed: a read leaves nothing to make visible.
+	if not self.readsOrdered then
+		self.readsOrdered = true
+		self.device.handle.v1_0.vkCmdPipelineBarrier(self.buffer.handle,
+			bit.bor(vk.PipelineStageFlagBits.DRAW_INDIRECT, vk.PipelineStageFlagBits.VERTEX_INPUT,
+				vk.PipelineStageFlagBits.VERTEX_SHADER, vk.PipelineStageFlagBits.FRAGMENT_SHADER,
+				vk.PipelineStageFlagBits.COMPUTE_SHADER),
+			vk.PipelineStageFlagBits.TRANSFER, 0, 0, nil, 0, nil, 0, nil)
+	end
+
 	local staging = self:_staging(size)
 	local stagingOffset = staging.staging.offset
 
@@ -719,6 +734,11 @@ function VKCommandEncoder:finish()
 	if self.inRenderPass then
 		error("hood: finish() was called with a render pass still open; endRendering() first")
 	end
+
+	-- A buffer written outside a pass -- a queue's pending writes, which nothing draws from in
+	-- the same command buffer -- has no later draw to make its write visible before the buffer
+	-- is read by another submission: the barrier goes here instead.
+	self:_flushStagedWrites()
 
 	self.device.handle:endCommandBuffer(self.buffer.handle)
 	self.buffer._swapchain = self._swapchain
