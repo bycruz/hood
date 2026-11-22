@@ -1,4 +1,5 @@
 local vk = require("vkapi") ---@cast vk vk & hood-vk.VkExtras
+local bit = require("bit")
 local vkConversions = require("hood-vk.convert")
 
 local VKSwapchain = require("hood-vk.swapchain")
@@ -97,6 +98,16 @@ function VKSurface:configure(device, config, oldSwapchain)
         error("Requested present mode not supported: " .. tostring(config.presentMode))
     end
 
+    -- What the compositor turns the frame by: the surface's current transform. `preTransform`
+    -- tells the presentation engine whether the app has already made that turn. A screen here is
+    -- laid out in the orientation the pixels are in, so the app has not: asking for IDENTITY makes
+    -- the compositor turn it, and the frame is upright on a phone held sideways. The turn is only
+    -- avoided where IDENTITY is not one of the transforms the surface supports.
+    local preTransform = vk.SurfaceTransformFlagBitsKHR.IDENTITY
+    if bit.band(caps.supportedTransforms, preTransform) == 0 then
+    	preTransform = caps.currentTransform
+    end
+
     local swapchainInfo = vk.SwapchainCreateInfoKHR({
     	surface = self.handle,
 		minImageCount = imageCount,
@@ -106,7 +117,7 @@ function VKSurface:configure(device, config, oldSwapchain)
 		imageArrayLayers = 1,
 		imageUsage = vk.ImageUsageFlagBits.COLOR_ATTACHMENT,
 		imageSharingMode = vk.SharingMode.EXCLUSIVE,
-		preTransform = caps.currentTransform,
+		preTransform = preTransform,
 		compositeAlpha = vk.CompositeAlphaFlagBitsKHR.OPAQUE,
 		presentMode = presentMode,
 		clipped = 1,
