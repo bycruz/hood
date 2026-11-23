@@ -64,6 +64,13 @@ function VKSurface:configure(device, config, oldSwapchain)
 	if extent.width == 0xFFFFFFFF then
 		extent.width = self.window.width
 		extent.height = self.window.height
+	elseif isAndroid and self.window.width > 0 and self.window.height > 0 then
+		-- Android reports a rotated window's new size here a resize late: the extent it hands back
+		-- while the window is turning is the size it had before, and a swapchain made at that is a
+		-- frame the compositor squeezes into the new shape. The window's own size is current, and
+		-- Android scales whatever extent a swapchain is made at, within the limits it reports.
+		extent.width = math.max(caps.minImageExtent.width, math.min(caps.maxImageExtent.width, self.window.width))
+		extent.height = math.max(caps.minImageExtent.height, math.min(caps.maxImageExtent.height, self.window.height))
 	end
 
 	-- A minimized or dragged window has no size to make a swapchain for, and one made for a
