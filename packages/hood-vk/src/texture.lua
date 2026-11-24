@@ -6,6 +6,19 @@ local memory = require("hood-vk.memory")
 
 local VKTextureView = require("hood-vk.texture_view")
 
+--- Free an image and, when it has memory of its own, that memory: what a destruction defers.
+--- A swapchain image has no memory of its own, and leaves with its swapchain.
+---@param device hood-vk.Device
+---@param handle vk.ffi.Image
+---@param deviceMemory vk.ffi.DeviceMemory?
+local function freeTexture(device, handle, deviceMemory)
+	device.handle:destroyImage(handle)
+
+	if deviceMemory ~= nil then
+		device.handle:freeMemory(deviceMemory)
+	end
+end
+
 ---@class hood-vk.Texture: hood.Texture
 ---@field handle vk.ffi.Image
 ---@field memory vk.ffi.DeviceMemory?
@@ -134,12 +147,7 @@ function VKTexture:destroy()
 	local device, handle, memory = self.device, self.handle, self.memory
 
 	-- A frame that is still drawing with this image must finish before the driver lets it go.
-	self.device.queue:defer(function()
-		device.handle:destroyImage(handle)
-		if memory then
-			device.handle:freeMemory(memory)
-		end
-	end)
+	self.device.queue:defer(freeTexture, device, handle, memory)
 end
 
 ---@param descriptor hood.TextureViewDescriptor?

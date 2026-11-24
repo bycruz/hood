@@ -6,6 +6,7 @@ local glConversions = {}
 ---@type table<hood.TextureFormat, number>
 glConversions.internalTextureFormat = {
 	["rgba8unorm"] = gl.InternalFormat.Rgba8,
+	["r8unorm"] = gl.InternalFormat.R8,
 	["depth24plus"] = gl.InternalFormat.DepthComponent24,
 }
 
@@ -13,12 +14,14 @@ glConversions.internalTextureFormat = {
 ---@type table<hood.TextureFormat, number>
 glConversions.textureFormat = {
 	["rgba8unorm"] = gl.PixelFormat.Rgba,
+	["r8unorm"] = gl.PixelFormat.Red,
 }
 
---- Gets texture type of format
+--- Gets texture type by format
 ---@type table<hood.TextureFormat, number>
 glConversions.textureType = {
 	["rgba8unorm"] = gl.DataType.UnsignedByte,
+	["r8unorm"] = gl.DataType.UnsignedByte,
 }
 
 ---@type table<hood.IndexFormat, number>

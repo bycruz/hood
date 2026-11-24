@@ -86,10 +86,9 @@ function BindGroup:destroy()
 	local device = self.device
 
 	-- A command buffer in flight may still name this set: the pool it came from takes it back
-	-- once nothing can be reading it.
-	self.device.queue:defer(function()
-		device:freeDescriptorSet(set)
-	end)
+	-- once nothing can be reading it. The device frees it, so what is deferred is its method and
+	-- the set, not a closure over both.
+	self.device.queue:defer(device.freeDescriptorSet, device, set)
 end
 
 return BindGroup

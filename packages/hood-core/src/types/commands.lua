@@ -22,6 +22,7 @@
 ---@field layer number?
 ---@field offset number?
 ---@field bytesPerRow number?
+---@field rowLength number? # How many texels a row is, where a texel is not four bytes
 ---@field rowsPerImage number?
 
 ---@class hood.RenderPassDescriptor

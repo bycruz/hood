@@ -18,7 +18,31 @@ local STAGING_MIN_SIZE = 256 * 1024
 ---@field pipeline hood-vk.Pipeline?
 ---@field computePipeline hood-vk.ComputePipeline?
 ---@field bindGroups table<number, hood-vk.BindGroup>
----@field _attachments { texture: hood-vk.Texture, finalLayout: number }[] # Where the pass leaves each attachment
+---@field _attachmentTextures hood-vk.Texture[] # The pass's attachments, in pass order, reused
+---@field _attachmentLayouts number[] # The layout each is left in
+---@field _attachmentCount number
+---@field _colorSpecs hood-vk.AttachmentSpec[] # The specs the pass is described by, reused
+---@field _colorSpecCount number
+---@field _depthSpec hood-vk.AttachmentSpec? # The depth spec, reused
+---@field _handles vk.ffi.Image[] # The images a framebuffer is keyed by, reused
+---@field _handleCount number
+---@field _imageViews vk.ffi.ImageView[]? # One per attachment, grown to fit
+---@field _imageViewCapacity number
+---@field _clearValues vk.ffi.ClearValue[]? # For a pass with more than two attachments
+---@field _clearValueCapacity number
+---@field _renderPass vk.ffi.RenderPass? # The pass this encoder drew with last frame
+---@field _passColorCount number
+---@field _passFormats number[]
+---@field _passSampled boolean[]
+---@field _passHasDepth boolean
+---@field _passDepthFormat number?
+---@field _passDepthSampled boolean?
+---@field _framebuffer vk.ffi.Framebuffer?
+---@field _framebufferPass vk.ffi.RenderPass?
+---@field _framebufferWidth number
+---@field _framebufferHeight number
+---@field _framebufferHandleCount number
+---@field _framebufferHandles vk.ffi.Image[] # The images the cached framebuffer was made from
 ---@field bufferCopy vk.ffi.BufferCopy[] scratch for vkCmdCopyBuffer regions
 ---@field memoryBarrier vk.ffi.MemoryBarrier[] scratch for _flushStagedWrites
 ---@field depthBarrier vk.ffi.ImageMemoryBarrier[] scratch for endRendering
@@ -36,10 +60,30 @@ local beginInfo = vk.CommandBufferBeginInfo({})
 -- Reused across frames: allocating these per frame is FFI churn on the hot path.
 local _reusableClearValues = vk.ClearValueArray(1)
 local _reusableBeginInfo = vk.RenderPassBeginInfo()
-local _reusableImageViews = ffi.new("VkImageView[1]")
 
 -- The colour + depth case, which is what a depth-tested pass uses.
 local _reusableClearValues2 = vk.ClearValueArray(2)
+
+-- A pass with no colour attachments has nothing to describe.
+local _noAttachments = {}
+
+-- A copy region, one at a time: a readback or an upload is described by it for the length of
+-- one call, and a readback happens every frame a screen with no window is drawn.
+local _reusableImageCopy = vk.BufferImageCopyArray(1)
+local _noOrigin = {}
+
+-- Where a compute pass leaves the images it writes, and where the pass after it reads them.
+-- Functions rather than closures so a dispatch that binds storage textures makes nothing.
+local function _toComputeLayout(encoder, texture)
+	image.transition(encoder.device, encoder.buffer.handle, texture,
+		vk.ImageLayout.GENERAL, vk.PipelineStageFlagBits.COMPUTE_SHADER, vk.AccessFlags.SHADER_WRITE)
+end
+
+local function _toSampleableLayout(encoder, texture)
+	image.transition(encoder.device, encoder.buffer.handle, texture,
+		vk.ImageLayout.SHADER_READ_ONLY_OPTIMAL, vk.PipelineStageFlagBits.FRAGMENT_SHADER,
+		vk.AccessFlags.SHADER_READ)
+end
 
 ---@param device hood-vk.Device
 ---@param reuseBuffer hood-vk.CommandBuffer? reset and reused rather than allocating a new one
@@ -64,16 +108,22 @@ function VKCommandEncoder.new(device, reuseBuffer)
 		encoder._swapchain = nil
 		encoder.sampleableDepth = nil
 		encoder.sampleableDepthLayers = nil
+		encoder.stagedWrites = false
+		encoder.readsOrdered = false
 
 		-- Only compute passes consult bind groups, and only a pass that wrote an attachment
-		-- records one, so emptying them here costs nothing on the render-only path.
-		if next(encoder.bindGroups) ~= nil then
-			encoder.bindGroups = {}
+		-- records one, so emptying them here costs nothing on the render-only path. They are
+		-- cleared in place because a frame that binds a group would otherwise make a table a
+		-- frame for the collector.
+		local bindGroups = encoder.bindGroups
+		local key = next(bindGroups)
+		while key ~= nil do
+			local following = next(bindGroups, key)
+			bindGroups[key] = nil
+			key = following
 		end
 
-		if #encoder._attachments ~= 0 then
-			encoder._attachments = {}
-		end
+		encoder._attachmentCount = 0
 
 		return encoder
 	end
@@ -82,7 +132,21 @@ function VKCommandEncoder.new(device, reuseBuffer)
 		device = device,
 		buffer = buffer,
 		bindGroups = {},
-		_attachments = {},
+		_attachmentTextures = {},
+		_attachmentLayouts = {},
+		_attachmentCount = 0,
+		_colorSpecs = {},
+		_colorSpecCount = 0,
+		_handles = {},
+		_handleCount = 0,
+		_imageViewCapacity = 0,
+		_clearValueCapacity = 0,
+		_passColorCount = 0,
+		_passFormats = {},
+		_passSampled = {},
+		_passHasDepth = false,
+		_framebufferHandleCount = 0,
+		_framebufferHandles = {},
 		bufferCopy = vk.BufferCopyArray(1),
 		memoryBarrier = vk.MemoryBarrierArray(1),
 		depthBarrier = vk.ImageMemoryBarrierArray(1),
@@ -153,46 +217,78 @@ function VKCommandEncoder:_beginRenderPass(descriptor)
 	-- Anything staged earlier has to be visible before the first draw reads it.
 	self:_flushStagedWrites()
 
-	local colorAttachments = descriptor.colorAttachments or {}
+	local colorAttachments = descriptor.colorAttachments or _noAttachments
 	local depthAttachment = descriptor.depthStencilAttachment
-	local totalAttachments = #colorAttachments + (depthAttachment and 1 or 0)
+	local colorCount = #colorAttachments
+	local totalAttachments = colorCount + (depthAttachment and 1 or 0)
 
-	-- This only describes the attachments; pass.define finds or creates the pass.
-	local colorSpecs = {}
-	local depthSpec = nil
-	local imageViews = totalAttachments == 1 and _reusableImageViews
-		or ffi.new("VkImageView[?]", totalAttachments)
-	local handles = {}
+	local imageViews = self._imageViews
+	if imageViews == nil or self._imageViewCapacity < totalAttachments then
+		imageViews = ffi.new("VkImageView[?]", totalAttachments)
+		self._imageViews = imageViews
+		self._imageViewCapacity = totalAttachments
+	end
+
+	local specs = self._colorSpecs
+	local formats = self._passFormats
+	local sampledFlags = self._passSampled
+	local handles = self._handles
+	local attachmentTextures = self._attachmentTextures
+	local attachmentLayouts = self._attachmentLayouts
+	local attachmentCount = 0
+
+	-- A pass is identified by its attachments' formats and whether each is sampled, which is
+	-- what the cache in pass.define is keyed by: when they are the ones this encoder drew with
+	-- last frame, the pass is the one it already has and nothing has to be described again.
+	local samePass = self._renderPass ~= nil and self._passColorCount == colorCount
 	local width, height = nil, nil
 
-	for i = 1, #colorAttachments do
+	for i = 1, colorCount do
 		local att = colorAttachments[i]
 		local view = att.texture --[[@as hood-vk.TextureView]]
 		local texture = view.texture
 		local isSwapchain = texture.isSwapchain == true
 		local initialLayout, finalLayout = image.passLayouts(view, isSwapchain, att.op)
+		local sampled = finalLayout == vk.ImageLayout.SHADER_READ_ONLY_OPTIMAL
 
 		if isSwapchain then
 			self._swapchain = texture.swapchain
 		end
 		imageViews[i - 1] = view.handle
 
-		colorSpecs[i] = {
-			format = texture.format,
-			loadOp = att.op.type == "clear" and vk.AttachmentLoadOp.CLEAR or vk.AttachmentLoadOp.LOAD,
-			initialLayout = initialLayout,
-			finalLayout = finalLayout,
-			sampled = finalLayout == vk.ImageLayout.SHADER_READ_ONLY_OPTIMAL,
-		}
+		local spec = specs[i]
+		if spec == nil then
+			spec = {}
+			specs[i] = spec
+		end
+		spec.format = texture.format
+		spec.loadOp = att.op.type == "clear" and vk.AttachmentLoadOp.CLEAR or vk.AttachmentLoadOp.LOAD
+		spec.initialLayout = initialLayout
+		spec.finalLayout = finalLayout
+		spec.sampled = sampled
+
+		if samePass and (formats[i] ~= spec.format or sampledFlags[i] ~= sampled) then
+			samePass = false
+		end
 
 		-- A swapchain image is identified by its index, not its handle: the swapchain turns
 		-- them over.
 		handles[i] = isSwapchain and (texture.swapchainImageIdx or 0) or texture.handle
 
-		self._attachments[#self._attachments + 1] = { texture = texture, finalLayout = finalLayout }
+		attachmentCount = attachmentCount + 1
+		attachmentTextures[attachmentCount] = texture
+		attachmentLayouts[attachmentCount] = finalLayout
+
 		width, height = texture.width, texture.height
 	end
 
+	-- The specs of attachments this frame does not have would otherwise be described again.
+	for i = colorCount + 1, self._colorSpecCount do
+		specs[i] = nil
+	end
+	self._colorSpecCount = colorCount
+
+	local depthFormat, depthSampled
 	if depthAttachment then
 		local view = depthAttachment.texture --[[@as hood-vk.TextureView]]
 		local texture = view.texture
@@ -201,36 +297,77 @@ function VKCommandEncoder:_beginRenderPass(descriptor)
 		imageViews[totalAttachments - 1] = view.handle
 		handles[totalAttachments] = texture.handle
 
-		depthSpec = {
-			format = texture.format,
-			loadOp = depthAttachment.op.type == "clear" and vk.AttachmentLoadOp.CLEAR or vk.AttachmentLoadOp.LOAD,
-			initialLayout = initialLayout,
-			finalLayout = finalLayout,
-			sampled = finalLayout == vk.ImageLayout.SHADER_READ_ONLY_OPTIMAL,
-		}
+		local spec = self._depthSpec
+		if spec == nil then
+			spec = {}
+			self._depthSpec = spec
+		end
+		spec.format = texture.format
+		spec.loadOp = depthAttachment.op.type == "clear" and vk.AttachmentLoadOp.CLEAR or vk.AttachmentLoadOp.LOAD
+		spec.initialLayout = initialLayout
+		spec.finalLayout = finalLayout
+
+		depthFormat = spec.format
+		depthSampled = finalLayout == vk.ImageLayout.SHADER_READ_ONLY_OPTIMAL
+		spec.sampled = depthSampled
+
+		if samePass and (not self._passHasDepth or self._passDepthFormat ~= depthFormat
+			or self._passDepthSampled ~= depthSampled) then
+			samePass = false
+		end
 
 		-- This one's writes are made visible after the pass; see endRendering.
-		if finalLayout == vk.ImageLayout.SHADER_READ_ONLY_OPTIMAL then
+		if depthSampled then
 			self.sampleableDepth = texture
 			self.sampleableDepthLayers = view.layerCount
 		end
 
-		self._attachments[#self._attachments + 1] = { texture = texture, finalLayout = finalLayout }
+		attachmentCount = attachmentCount + 1
+		attachmentTextures[attachmentCount] = texture
+		attachmentLayouts[attachmentCount] = finalLayout
 		width, height = width or texture.width, height or texture.height
+	elseif samePass and self._passHasDepth then
+		samePass = false
 	end
 
 	assert(width ~= nil)
 	assert(height ~= nil)
-	local renderPass = pass.define(self.device, colorSpecs, depthSpec)
-	local swapchain = self._swapchain
 
+	-- A pass with fewer attachments must not keep the ones the last frame had.
+	for i = totalAttachments + 1, self._handleCount do
+		handles[i] = nil
+	end
+	self._handleCount = totalAttachments
+
+	local renderPass
+	if samePass then
+		renderPass = self._renderPass --[[@as vk.ffi.RenderPass]]
+	else
+		renderPass = pass.define(self.device, specs, depthAttachment and self._depthSpec or nil)
+		self._renderPass = renderPass
+
+		for i = 1, colorCount do
+			formats[i] = specs[i].format
+			sampledFlags[i] = specs[i].sampled
+		end
+		for i = colorCount + 1, self._passColorCount do
+			formats[i] = nil
+			sampledFlags[i] = nil
+		end
+		self._passColorCount = colorCount
+		self._passHasDepth = depthAttachment ~= nil
+		self._passDepthFormat = depthFormat
+		self._passDepthSampled = depthSampled
+	end
+
+	local swapchain = self._swapchain
 	local framebuffer
 	if swapchain and swapchain.currentVkImageIdx ~= nil then
 		-- The swapchain keeps its own framebuffers, and its depth view can change per frame.
 		local depthView = depthAttachment and (depthAttachment.texture --[[@as hood-vk.TextureView]]).handle or nil
 		framebuffer = swapchain:getFramebuffer(renderPass, width, height, depthView)
 	else
-		framebuffer = pass.framebuffer(self.device, renderPass, imageViews, handles, width, height)
+		framebuffer = self:_framebufferFor(renderPass, imageViews, handles, totalAttachments, width, height)
 	end
 
 	local clearValues
@@ -239,10 +376,14 @@ function VKCommandEncoder:_beginRenderPass(descriptor)
 	elseif totalAttachments == 2 then
 		clearValues = _reusableClearValues2
 	else
-		clearValues = vk.ClearValueArray(totalAttachments)
+		if self._clearValueCapacity < totalAttachments then
+			self._clearValues = vk.ClearValueArray(totalAttachments)
+			self._clearValueCapacity = totalAttachments
+		end
+		clearValues = self._clearValues --[[@as vk.ffi.ClearValue[] ]]
 	end
 
-	for i = 1, #colorAttachments do
+	for i = 1, colorCount do
 		local att = colorAttachments[i]
 		if att.op.type == "clear" then
 			local c = att.op.color
@@ -271,11 +412,72 @@ function VKCommandEncoder:_beginRenderPass(descriptor)
 	beginInfo.pClearValues = clearValues
 
 	-- The pass is recorded now, so every attachment is where the pass leaves it.
-	for _, attachment in ipairs(self._attachments) do
-		attachment.texture.layout = attachment.finalLayout
+	for i = attachmentCount + 1, self._attachmentCount do
+		attachmentTextures[i] = nil
+		attachmentLayouts[i] = nil
+	end
+	self._attachmentCount = attachmentCount
+
+	for i = 1, attachmentCount do
+		attachmentTextures[i].layout = attachmentLayouts[i]
 	end
 
 	self:_beginRenderPassRaw(beginInfo)
+end
+
+--- The framebuffer for a pass and images this encoder drew with last frame, or the one the
+--- device's cache makes for them.
+---
+--- The images, the pass and the size are what a framebuffer is determined by, so comparing them
+--- to the last frame's is what tells a frame that renders into the same place from one that does
+--- not: a screen with no window is drawn into the same capture every frame, so it is the common
+--- case and the key string pass.framebuffer would build is not made at all.
+---@param renderPass vk.ffi.RenderPass
+---@param imageViews vk.ffi.ImageView[]
+---@param handles vk.ffi.Image[]
+---@param count number
+---@param width number
+---@param height number
+---@return vk.ffi.Framebuffer
+---@param self hood-vk.CommandEncoder
+function VKCommandEncoder:_framebufferFor(renderPass, imageViews, handles, count, width, height)
+	local same = self._framebuffer ~= nil
+		and self._framebufferPass == renderPass
+		and self._framebufferWidth == width
+		and self._framebufferHeight == height
+		and self._framebufferHandleCount == count
+
+	if same then
+		local cached = self._framebufferHandles
+		for i = 1, count do
+			if cached[i] ~= handles[i] then
+				same = false
+				break
+			end
+		end
+	end
+
+	if same then
+		return self._framebuffer
+	end
+
+	local framebuffer = pass.framebuffer(self.device, renderPass, imageViews, handles, width, height)
+
+	self._framebuffer = framebuffer
+	self._framebufferPass = renderPass
+	self._framebufferWidth = width
+	self._framebufferHeight = height
+
+	local cached = self._framebufferHandles
+	for i = 1, count do
+		cached[i] = handles[i]
+	end
+	for i = count + 1, self._framebufferHandleCount do
+		cached[i] = nil
+	end
+	self._framebufferHandleCount = count
+
+	return framebuffer
 end
 
 do
@@ -386,11 +588,13 @@ function VKCommandEncoder:setBindGroup(index, bindGroup)
 	elseif self.computePipeline then
 		bindPoint = vk.PipelineBindPoint.COMPUTE
 		layout = self.computePipeline.layout
+		-- Only a compute pass moves the images it binds, and what it bound is what it moves
+		-- back afterwards: a frame drawing with a group does not keep it.
+		self.bindGroups[index] = bindGroup
 	else
 		error("No pipeline set")
 	end
 
-	self.bindGroups[index] = bindGroup
 	descriptorSetArray[0] = bindGroup.set
 
 	self.device.handle:cmdBindDescriptorSets(self.buffer.handle, bindPoint, layout, index, 1, descriptorSetArray, 0)
@@ -635,14 +839,22 @@ function VKCommandEncoder:writeTexture(texture, descriptor, data)
 		vk.ImageLayout.TRANSFER_DST_OPTIMAL, vk.PipelineStageFlagBits.TRANSFER, vk.AccessFlags.TRANSFER_WRITE)
 
 	-- Points at this upload's slice of staging, not the start of it.
-	local region = vk.BufferImageCopyArray(1)
+	local region = _reusableImageCopy
 	region[0].bufferOffset = stagingOffset
-	region[0].bufferRowLength = descriptor.bytesPerRow and (descriptor.bytesPerRow / 4) or 0
+	-- A row length is counted in texels, and a texel is not four bytes for a picture of coverage:
+	-- what one is named in is asked for where the caller knows the format, and four byte texels
+	-- are what a caller that only gives a stride is copying.
+	region[0].bufferRowLength = descriptor.rowLength
+		or (descriptor.bytesPerRow and (descriptor.bytesPerRow / 4)) or 0
 	region[0].bufferImageHeight = descriptor.rowsPerImage or 0
 	region[0].imageSubresource.aspectMask = vk.ImageAspectFlagBits.COLOR
 	region[0].imageSubresource.mipLevel = mip
 	region[0].imageSubresource.baseArrayLayer = layer
 	region[0].imageSubresource.layerCount = 1
+	-- Written too: the struct is shared with the readback, which moves its origin.
+	region[0].imageOffset.x = 0
+	region[0].imageOffset.y = 0
+	region[0].imageOffset.z = 0
 	region[0].imageExtent.width = width
 	region[0].imageExtent.height = height
 	region[0].imageExtent.depth = depth
@@ -662,13 +874,13 @@ function VKCommandEncoder:copyTextureToBuffer(source, destination, copySize)
 	local texture = source.texture --[[@as hood-vk.Texture]]
 	local buffer = destination.buffer --[[@as hood-vk.Buffer]]
 	local mipLevel = source.mipLevel or 0
-	local origin = source.origin or {}
+	local origin = source.origin or _noOrigin
 	local layer = origin.z or 0
 
 	image.transition(self.device, self.buffer.handle, texture,
 		vk.ImageLayout.TRANSFER_SRC_OPTIMAL, vk.PipelineStageFlagBits.TRANSFER, vk.AccessFlags.TRANSFER_READ)
 
-	local region = vk.BufferImageCopyArray(1)
+	local region = _reusableImageCopy
 	region[0].bufferOffset = destination.offset or 0
 	region[0].bufferRowLength = destination.bytesPerRow and (destination.bytesPerRow / 4) or 0
 	region[0].bufferImageHeight = destination.rowsPerImage or 0
@@ -698,10 +910,7 @@ function VKCommandEncoder:beginComputePass(descriptor)
 	self:_flushStagedWrites()
 
 	-- A descriptor names one layout for the whole view, and a storage image needs GENERAL.
-	image.eachStorageTexture(self.bindGroups, function(texture)
-		image.transition(self.device, self.buffer.handle, texture,
-			vk.ImageLayout.GENERAL, vk.PipelineStageFlagBits.COMPUTE_SHADER, vk.AccessFlags.SHADER_WRITE)
-	end)
+	image.eachStorageTexture(self.bindGroups, _toComputeLayout, self)
 end
 
 ---@param pipeline hood-vk.ComputePipeline
@@ -723,11 +932,7 @@ end
 ---@param self hood-vk.CommandEncoder
 function VKCommandEncoder:endComputePass()
 	-- Back to the layout a render pass samples from, so the same texture can be drawn with.
-	image.eachStorageTexture(self.bindGroups, function(texture)
-		image.transition(self.device, self.buffer.handle, texture,
-			vk.ImageLayout.SHADER_READ_ONLY_OPTIMAL, vk.PipelineStageFlagBits.FRAGMENT_SHADER,
-			vk.AccessFlags.SHADER_READ)
-	end)
+	image.eachStorageTexture(self.bindGroups, _toSampleableLayout, self)
 end
 
 function VKCommandEncoder:finish()

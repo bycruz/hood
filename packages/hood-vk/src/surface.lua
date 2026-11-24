@@ -55,11 +55,6 @@ function VKSurface:configure(device, config, oldSwapchain)
 
 	local format = vkConversions.pickSurfaceFormat(formats, config.format)
 
-	local imageCount = caps.minImageCount + 1
-	if caps.maxImageCount > 0 and imageCount > caps.maxImageCount then
-		imageCount = caps.maxImageCount
-	end
-
 	local extent = caps.currentExtent
 	if extent.width == 0xFFFFFFFF then
 		extent.width = self.window.width
@@ -103,6 +98,24 @@ function VKSurface:configure(device, config, oldSwapchain)
     end
     if not presentMode then
         error("Requested present mode not supported: " .. tostring(config.presentMode))
+    end
+
+    -- How many images the swapchain cycles through. Every image is a whole colour buffer -- a phone
+    -- screen of them is about ten megabytes each -- so the surface's own minimum is what is asked
+    -- for, and one more only where the present mode needs it: mailbox replaces a frame already
+    -- waiting to be shown, so three images let the cpu build the next frame while one is drawn and
+    -- one waits, which is what keeps latency steady with that mode. FIFO spends two images on the
+    -- same work: one drawn while one is presented, and a fourth would be memory a frame in flight
+    -- only for throughput the display does not have. The minimum is at least two, because a
+    -- swapchain of one image has nothing to draw into while the other is presented.
+    local imageCount = math.max(2, caps.minImageCount)
+
+    if presentMode == vk.PresentModeKHR.MAILBOX and imageCount < 3 then
+        imageCount = 3
+    end
+
+    if caps.maxImageCount > 0 and imageCount > caps.maxImageCount then
+        imageCount = caps.maxImageCount
     end
 
     -- What the compositor turns the frame by: the surface's current transform. `preTransform`

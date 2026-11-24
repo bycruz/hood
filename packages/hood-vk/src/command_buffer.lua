@@ -8,6 +8,7 @@ local vk = require("vkapi") ---@cast vk vk & hood-vk.VkExtras
 ---@field _encoder hood-vk.CommandEncoder? # Encoder reused for this buffer across frames
 ---@field stagingBuffer hood-vk.Buffer? # Upload memory kept across frames that reuse this buffer
 ---@field stagingResources hood-vk.Buffer[]? # Staging buffers this buffer outgrew
+---@field recyclable boolean # Whether the queue may hand it back to the device once submitted
 local VKCommandBuffer = {}
 VKCommandBuffer.__index = VKCommandBuffer
 
@@ -27,6 +28,7 @@ function VKCommandBuffer.new(device)
 		device = device,
 		pool = pool,
 		handle = handle,
+		recyclable = true,
 	}, VKCommandBuffer)
 end
 
@@ -37,8 +39,15 @@ end
 --- finished by the time this buffer is recorded again.
 ---@param self hood-vk.CommandBuffer
 function VKCommandBuffer:reset()
-	if self.stagingBuffer then
-		self.stagingBuffer.staging = { offset = 0 }
+	local staging = self.stagingBuffer
+	if staging then
+		-- The cursor is written rather than replaced: a frame's reset is not a table a frame.
+		local cursor = staging.staging
+		if cursor then
+			cursor.offset = 0
+		else
+			staging.staging = { offset = 0 }
+		end
 	end
 
 	if self.stagingResources then

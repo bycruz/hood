@@ -1,6 +1,13 @@
 local vk = require("vkapi") ---@cast vk vk & hood-vk.VkExtras
 local vkConvert = require("hood-vk.convert")
 
+--- Free a sampler: what a destruction defers, rather than a closure.
+---@param device hood-vk.Device
+---@param handle vk.ffi.Sampler
+local function freeSampler(device, handle)
+	device.handle:destroySampler(handle)
+end
+
 ---@class hood-vk.Sampler
 ---@field handle vk.ffi.Sampler
 ---@field device hood-vk.Device
@@ -37,9 +44,7 @@ function VKSampler:destroy()
 
 	local device, handle = self.device, self.handle
 
-	self.device.queue:defer(function()
-		device.handle:destroySampler(handle)
-	end)
+	self.device.queue:defer(freeSampler, device, handle)
 end
 
 return VKSampler

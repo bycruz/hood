@@ -44,10 +44,14 @@ function VKSwapchain.new(device, format, info)
 		renderFinishedSemaphores[i] = device.handle:createSemaphore({})
 	end
 
-	-- One per swapchain image, so a frame does not allocate a command buffer.
+	-- One per swapchain image, so a frame does not allocate a command buffer. They belong to
+	-- the image slots and are only re-recorded when that slot comes round again, so the queue
+	-- must not hand them back to the device when a submission finishes.
 	local commandBuffers = {}
 	for i = 1, #images do
-		commandBuffers[i] = VKCommandBuffer.new(device)
+		local buffer = VKCommandBuffer.new(device)
+		buffer.recyclable = false
+		commandBuffers[i] = buffer
 	end
 
 	-- One per swapchain image, since they are bound on every frame.

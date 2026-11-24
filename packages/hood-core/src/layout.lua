@@ -43,9 +43,12 @@ function layout.assertWriteFits(buffer, size, offset, data)
 			table.concat(buffer.descriptor.usages, ", ")))
 	end
 
-	if data ~= nil then
-		local ok, sourceSize = pcall(ffi.sizeof, data)
-		if ok and type(sourceSize) == "number" and sourceSize < size then
+	-- A frame writes its vertex data through here, so what is knowable of the source's size is
+	-- read without a protected call: `ffi.sizeof` answers for any cdata, and anything that is
+	-- not cdata is a string or a table whose length this check does not know.
+	if type(data) == "cdata" then
+		local sourceSize = ffi.sizeof(data)
+		if sourceSize < size then
 			error(string.format(
 				"hood: buffer write of %d bytes reads past the end of its %d byte source",
 				size, sourceSize))

@@ -31,6 +31,7 @@ vkConversions.textureViewType = {
 ---@type table<hood.TextureFormat, number>
 vkConversions.textureFormat = {
 	["rgba8unorm"] = vk.Format.R8G8B8A8_UNORM,
+	["r8unorm"] = vk.Format.R8_UNORM,
 	["rgba8unorm-srgb"] = vk.Format.R8G8B8A8_SRGB,
 	["rgba8uint"] = vk.Format.R8G8B8A8_UINT,
 	["depth16unorm"] = vk.Format.D16_UNORM,

@@ -10,6 +10,11 @@ local vk = require("vkapi") ---@cast vk vk & hood-vk.VkExtras
 --- nothing.
 local image = {}
 
+-- A transition is recorded and copied by the driver before the next one starts, so the struct it
+-- is described by is the module's: made per transition it is an allocation on every frame that
+-- moves an image, which a readback does twice.
+local transitionBarriers = vk.ImageMemoryBarrierArray(1)
+
 --- VK_QUEUE_FAMILY_IGNORED: hood does not share images between queues.
 image.QUEUE_FAMILY_IGNORED = 0xFFFFFFFF
 
@@ -71,15 +76,14 @@ function image.transition(device, commandBuffer, texture, newLayout, dstStage, d
 	end
 
 	local producer = producers[oldLayout]
-	local barrier = vk.ImageMemoryBarrier({ --[[@as vk.ffi.ImageMemoryBarrier ]]
-		srcAccessMask = producer.access,
-		dstAccessMask = dstAccess,
-		oldLayout = oldLayout,
-		newLayout = newLayout,
-		srcQueueFamilyIndex = image.QUEUE_FAMILY_IGNORED,
-		dstQueueFamilyIndex = image.QUEUE_FAMILY_IGNORED,
-		image = texture.handle,
-	})
+	local barrier = transitionBarriers[0]
+	barrier.srcAccessMask = producer.access
+	barrier.dstAccessMask = dstAccess
+	barrier.oldLayout = oldLayout
+	barrier.newLayout = newLayout
+	barrier.srcQueueFamilyIndex = image.QUEUE_FAMILY_IGNORED
+	barrier.dstQueueFamilyIndex = image.QUEUE_FAMILY_IGNORED
+	barrier.image = texture.handle
 
 	barrier.subresourceRange.aspectMask = aspect or vk.ImageAspectFlagBits.COLOR
 	barrier.subresourceRange.baseMipLevel = 0
@@ -88,7 +92,7 @@ function image.transition(device, commandBuffer, texture, newLayout, dstStage, d
 	barrier.subresourceRange.layerCount = vk.REMAINING_ARRAY_LAYERS
 
 	device.handle.v1_0.vkCmdPipelineBarrier(commandBuffer, producer.stage, dstStage,
-		0, 0, nil, 0, nil, 1, barrier)
+		0, 0, nil, 0, nil, 1, transitionBarriers)
 
 	texture.layout = newLayout
 
@@ -177,15 +181,16 @@ function image.barrier(device, commandBuffer, scratch, texture, layout, srcStage
 	device.handle.v1_0.vkCmdPipelineBarrier(commandBuffer, srcStage, dstStage, 0, 0, nil, 0, nil, 1, scratch)
 end
 
---- Call `fn` for every texture bound as a storage texture across the given bind groups, which
---- is the only place a dispatch states the images it writes.
+--- Call `fn(arg, texture)` for every texture bound as a storage texture across the given bind
+--- groups, which is the only place a dispatch states the images it writes.
 ---@param bindGroups table<number, hood-vk.BindGroup>
----@param fn fun(texture: hood-vk.Texture)
-function image.eachStorageTexture(bindGroups, fn)
+---@param fn fun(arg: any, texture: hood-vk.Texture)
+---@param arg any
+function image.eachStorageTexture(bindGroups, fn, arg)
 	for _, bindGroup in pairs(bindGroups) do
 		for _, entry in ipairs(bindGroup.entries) do
 			if entry.type == "storageTexture" then
-				fn((entry.texture --[[@as hood-vk.TextureView]]).texture)
+				fn(arg, (entry.texture --[[@as hood-vk.TextureView]]).texture)
 			end
 		end
 	end

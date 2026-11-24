@@ -11,9 +11,11 @@ local VKCommandEncoder = require("hood-vk.command_encoder")
 ---@field idx number
 ---@field _serial number # How many submissions this queue has made
 ---@field _completed number # The last serial whose submission has finished
----@field _inflight { serial: number, fence: vk.ffi.Fence, buffer: hood-vk.CommandBuffer? }[] # In submission order
+---@field _inflight { serial: number, fence: vk.ffi.Fence, buffer: hood-vk.CommandBuffer?, frame: hood-vk.CommandBuffer? }[] # In submission order
+---@field _entrySpare { serial: number, fence: vk.ffi.Fence, buffer: hood-vk.CommandBuffer?, frame: hood-vk.CommandBuffer? }[] # Entries a finished submission gave back
 ---@field _fences vk.ffi.Fence[] # Fences free for the next submission
----@field _doomed { serial: number, dispose: fun() }[] # Resources waiting for their last reader to finish
+---@field _doomed { serial: number, dispose: fun(...), a: any, b: any, c: any }[] # Resources waiting for their last reader to finish
+---@field _doomedSpare { serial: number, dispose: fun(...), a: any, b: any, c: any }[] # Entries a finished destruction gave back
 ---@field _buffers hood-vk.CommandBuffer[] # Command buffers waiting to record the next pending writes
 ---@field _pending hood-vk.CommandBuffer? # Where writes not yet submitted are recorded
 ---@field _pendingEncoder hood-vk.CommandEncoder? # And the encoder over it
@@ -35,8 +37,10 @@ function VKQueue.new(device, familyIdx, idx)
 		_serial = 0,
 		_completed = 0,
 		_inflight = {},
+		_entrySpare = {},
 		_fences = {},
 		_doomed = {},
+		_doomedSpare = {},
 		_buffers = {},
 		_collecting = false,
 	}, VKQueue)
@@ -63,6 +67,37 @@ function VKQueue:_takeBuffer()
 	return buffer or VKCommandBuffer.new(self.device)
 end
 
+--- A submission's table, kept from an earlier one rather than made for this one.
+---@return { serial: number, fence: vk.ffi.Fence, buffer: hood-vk.CommandBuffer?, frame: hood-vk.CommandBuffer? }
+---@param self hood-vk.Queue
+function VKQueue:_takeEntry()
+	return table.remove(self._entrySpare) or {}
+end
+
+--- Hand a finished submission's command buffers back, and keep its table for the next one.
+---
+--- Only a buffer the device owns comes back: a swapchain's is one per image and is recorded
+--- again when that image is taken, so it stays with the swapchain.
+---@param entry { serial: number, fence: vk.ffi.Fence, buffer: hood-vk.CommandBuffer?, frame: hood-vk.CommandBuffer? }
+---@param self hood-vk.Queue
+function VKQueue:_recycle(entry)
+	local pending = entry.buffer
+	if pending then
+		pending:reset()
+		self._buffers[#self._buffers + 1] = pending
+		entry.buffer = nil
+	end
+
+	local frame = entry.frame
+	if frame then
+		frame:reset()
+		self._buffers[#self._buffers + 1] = frame
+		entry.frame = nil
+	end
+
+	self._entrySpare[#self._entrySpare + 1] = entry
+end
+
 --- A fence no submission is using, reset for the next one.
 ---@return vk.ffi.Fence
 ---@param self hood-vk.Queue
@@ -80,13 +115,23 @@ function VKQueue:_takeFence()
 end
 
 --- Destroy what a finished submission had been keeping alive, oldest first.
+---
+--- The entry is put back in the spare list before the destruction runs: a destruction that frees
+--- a second resource defers again, and its entry is one of these rather than a table per frame.
 ---@param self hood-vk.Queue
 function VKQueue:_releaseDoomed()
 	local doomed = self._doomed
 
 	while #doomed > 0 and doomed[1].serial <= self._completed do
 		local entry = table.remove(doomed, 1)
-		entry.dispose()
+		local dispose = entry.dispose
+		local a, b, c = entry.a, entry.b, entry.c
+
+		entry.dispose = nil
+		entry.a, entry.b, entry.c = nil, nil, nil
+		self._doomedSpare[#self._doomedSpare + 1] = entry
+
+		dispose(a, b, c)
 	end
 end
 
@@ -121,11 +166,8 @@ function VKQueue:_collect()
 		table.remove(inflight, 1)
 		self._completed = entry.serial
 
-		if entry.buffer then
-			-- Its copies are done, so the staging they read can be reused or let go of.
-			entry.buffer:reset()
-			self._buffers[#self._buffers + 1] = entry.buffer
-		end
+		-- Its commands are done, so its buffers can be recorded again and its table reused.
+		self:_recycle(entry)
 
 		device.handle:resetFences(1, fenceArray)
 		self._fences[#self._fences + 1] = entry.fence
@@ -142,19 +184,34 @@ end
 --- the next submission, so what it has to outlive is the last serial made and any submission that
 --- carries those writes. Waiting on a serial rather than on the swapchain that happened to draw
 --- it keeps this working for a window, a screenshot and a test alike.
----@param dispose fun()
+---
+--- What `dispose` is given are `a`, `b` and `c`: a destruction passes the handle it frees and the
+--- device that frees it, so the frame path makes no closure for the collector to trace.
+---@param dispose fun(a: any, b: any, c: any)
+---@param a any?
+---@param b any?
+---@param c any?
 ---@param self hood-vk.Queue
-function VKQueue:defer(dispose)
+function VKQueue:defer(dispose, a, b, c)
 	self:_collect()
 
 	local serial = self._pending and (self._serial + 1) or self._serial
 
 	if serial <= self._completed then
-		dispose()
+		dispose(a, b, c)
 		return
 	end
 
-	self._doomed[#self._doomed + 1] = { serial = serial, dispose = dispose }
+	local entry = table.remove(self._doomedSpare)
+	if entry == nil then
+		entry = {}
+	end
+
+	entry.serial = serial
+	entry.dispose = dispose
+	entry.a, entry.b, entry.c = a, b, c
+
+	self._doomed[#self._doomed + 1] = entry
 end
 
 --- Waits for the submission made with `serial`, then frees whatever has finished.
@@ -243,11 +300,11 @@ function VKQueue:_submitPending()
 
 	self._serial = self._serial + 1
 
-	self._inflight[#self._inflight + 1] = {
-		serial = self._serial,
-		fence = fence,
-		buffer = pending,
-	}
+	local entry = self:_takeEntry()
+	entry.serial = self._serial
+	entry.fence = fence
+	entry.buffer = pending
+	self._inflight[#self._inflight + 1] = entry
 end
 
 --- Helper method to write data to a buffer.
@@ -359,11 +416,14 @@ function VKQueue:submit(buffer)
 
 	self._serial = self._serial + 1
 
-	self._inflight[#self._inflight + 1] = {
-		serial = self._serial,
-		fence = fence,
-		buffer = pending,
-	}
+	local entry = self:_takeEntry()
+	entry.serial = self._serial
+	entry.fence = fence
+	entry.buffer = pending
+	-- A swapchain buffer belongs to its image slot and is recorded again when that slot comes
+	-- round, so only a buffer the device made comes back to the device.
+	entry.frame = buffer.recyclable and buffer or nil
+	self._inflight[#self._inflight + 1] = entry
 
 	-- The swapchain image is handed out again only once the submission that last drew into it has
 	-- finished: what `getCurrentTexture` waits for.
@@ -381,22 +441,30 @@ function VKQueue:waitIdle()
 
 	local inflight = self._inflight
 
+	-- Recycling a buffer can defer a destroy, and a defer checks the fences: without this it
+	-- would empty the list this loop is walking.
+	self._collecting = true
+
 	for index = 1, #inflight do
 		local entry = inflight[index]
 
 		self._completed = entry.serial
 
-		if entry.buffer then
-			entry.buffer:reset()
-			self._buffers[#self._buffers + 1] = entry.buffer
-		end
-
 		fenceArray[0] = entry.fence
 		self.device.handle:resetFences(1, fenceArray)
 		self._fences[#self._fences + 1] = entry.fence
+
+		-- Everything the queue was given is done, so their buffers can be recorded again.
+		self:_recycle(entry)
 	end
 
-	self._inflight = {}
+	-- Emptied rather than replaced: the table is the queue's for as long as it lives.
+	for index = #inflight, 1, -1 do
+		inflight[index] = nil
+	end
+
+	self._collecting = false
+
 	self:_releaseDoomed()
 end
 

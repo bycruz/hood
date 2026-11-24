@@ -170,8 +170,13 @@ function VKDevice:createPipeline(descriptor)
 	return VKPipeline.new(self, descriptor)
 end
 
+--- A command encoder over a buffer the queue has finished with, so an encoder a frame asks for
+--- is not a buffer allocated from the driver's pool every frame. The encoder and its tables are
+--- reused with it; see `VKCommandEncoder.new`.
+---@return hood-vk.CommandEncoder
+---@param self hood-vk.Device
 function VKDevice:createCommandEncoder()
-	return VKCommandEncoder.new(self)
+	return VKCommandEncoder.new(self, self.queue:_takeBuffer())
 end
 
 --- The pool command buffers are allocated from, which belongs to the device: a pool is hundreds

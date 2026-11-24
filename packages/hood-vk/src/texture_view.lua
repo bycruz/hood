@@ -1,6 +1,13 @@
 local vk = require("vkapi") ---@cast vk vk & hood-vk.VkExtras
 local vkConversions = require("hood-vk.convert")
 
+--- Free an image view: what a destruction defers, rather than a closure.
+---@param device hood-vk.Device
+---@param handle vk.ffi.ImageView
+local function freeView(device, handle)
+	device.handle:destroyImageView(handle)
+end
+
 ---@class hood-vk.TextureView: hood.TextureView
 ---@field handle vk.ffi.ImageView
 ---@field texture hood-vk.Texture
@@ -90,9 +97,7 @@ function VKTextureView:destroy()
 
 	local device, handle = self.device, self.handle
 
-	self.device.queue:defer(function()
-		device.handle:destroyImageView(handle)
-	end)
+	self.device.queue:defer(freeView, device, handle)
 end
 
 return VKTextureView

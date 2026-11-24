@@ -5,6 +5,15 @@ local coreLayout = require("hood-core.layout")
 local pass = require("hood-vk.pass")
 local vkConversions = require("hood-vk.convert")
 
+--- Free a pipeline and its layout: what a destruction defers, rather than a closure.
+---@param device hood-vk.Device
+---@param handle vk.ffi.Pipeline
+---@param pipelineLayout vk.ffi.PipelineLayout
+local function freePipeline(device, handle, pipelineLayout)
+	device.handle:destroyPipeline(handle)
+	device.handle:destroyPipelineLayout(pipelineLayout)
+end
+
 --- Vertex attribute formats, keyed by the layout's attribute type and size.
 ---
 --- The narrow types exist so a vertex can be packed: a normal costs four bytes
@@ -319,10 +328,7 @@ function VKPipeline:destroy()
 
 	local device, handle, layout = self.device, self.handle, self.layout
 
-	self.device.queue:defer(function()
-		device.handle:destroyPipeline(handle)
-		device.handle:destroyPipelineLayout(layout)
-	end)
+	self.device.queue:defer(freePipeline, device, handle, layout)
 end
 
 return VKPipeline

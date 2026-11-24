@@ -1,6 +1,15 @@
 local ffi = require("ffi")
 local vk = require("vkapi") ---@cast vk vk & hood-vk.VkExtras
 
+--- Free a compute pipeline and its layout: what a destruction defers, rather than a closure.
+---@param device hood-vk.Device
+---@param handle vk.ffi.Pipeline
+---@param pipelineLayout vk.ffi.PipelineLayout
+local function freePipeline(device, handle, pipelineLayout)
+	device.handle:destroyPipeline(handle)
+	device.handle:destroyPipelineLayout(pipelineLayout)
+end
+
 ---@class hood-vk.ComputePipeline
 ---@field handle vk.ffi.Pipeline
 ---@field layout vk.ffi.PipelineLayout
@@ -51,10 +60,7 @@ function VKComputePipeline:destroy()
 
 	local device, handle, layout = self.device, self.handle, self.layout
 
-	self.device.queue:defer(function()
-		device.handle:destroyPipeline(handle)
-		device.handle:destroyPipelineLayout(layout)
-	end)
+	self.device.queue:defer(freePipeline, device, handle, layout)
 end
 
 return VKComputePipeline

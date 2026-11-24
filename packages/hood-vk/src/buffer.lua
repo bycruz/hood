@@ -4,6 +4,15 @@ local vk = require("vkapi") ---@cast vk vk & hood-vk.VkExtras
 local layout = require("hood-core.layout")
 local memory = require("hood-vk.memory")
 
+--- Free a buffer and the memory behind it: what a destruction defers, rather than a closure.
+---@param device hood-vk.Device
+---@param handle vk.ffi.Buffer
+---@param deviceMemory vk.ffi.DeviceMemory
+local function freeBuffer(device, handle, deviceMemory)
+	device.handle:destroyBuffer(handle)
+	device.handle:freeMemory(deviceMemory)
+end
+
 ---@class hood-vk.Buffer: hood.Buffer
 ---@field handle vk.ffi.Buffer
 ---@field memory vk.ffi.DeviceMemory
@@ -96,7 +105,13 @@ function VKBuffer:mappedPointer(offset)
 		error("hood: buffer is not mapped; create it with { mapped = true }")
 	end
 
-	return self.mappedBase + (offset or 0)
+	-- The base pointer itself for a write at the start: pointer arithmetic makes a new cdata,
+	-- and a frame's writes are at the start of the buffer they fill.
+	if offset == nil or offset == 0 then
+		return self.mappedBase
+	end
+
+	return self.mappedBase + offset
 end
 
 function VKBuffer:destroy()
@@ -112,10 +127,7 @@ function VKBuffer:destroy()
 
 	local device, handle, memory = self.device, self.handle, self.memory
 
-	self.device.queue:defer(function()
-		device.handle:destroyBuffer(handle)
-		device.handle:freeMemory(memory)
-	end)
+	self.device.queue:defer(freeBuffer, device, handle, memory)
 end
 
 ---@param size number bytes to write

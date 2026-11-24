@@ -50,6 +50,7 @@
 
 ---@alias hood.TextureFormat
 --- | "rgba8unorm"
+--- | "r8unorm"
 --- | "rgba8uint"
 --- | "bgra8unorm"
 --- | "bgra8unorm-srgb"
