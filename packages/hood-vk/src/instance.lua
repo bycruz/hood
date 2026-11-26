@@ -9,6 +9,7 @@ local isAndroid = jit.android == true
 ---@class hood-vk.Instance: hood.Instance
 ---@field headless boolean
 ---@field handle vk.Instance
+---@field rankDeviceType fun(deviceType: vk.PhysicalDeviceType, powerPreference: "low-power"|"high-performance"|nil): number # static helper, not a method
 local VKInstance = {}
 VKInstance.__index = VKInstance
 
@@ -51,29 +52,55 @@ function VKInstance.new(descriptor)
 	return setmetatable({ handle = handle, headless = hasHeadless }, VKInstance)
 end
 
+-- Higher wins. The CPU device type is a software rasterizer (lavapipe, llvmpipe,
+-- ...): it is ranked below every GPU type so it is only picked when the machine
+-- has no GPU at all. No preference is the battery-friendly ordering, which is
+-- what "low-power" asks for.
+local deviceTypeRanks = {
+	lowPower = {
+		[vk.PhysicalDeviceType.INTEGRATED_GPU] = 5,
+		[vk.PhysicalDeviceType.DISCRETE_GPU] = 4,
+		[vk.PhysicalDeviceType.VIRTUAL_GPU] = 3,
+		[vk.PhysicalDeviceType.OTHER] = 2,
+		[vk.PhysicalDeviceType.CPU] = 0,
+	},
+	highPerformance = {
+		[vk.PhysicalDeviceType.DISCRETE_GPU] = 5,
+		[vk.PhysicalDeviceType.INTEGRATED_GPU] = 4,
+		[vk.PhysicalDeviceType.VIRTUAL_GPU] = 3,
+		[vk.PhysicalDeviceType.OTHER] = 2,
+		[vk.PhysicalDeviceType.CPU] = 0,
+	},
+}
+
+--- Rank a physical device type for adapter selection; higher is better. CPU
+--- always ranks last, whatever the preference, so a software renderer is never
+--- chosen over an available GPU.
+---@param deviceType vk.PhysicalDeviceType
+---@param powerPreference "low-power"|"high-performance"|nil
+---@return number
+local function rankDeviceType(deviceType, powerPreference)
+	local ranks = powerPreference == "high-performance"
+		and deviceTypeRanks.highPerformance
+		or deviceTypeRanks.lowPower
+	local rank = ranks[deviceType]
+	return rank ~= nil and rank or ranks[vk.PhysicalDeviceType.OTHER]
+end
+VKInstance.rankDeviceType = rankDeviceType
+
 ---@param config hood.AdapterConfig
 ---@param self hood-vk.Instance
 ---@return hood-vk.Adapter?
 function VKInstance:requestAdapter(config)
 	config = config or {}
-	local deviceOrdering = {
-		[vk.PhysicalDeviceType.DISCRETE_GPU] = 4,
-		[vk.PhysicalDeviceType.INTEGRATED_GPU] = 3,
-		[vk.PhysicalDeviceType.VIRTUAL_GPU] = 2,
-		[vk.PhysicalDeviceType.CPU] = 1
-	}
-
-	local deviceOrderingFlip = config.powerPreference == "high-performance"
-		and 1 or -1
 
 	local devices = {}
 	for _, physicalDevice in ipairs(self.handle:enumeratePhysicalDevices()) do
 		local props = vk.getPhysicalDeviceProperties(physicalDevice)
-		local ordering = deviceOrdering[props.deviceType] * deviceOrderingFlip
 
 		devices[#devices + 1] = {
 			device = physicalDevice,
-			score = ordering
+			score = rankDeviceType(props.deviceType, config.powerPreference)
 		}
 	end
 
