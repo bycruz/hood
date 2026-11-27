@@ -525,23 +525,61 @@ test.it("sampler: destroy does not error", function()
 end)
 
 -- ─── Surface format choice ────────────────────────────────────────────────────
---- Which format a swapchain is made in decides how a shader's output is stored: write linear
+--- Which format a swapchain is made in decides how a shader's output is stored: write sRGB-encoded
 --- values into an `-srgb` format and the hardware encodes them again, which is the difference
---- between the same app looking right and looking washed out. Drivers disagree about which
---- format to list first, so the choice cannot be left to the driver.
+--- between the same app looking right and looking washed out. Drivers disagree about which format
+--- to list first, so the choice cannot be left to the driver.
 
-local ffiSurface = function(fmt)
-	return { format = fmt, colorSpace = 0 }
+local ffiSurface = function(fmt, colorSpace)
+	return { format = fmt, colorSpace = colorSpace or 0 }
 end
 
 local vkEnums = require("vkapi.ffi.enums")
 
-test.it("surface format: no request takes the driver's first choice", function()
-	local formats = { ffiSurface(vkEnums.Format.B8G8R8A8_UNORM),
-		ffiSurface(vkEnums.Format.B8G8R8A8_SRGB) }
+test.it("surface format: the default preference is the unorm formats, in order", function()
+	test.equal(vkConversions.defaultSurfaceFormats[1], "bgra8unorm")
+	test.equal(vkConversions.defaultSurfaceFormats[2], "rgba8unorm")
+end)
+
+test.it("surface format: no request never takes an sRGB format, however early it is listed", function()
+	-- Mesa's X11 surface lists B8G8R8A8_SRGB before the unorm one; taking it is the washed-out look.
+	local formats = { ffiSurface(vkEnums.Format.B8G8R8A8_SRGB),
+		ffiSurface(vkEnums.Format.B8G8R8A8_UNORM) }
 
 	local picked = vkConversions.pickSurfaceFormat(formats, nil)
 	test.equal(picked.format, vkEnums.Format.B8G8R8A8_UNORM)
+end)
+
+test.it("surface format: an sRGB-only surface is refused rather than drawn into", function()
+	-- The hardware would encode every value the shaders write a second time; saying so is better
+	-- than a window that looks wrong.
+	local ok, err = pcall(vkConversions.pickSurfaceFormat,
+		{ ffiSurface(vkEnums.Format.B8G8R8A8_SRGB) }, nil)
+
+	test.equal(ok, false)
+	test.truthy(tostring(err):match("offers none of the preferred formats"))
+end)
+
+test.it("surface format: the preference order decides, not the driver's list order", function()
+	local bgra = ffiSurface(vkEnums.Format.B8G8R8A8_UNORM)
+	local rgba = ffiSurface(vkEnums.Format.R8G8B8A8_UNORM)
+
+	test.equal(vkConversions.pickSurfaceFormat({ rgba, bgra }, nil).format,
+		vkEnums.Format.B8G8R8A8_UNORM)
+	test.equal(vkConversions.pickSurfaceFormat({ bgra, rgba }, nil).format,
+		vkEnums.Format.B8G8R8A8_UNORM)
+
+	-- The same set, asked for the other way round.
+	test.equal(vkConversions.pickSurfaceFormat({ bgra, rgba }, nil,
+		{ "rgba8unorm", "bgra8unorm" }).format, vkEnums.Format.R8G8B8A8_UNORM)
+end)
+
+test.it("surface format: an sRGB non-linear entry is chosen where a format is listed twice", function()
+	local bgra = vkEnums.Format.B8G8R8A8_UNORM
+	-- A colour space other than sRGB is not what encoded bytes want to be shown through.
+	local formats = { ffiSurface(bgra, 1000104000), ffiSurface(bgra, 0) }
+
+	test.equal(vkConversions.pickSurfaceFormat(formats, nil).colorSpace, 0)
 end)
 
 test.it("surface format: a request is honoured wherever it sits in the list", function()
@@ -562,6 +600,14 @@ test.it("surface format: one the surface does not support is refused", function(
 
 	test.equal(ok, false)
 	test.truthy(tostring(err):match("Requested surface format not supported"))
+end)
+
+test.it("surface format: a surface that supports any format takes the first preference", function()
+	-- VK_FORMAT_UNDEFINED alone is the old way of saying any format may be used.
+	local picked = vkConversions.pickSurfaceFormat({ ffiSurface(vkEnums.Format.UNDEFINED) }, nil)
+
+	test.equal(picked.format, vkEnums.Format.B8G8R8A8_UNORM)
+	test.equal(picked.colorSpace, 0)
 end)
 
 test.it("surface format: every format hood names converts and inverts back", function()

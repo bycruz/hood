@@ -7,6 +7,15 @@ local VKSwapchain = require("hood-vk.swapchain")
 local isWindows = jit.os == "Windows"
 local isAndroid = jit.android == true
 
+--- The surface format a swapchain is made in decides how a shader's output is stored, so it is the
+--- caller's to choose: `config.format` names one outright, and `config.preferredFormats` lists the
+--- ones to take in order -- a driver's list order is not a preference, and Mesa's X11 surface and
+--- Android's disagree about which should come first. With neither given,
+--- `vkConversions.defaultSurfaceFormats` applies: the unorm formats, because the shaders this
+--- library is used with write sRGB-encoded colour, which an `-srgb` format would encode again.
+---@class hood.SurfaceConfig
+---@field preferredFormats hood.TextureFormat[]?
+
 ---@class hood-vk.Surface
 ---@field window winit.Window
 ---@field handle vk.ffi.SurfaceKHR
@@ -53,7 +62,7 @@ function VKSurface:configure(device, config, oldSwapchain)
 	local caps = vk.getPhysicalDeviceSurfaceCapabilitiesKHR(device.pd, self.handle)
 	local formats = vk.getPhysicalDeviceSurfaceFormatsKHR(device.pd, self.handle)
 
-	local format = vkConversions.pickSurfaceFormat(formats, config.format)
+	local format = vkConversions.pickSurfaceFormat(formats, config.format, config.preferredFormats)
 
 	local extent = caps.currentExtent
 	if extent.width == 0xFFFFFFFF then

@@ -142,28 +142,104 @@ end
 vkConversions.from = {}
 vkConversions.from.textureFormat = invert(vkConversions.textureFormat) ---@type table<number, hood.TextureFormat>
 
+--- The surface formats a swapchain is made in when the caller names none, in the order tried.
+---
+--- A swapchain format decides how a shader's output is stored, not how it is computed: an
+--- `-srgb` format makes the hardware encode the values a shader writes, a plain one stores them
+--- as they are. The shaders this library is used with write sRGB-encoded colour -- a theme's
+--- colour is the bytes of its hex string, a picture is uploaded as `rgba8unorm`, and the fragment
+--- shader converts between encoded and linear nowhere -- so an `-srgb` format would encode those
+--- bytes a second time. That is the washed-out look, and it is why no `-srgb` format is ever
+--- chosen by default, however early a driver lists one.
+---
+--- B8G8R8A8 is first because it is what desktop WSI implementations present natively; R8G8B8A8
+--- is what Android's surface offers. A driver's own order is not a preference: Mesa's X11 surface
+--- lists B8G8R8A8_SRGB first and Android's lists R8G8B8A8_UNORM, which is the same app looking
+--- different on each GPU.
+---@type hood.TextureFormat[]
+vkConversions.defaultSurfaceFormats = { "bgra8unorm", "rgba8unorm" }
+
 --- The surface format a swapchain is made in.
 ---
---- Drivers do not agree on which format to list first, so an app that asks for none gets
---- whatever its GPU happens to prefer: the same shader output written into a linear format and
---- into an `-srgb` one produces different pixels.
+--- The colour space is the transfer function the display shows the written bytes through. What
+--- the shaders write is already encoded, so `SRGB_NONLINEAR` is the space wanted; where the
+--- surface offers it, only formats in that space are candidates. Another space, where the surface
+--- offers sRGB for nothing, would show the same bytes through another function, so it is taken
+--- only as a last resort.
+---
+--- `VK_FORMAT_UNDEFINED` as the surface's only format is the old way of saying any format is
+--- supported: the first preference is then handed back for a swapchain to be made in.
 ---@param formats vk.ffi.SurfaceFormatKHR[]
----@param requested hood.TextureFormat? # nil takes the driver's first choice
+---@param requested hood.TextureFormat? # An exact format, overriding any preference
+---@param preferred hood.TextureFormat[]? # The formats to try in order when none is requested; nil takes `defaultSurfaceFormats`
 ---@return vk.ffi.SurfaceFormatKHR
-function vkConversions.pickSurfaceFormat(formats, requested)
-	if not requested then
-		return formats[1]
+function vkConversions.pickSurfaceFormat(formats, requested, preferred)
+	if #formats == 0 then
+		error("The surface offers no format")
 	end
 
-	local wanted = vkConversions.textureFormat[requested]
+	if #formats == 1 and formats[1].format == vk.Format.UNDEFINED then
+		local wanted = requested or (preferred or vkConversions.defaultSurfaceFormats)[1]
+		local format = assert(vkConversions.textureFormat[wanted],
+			"Unknown surface format: " .. tostring(wanted))
+		return { format = format, colorSpace = vk.ColorSpaceKHR.SRGB_NONLINEAR }
+	end
 
+	-- The formats offered in the colour space a display shows encoded bytes through: a driver may
+	-- list a format in more than one space, and only the space entries are candidates.
+	local nonlinear = {}
 	for _, format in ipairs(formats) do
-		if format.format == wanted then
-			return format
+		if format.colorSpace == vk.ColorSpaceKHR.SRGB_NONLINEAR then
+			nonlinear[#nonlinear + 1] = format
+		end
+	end
+	local candidates = #nonlinear > 0 and nonlinear or formats
+
+	if requested then
+		local wanted = assert(vkConversions.textureFormat[requested],
+			"Unknown surface format: " .. tostring(requested))
+
+		for _, format in ipairs(candidates) do
+			if format.format == wanted then
+				return format
+			end
+		end
+
+		-- The format exists, in a colour space other than sRGB non-linear: an explicit request is
+		-- honoured over the colour-space preference, since the caller named the format it draws.
+		for _, format in ipairs(formats) do
+			if format.format == wanted then
+				return format
+			end
+		end
+
+		error("Requested surface format not supported: " .. tostring(requested))
+	end
+
+	for _, name in ipairs(preferred or vkConversions.defaultSurfaceFormats) do
+		local wanted = vkConversions.textureFormat[name]
+		if wanted ~= nil then
+			for _, format in ipairs(candidates) do
+				if format.format == wanted then
+					return format
+				end
+			end
 		end
 	end
 
-	error("Requested surface format not supported: " .. tostring(requested))
+	-- What is left is a surface that cannot store an encoded colour as it is: the alternative is
+	-- drawing every frame into a format that would encode it again, which is worse than saying so.
+	local offered = {}
+	for _, format in ipairs(formats) do
+		local name = vkConversions.from.textureFormat[format.format]
+			or ("format " .. tostring(format.format))
+		offered[#offered + 1] = string.format("%s (colour space %s)", name, tostring(format.colorSpace))
+	end
+
+	error(string.format(
+		"Surface offers none of the preferred formats (%s), and this renderer writes encoded colour: %s",
+		table.concat(preferred or vkConversions.defaultSurfaceFormats, ", "),
+		table.concat(offered, ", ")))
 end
 
 return vkConversions
